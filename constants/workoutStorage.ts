@@ -1,4 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { DeviceEventEmitter } from 'react-native';
 import rawExercisesData from './exercisesData.json';
 
 export interface ExerciseDefinition {
@@ -121,6 +122,7 @@ export const DEFAULT_EXERCISES: ExerciseDefinition[] = (rawExercisesData as any[
 }));
 
 const LOG_STORAGE_KEY = (userId: string) => `@stridetrack_workout_logs_${userId}`;
+export const WORKOUT_LOGS_CHANGED = 'footprint:workout-logs-changed';
 const VISIBLE_EXERCISES_KEY = (userId: string) => `@stridetrack_visible_exercises_${userId}`;
 
 export async function saveWorkoutLog(
@@ -140,6 +142,7 @@ export async function saveWorkoutLog(
     const existing: WorkoutLogEntry[] = raw ? JSON.parse(raw) : [];
     const updated = [newLog, ...existing];
     await AsyncStorage.setItem(key, JSON.stringify(updated));
+    DeviceEventEmitter.emit(WORKOUT_LOGS_CHANGED, { userId });
   } catch (e) {
     console.error('Failed to save workout log', e);
   }
@@ -156,9 +159,19 @@ export async function deleteWorkoutLogsByIds(userId: string, idsToDelete: string
     const idsSet = new Set(idsToDelete);
     const updated = existing.filter((log) => !idsSet.has(log.id));
     await AsyncStorage.setItem(key, JSON.stringify(updated));
+    DeviceEventEmitter.emit(WORKOUT_LOGS_CHANGED, { userId });
   } catch (e) {
     console.error('Failed to delete workout logs', e);
   }
+}
+
+/** Read existing history without seeding demonstrations or migrating another key. */
+export async function loadRankableWorkoutLogs(userId: string): Promise<WorkoutLogEntry[]> {
+  const raw = await AsyncStorage.getItem(LOG_STORAGE_KEY(userId));
+  if (!raw) return [];
+  const parsed: unknown = JSON.parse(raw);
+  if (!Array.isArray(parsed)) throw new Error('Workout history is unavailable.');
+  return parsed as WorkoutLogEntry[];
 }
 
 export async function loadWorkoutLogs(userId: string): Promise<WorkoutLogEntry[]> {

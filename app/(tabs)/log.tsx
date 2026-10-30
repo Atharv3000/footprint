@@ -1236,7 +1236,7 @@ export default function LogScreen() {
               reps: trackingData.repCount,
               weight: defaultWeight,
               weightUnit: effectiveWeightUnit,
-              notes: `AI Form Score: ${trackingData.averageFormScore}%`,
+              notes: trackingData.averageFormScore > 0 ? `AI Form Score: ${trackingData.averageFormScore}%` : 'Camera-counted reps; form score not assessed.',
               aiTracked: true,
               trackingData,
             });

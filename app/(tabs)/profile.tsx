@@ -48,6 +48,7 @@ import { AppleHealthSyncModal } from '@/components/AppleHealthSyncModal';
 
 import { InsightsSection } from '@/components/InsightsSection';
 import { ProfileActivitySection } from '@/components/ProfileActivitySection';
+import { MuscleRanksSection } from '@/components/MuscleRanksSection';
 
 export default function ProfileScreen() {
   const { user, profile, signOut, updateProfile, isAppleAvailable, isGoogleConfigured } = useAuth();
@@ -86,17 +87,17 @@ export default function ProfileScreen() {
   const [nameInput, setNameInput] = useState<string>('');
   const [usernameLoading, setUsernameLoading] = useState<boolean>(false);
 
-  // Active Profile Sub-tab: 'activity' | 'insights' | 'badges' with animated indicator
-  const [activeSubTab, setActiveSubTab] = useState<'activity' | 'insights' | 'badges'>('activity');
-  const tabAnim = useRef(new Animated.Value(0)).current; // 0 = activity, 1 = insights, 2 = badges
+  // Active Profile Sub-tab: 'activity' | 'insights' | 'badges' | 'ranks' with animated indicator
+  const [activeSubTab, setActiveSubTab] = useState<'activity' | 'insights' | 'badges' | 'ranks'>('ranks');
+  const tabAnim = useRef(new Animated.Value(0)).current; // ranks, activity, insights, badges
   const [badges, setBadges] = useState<BadgeDefinition[]>([]);
   const [selectedBadge, setSelectedBadge] = useState<BadgeDefinition | null>(null);
 
-  const switchTab = (tab: 'activity' | 'insights' | 'badges') => {
+  const switchTab = (tab: 'activity' | 'insights' | 'badges' | 'ranks') => {
     if (tab === activeSubTab) return;
     Haptics.selectionAsync().catch(() => {});
     setActiveSubTab(tab);
-    const targetVal = tab === 'activity' ? 0 : tab === 'insights' ? 1 : 2;
+    const targetVal = tab === 'ranks' ? 0 : tab === 'activity' ? 1 : tab === 'insights' ? 2 : 3;
     Animated.timing(tabAnim, {
       toValue: targetVal,
       duration: 220,
@@ -781,61 +782,17 @@ export default function ProfileScreen() {
 
       {/* ── LOWER SCREEN CONTAINER (Sub-tab bar and entire content below it: pure white in light mode, pure black in dark mode) ── */}
       <View style={[styles.lowerScreenSection, { backgroundColor: isDark ? '#000000' : '#ffffff', borderTopColor: isDark ? '#1a1a1f' : '#ededf0' }]}>
-        {/* Animated Sub-Tab Selector: activity vs insights vs badges */}
+        {/* Animated Sub-Tab Selector: activity, insights, badges, ranks */}
         <View style={[styles.subTabBarContainer, { backgroundColor: isDark ? '#000000' : '#ffffff', borderBottomColor: isDark ? '#1f1f24' : '#e5e5ea' }]}>
-          <TouchableOpacity
-            style={styles.subTabBtn}
-            onPress={() => switchTab('activity')}
-            activeOpacity={0.75}
-          >
-            <Animated.Text
-              style={[
-                styles.subTabText,
-                {
-                  color: activeSubTab === 'activity' ? (isDark ? '#ffffff' : '#000000') : (isDark ? '#71717a' : '#9ca3af'),
-                  fontWeight: activeSubTab === 'activity' ? '800' : '600',
-                },
-              ]}
-            >
-              activity
-            </Animated.Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={styles.subTabBtn}
-            onPress={() => switchTab('insights')}
-            activeOpacity={0.75}
-          >
-            <Animated.Text
-              style={[
-                styles.subTabText,
-                {
-                  color: activeSubTab === 'insights' ? (isDark ? '#ffffff' : '#000000') : (isDark ? '#71717a' : '#9ca3af'),
-                  fontWeight: activeSubTab === 'insights' ? '800' : '600',
-                },
-              ]}
-            >
-              insights
-            </Animated.Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={styles.subTabBtn}
-            onPress={() => switchTab('badges')}
-            activeOpacity={0.75}
-          >
-            <Animated.Text
-              style={[
-                styles.subTabText,
-                {
-                  color: activeSubTab === 'badges' ? (isDark ? '#ffffff' : '#000000') : (isDark ? '#71717a' : '#9ca3af'),
-                  fontWeight: activeSubTab === 'badges' ? '800' : '600',
-                },
-              ]}
-            >
-              badges
-            </Animated.Text>
-          </TouchableOpacity>
+          {(['ranks', 'activity', 'insights', 'badges'] as const).map(tab => (
+            <TouchableOpacity key={tab} accessibilityRole="tab" accessibilityState={{ selected: activeSubTab === tab }}
+              style={styles.subTabBtn} onPress={() => switchTab(tab)} activeOpacity={0.75}>
+              <Animated.Text style={[styles.subTabText, {
+                color: activeSubTab === tab ? (isDark ? '#ffffff' : '#000000') : (isDark ? '#71717a' : '#9ca3af'),
+                fontWeight: activeSubTab === tab ? '800' : '600',
+              }]}>{tab}</Animated.Text>
+            </TouchableOpacity>
+          ))}
 
           {/* Animated line highlighted under what is selected */}
           <Animated.View
@@ -844,16 +801,20 @@ export default function ProfileScreen() {
               {
                 backgroundColor: isDark ? '#ffffff' : '#000000',
                 left: tabAnim.interpolate({
-                  inputRange: [0, 1, 2],
-                  outputRange: ['0%', '33.33%', '66.66%'],
+                  inputRange: [0, 1, 2, 3],
+                  outputRange: ['0%', '25%', '50%', '75%'],
                 }),
-                width: '33.33%',
+                width: '25%',
               },
             ]}
           />
         </View>
 
         {/* ── PERSISTENT SUB-TAB CONTENT: ACTIVITY vs INSIGHTS vs BADGES ── */}
+        <View style={activeSubTab !== 'ranks' ? { display: 'none' } : undefined}>
+          <MuscleRanksSection userId={effectiveUserId} active={activeSubTab === 'ranks'} accountName={user?.name || profile.name} accountHandle={username} />
+        </View>
+
         <View style={[styles.activityTabWrapper, activeSubTab !== 'activity' && { display: 'none' }]}>
           <ProfileActivitySection
             userId={effectiveUserId}

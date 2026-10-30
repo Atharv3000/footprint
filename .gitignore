@@ -39,3 +39,8 @@ yarn-error.*
 # generated native folders
 /ios
 /android
+
+# Local rep vision service
+.venv/
+__pycache__/
+server/models/
