@@ -11,7 +11,7 @@ images or additional packages.
 
 | Rank | Training days for that body part |
 | --- | ---: |
-| Iron | 0 |
+| Wood | 0 |
 | Bronze | 1 |
 | Silver | 3 |
 | Gold | 7 |
@@ -56,3 +56,7 @@ Run `node scripts/test-muscle-ranks.cjs` to check thresholds, day deduplication,
 exercise mapping, input exclusion, deletion, raw storage reads and update events.
 The development artwork preview uses test ranks only; those examples are never
 inserted into the user's workout history.
+
+## Reference palette
+
+Rank gradients visually match the supplied screenshots: Wood brown, Bronze copper, Silver blue-gray, Gold yellow, Platinum turquoise, Diamond violet, Champion pink-purple, Titan deep red, Olympian cyan. These are visual matches rather than official extracted hex codes. Base, highlight and shadow values are centralized in `constants/muscleRanks.ts` and shared by the muscle map, emblems, progress bars and tier list. The old random account palette no longer overrides earned rank colors. The starter tier keeps its legacy `iron` ID while displaying Wood; training-day thresholds are unchanged.

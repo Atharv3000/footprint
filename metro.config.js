@@ -11,7 +11,7 @@ config.resolver.resolveRequest = (context, moduleName, platform) => {
 };
 
 const routes = new Map([
-  ['/rep-api/health', 'GET'], ['/rep-api/session', 'POST'], ['/rep-api/poll', 'GET'],
+  ['/rep-api/countries', 'POST'], ['/rep-api/calories', 'POST'], ['/rep-api/health', 'GET'], ['/rep-api/session', 'POST'], ['/rep-api/poll', 'GET'],
   ['/rep-api/command', 'POST'], ['/rep-api/frame', 'POST'], ['/rep-api/close', 'POST'],
 ]);
 const originalEnhance = config.server.enhanceMiddleware;

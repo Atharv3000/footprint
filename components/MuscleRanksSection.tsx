@@ -7,18 +7,12 @@ import { useTheme, SERIF_FONT } from '@/constants/ThemeContext';
 import { BODY_PARTS, BodyPart, computeMuscleRanks, MUSCLE_TIERS } from '@/constants/muscleRanks';
 import { DEFAULT_EXERCISES, loadRankableWorkoutLogs, WORKOUT_LOGS_CHANGED, WorkoutLogEntry } from '@/constants/workoutStorage';
 import { MuscleRankBody, RankEmblem } from './MuscleRankArtwork';
-import { personalRankPalette } from '@/constants/personalRankPalette';
 
-export function MuscleRanksSection({ userId, active, accountName, accountHandle }: {
-  userId: string; active: boolean; accountName?: string; accountHandle?: string;
-}) {
+export function MuscleRanksSection({ userId, active }: { userId: string; active: boolean }) {
   const { colors, isDark } = useTheme();
   const [selected, setSelected] = useState<BodyPart>('arms');
   const [back, setBack] = useState(false);
   const [rulesOpen, setRulesOpen] = useState(false);
-  const [personalColors, setPersonalColors] = useState(true);
-  const availablePalette = personalRankPalette(accountName, accountHandle);
-  const palette = personalColors ? availablePalette : undefined;
   const [history, setHistory] = useState<{ userId: string; logs: WorkoutLogEntry[]; loading: boolean; error: boolean }>({ userId, logs: [], loading: true, error: false });
   const generation = useRef(0);
   const alive = useRef(true);
@@ -75,13 +69,10 @@ export function MuscleRanksSection({ userId, active, accountName, accountHandle 
         </View>
         <View style={s.bodyStage}>
           <View pointerEvents="none" style={s.stageRing} />
-          <MuscleRankBody ranks={ranks} selected={selected} onSelect={choosePart} back={back} palette={palette} />
+          <MuscleRankBody ranks={ranks} selected={selected} onSelect={choosePart} back={back} />
           <View pointerEvents="none" style={[s.heroChip, { borderColor: rank.tier.color + '70' }]}><RankEmblem tier={rank.tier} size={32} /><View><Text style={s.chipPart}>{part.label.toUpperCase()}</Text><Text style={[s.chipRank, { color: rank.tier.light }]}>{rank.tier.name}</Text></View></View>
         </View>
-        {availablePalette && <View style={s.paletteRow}>
-          <View><Text style={s.heroEyebrow}>{palette ? 'PERSONAL COLOR PALETTE' : 'EARNED RANK COLORS'}</Text><Text style={s.heroHint}>Your ranks still follow your workouts</Text></View>
-          <TouchableOpacity accessibilityRole="button" onPress={() => setPersonalColors(value => !value)}><Text style={s.paletteToggle}>{palette ? 'Use rank colors' : 'Use my palette'}</Text></TouchableOpacity>
-        </View>}
+
       </View>
 
       <View style={[s.detail, panel]}>
@@ -148,8 +139,6 @@ const s = StyleSheet.create({
   heroChip: { position: 'absolute', bottom: 24, left: 16, flexDirection: 'row', alignItems: 'center', gap: 6, borderWidth: 1, borderRadius: 13, backgroundColor: '#121620ED', padding: 8 },
   chipPart: { color: '#8F9BAD', fontSize: 8, letterSpacing: 1.1, fontWeight: '800' },
   chipRank: { fontSize: 14, fontWeight: '700', marginTop: 2 },
-  paletteRow: { padding: 16, paddingTop: 5, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
-  paletteToggle: { color: '#C4CFFF', fontSize: 10, fontWeight: '700' },
   detail: { borderRadius: 20, padding: 16, borderWidth: 1, gap: 14 },
   detailRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   detailTitle: { fontSize: 22, fontWeight: '800', marginTop: 2 },

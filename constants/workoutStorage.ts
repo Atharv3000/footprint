@@ -14,11 +14,14 @@ export interface ExerciseDefinition {
 }
 
 export interface WorkoutTrackingData {
-  exerciseType: 'pushups' | 'squats' | 'bicep_curls' | 'jumping_jacks';
+  exerciseType: 'pushups' | 'squats' | 'bicep_curls' | 'jumping_jacks' | 'boxing';
   repCount: number;
   averageFormScore: number; // 0 - 100
   formAdvice: string[];
   feedbackHighlights: string[];
+  boxingScore?: number;
+  boxingMisses?: number;
+  boxingBestCombo?: number;
   durationSeconds: number;
 }
 

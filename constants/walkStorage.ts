@@ -1,3 +1,5 @@
+import { DeviceEventEmitter } from 'react-native';
+export const WALKS_CHANGED = 'footprint:walks-changed';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export interface WalkRecord {
@@ -42,6 +44,7 @@ export async function saveWalk(userId: string, walk: Omit<WalkRecord, 'id' | 'us
     const existing: WalkRecord[] = raw ? JSON.parse(raw) : [];
     const updated = [record, ...existing];
     await AsyncStorage.setItem(key, JSON.stringify(updated));
+    DeviceEventEmitter.emit(WALKS_CHANGED, { userId });
   } catch (e) {
     console.error('Failed to save walk', e);
   }
@@ -169,6 +172,7 @@ export async function deleteWalk(userId: string, walkId: string): Promise<void> 
       const walks: WalkRecord[] = JSON.parse(raw);
       const updated = walks.filter((w) => w.id !== walkId);
       await AsyncStorage.setItem(key, JSON.stringify(updated));
+    DeviceEventEmitter.emit(WALKS_CHANGED, { userId });
     }
   } catch (e) {
     console.error('Failed to delete walk', e);
@@ -185,4 +189,14 @@ export function formatWalkDate(isoDate: string): string {
   if (diffDays === 0) return `Today, ${timeStr}`;
   if (diffDays === 1) return `Yesterday, ${timeStr}`;
   return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) + `, ${timeStr}`;
+}
+
+
+/** Raw persisted records for real collaborative goals; never seeds demo walks. */
+export async function loadRecordedWalks(userId: string): Promise<WalkRecord[]> {
+  const raw = await AsyncStorage.getItem(WALK_STORAGE_KEY(userId));
+  if (!raw) return [];
+  const records = JSON.parse(raw);
+  if (!Array.isArray(records)) throw new Error('Saved walk history could not be read.');
+  return records;
 }

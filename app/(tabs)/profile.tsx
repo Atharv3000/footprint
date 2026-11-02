@@ -812,7 +812,7 @@ export default function ProfileScreen() {
 
         {/* ── PERSISTENT SUB-TAB CONTENT: ACTIVITY vs INSIGHTS vs BADGES ── */}
         <View style={activeSubTab !== 'ranks' ? { display: 'none' } : undefined}>
-          <MuscleRanksSection userId={effectiveUserId} active={activeSubTab === 'ranks'} accountName={user?.name || profile.name} accountHandle={username} />
+          <MuscleRanksSection userId={effectiveUserId} active={activeSubTab === 'ranks'} />
         </View>
 
         <View style={[styles.activityTabWrapper, activeSubTab !== 'activity' && { display: 'none' }]}>

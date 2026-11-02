@@ -7,10 +7,15 @@ export type BattleState = {
   lead_to_win: number; host_share: number; revision: number;
 };
 
-export type Joint = { id: string; x: number; y: number; visibility: number };
+export type BoxingState = {
+  score: number; hits: number; misses: number; combo: number; best_combo: number;
+  remaining: number; finished: boolean; result: string; scale: number;
+  target: null | { id: number; hand: 'l' | 'r'; kind: 'straight' | 'hook' | 'uppercut'; x: number; y: number; age: number; inward: number };
+};
+export type Joint = { id: string; x: number; y: number; visibility: number; z?: number };
 export type PoseFrame = { type: 'pose'; rep_count: number; state: string; valid: boolean;
   feedback: string; calibrated: boolean; keypoints: Record<string, Joint>; aspect: number;
-  view_mode?: 'side' | 'head_on' | null };
+  boxing?: BoxingState; view_mode?: 'side' | 'head_on' | null };
 
 export function repServerUrl(): string {
   const override = process.env.EXPO_PUBLIC_REP_SERVER_URL;

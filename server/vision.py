@@ -31,10 +31,10 @@ class Vision:
         for i, name in NAMES.items():
             p = result.pose_landmarks[0][i]
             x, y = restore_point(p.x, p.y, rotation)
-            points[name] = {'id': name, 'x': x, 'y': y, 'visibility': min(p.visibility, p.presence)}
+            points[name] = {'id': name, 'x': x, 'y': y, 'z': p.z, 'visibility': min(p.visibility, p.presence)}
         return points
 
-    def analyze(self, encoded):
+    def analyze(self, encoded, upright=False):
         if not isinstance(encoded, str) or len(encoded) > 2_800_000:
             raise ValueError('Frame is too large. Use the low-resolution camera setting.')
         try:
@@ -49,9 +49,9 @@ class Vision:
         with self.lock:
             rgb = np.asarray(image)
             raw_points = self._points(rgb)
-            rotation = preferred_rotation(raw_points, image.width / image.height)
+            rotation = 0 if upright else preferred_rotation(raw_points, image.width / image.height)
             points = (self._points(rgb, rotation) or raw_points) if rotation else raw_points
-            if not raw_points:
+            if not raw_points and not upright:
                 candidates = [self._points(rgb, angle) for angle in (90, 270)]
                 points = max(candidates, key=arm_quality)
         # Relay the normalized, reduced JPEG, never an EXIF-bearing original.

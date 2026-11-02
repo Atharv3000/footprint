@@ -1,3 +1,5 @@
+import { DeviceEventEmitter } from 'react-native';
+export const MEAL_LOGS_CHANGED = 'footprint:meal-logs-changed';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export type ActivityLevel = 'sedentary' | 'light' | 'moderate' | 'very_active';
@@ -217,6 +219,7 @@ export async function saveMealLog(meal: MealLog): Promise<void> {
       allMeals.unshift(meal);
     }
     await AsyncStorage.setItem(STORAGE_KEY_MEALS, JSON.stringify(allMeals));
+    DeviceEventEmitter.emit(MEAL_LOGS_CHANGED);
   } catch (e) {
     console.error('Error saving meal log:', e);
   }
@@ -229,6 +232,7 @@ export async function deleteMealLog(mealId: string): Promise<void> {
       const allMeals: MealLog[] = JSON.parse(raw);
       const filtered = allMeals.filter((m) => m.id !== mealId);
       await AsyncStorage.setItem(STORAGE_KEY_MEALS, JSON.stringify(filtered));
+      DeviceEventEmitter.emit(MEAL_LOGS_CHANGED);
     }
   } catch (e) {
     console.error('Error deleting meal log:', e);

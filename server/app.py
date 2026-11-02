@@ -11,11 +11,16 @@ from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Request
 
+from .calorie_challenges import CalorieChallenges
 from .battle import Battles
 from .counter import RepCounter
+from .boxing import BoxingGame
+from .country_quests import CountryQuests
 
 TOKEN = os.environ.get('REP_SERVER_TOKEN', '')
 battles = Battles()
+calorie_challenges = CalorieChallenges(os.environ.get('CALORIE_DB_PATH', str(Path(__file__).parent / 'data/calories.sqlite3')))
+country_quests = CountryQuests(os.environ.get('COUNTRY_QUEST_DB_PATH', str(Path(__file__).parent / 'data/country-quests.sqlite3')), Path(__file__).parent.parent / 'assets/data/countryBorders.json')
 clients = {}
 sessions = {}
 vision = None
@@ -25,7 +30,7 @@ tasks = set()
 class Client:
     def __init__(self):
         self.id = secrets.token_hex(12); self.session = secrets.token_hex(32)
-        self.counter = RepCounter(); self.valid_at = 0; self.frame_at = 0
+        self.counter = RepCounter(); self.boxing = None; self.valid_at = 0; self.frame_at = 0
         self.touched = time.monotonic(); self.busy = False; self.epoch = 0
         self.messages = deque(maxlen=12)
 
@@ -153,13 +158,15 @@ async def command(request: Request):
         if kind == 'reset':
             if room: raise ValueError('Leave your battle before changing exercises.')
             exercise = data.get('exercise', 'pushups')
-            if exercise not in ('pushups', 'squats', 'bicep_curls'): raise ValueError('Unsupported exercise.')
-            client.counter = RepCounter(exercise); client.epoch += 1; client.valid_at = 0
+            if exercise not in ('pushups', 'squats', 'bicep_curls', 'boxing'): raise ValueError('Unsupported exercise.')
+            client.boxing = BoxingGame() if exercise == 'boxing' else None
+            client.counter = RepCounter('pushups' if client.boxing else exercise); client.epoch += 1; client.valid_at = 0
             return {'messages': [{'type': 'reset', 'rep_count': 0}]}
         if kind in ('create', 'join'):
             name = str(data.get('name', 'Player')).strip()[:24] or 'Player'
             room = battles.create(client.id, name) if kind == 'create' else battles.join(
                 client.id, name, str(data.get('code', '')).strip().upper())
+            client.boxing = None
             client.counter = RepCounter(); client.epoch += 1; client.valid_at = 0
             publish(room); return {'messages': []}
         if kind == 'ready':
@@ -178,6 +185,7 @@ async def command(request: Request):
             room = battles.leave(client.id)
             if room: publish(room, exclude=client.id)
             client.messages.clear()
+            if client.boxing: client.boxing.pause()
             client.counter.reset_cycle(); client.valid_at = 0; client.epoch += 1
             return {'messages': [{'type': 'left'}]}
         raise ValueError('Unsupported command.')
@@ -192,12 +200,15 @@ async def frame(request: Request):
     client.busy = True; client.frame_at = time.monotonic(); epoch = client.epoch
     try:
         data = await payload(request)
-        points, aspect, preview = await asyncio.to_thread(vision.analyze, data.get('image'))
+        if client.boxing:
+            points, aspect, preview = await asyncio.to_thread(vision.analyze, data.get('image'), True)
+        else:
+            points, aspect, preview = await asyncio.to_thread(vision.analyze, data.get('image'))
         if client.id not in clients or epoch != client.epoch:
             return {'messages': [{'type': 'frame_skipped'}]}
         room = battles.get(client.id)
         before = client.counter.count
-        pose = client.counter.update(points, time.monotonic(), aspect)
+        pose = (client.boxing or client.counter).update(points, time.monotonic(), aspect)
         if pose['valid']: client.valid_at = time.monotonic()
         else:
             client.valid_at = 0
@@ -213,3 +224,44 @@ async def frame(request: Request):
         return {'messages': [{'type': 'pose', **pose, 'keypoints': points, 'aspect': aspect}]}
     except ValueError as error: raise HTTPException(400, str(error))
     finally: client.busy = False
+
+
+@app.post('/rep-api/calories')
+async def calories(request: Request):
+    auth(request)
+    data = await payload(request)
+    try:
+        action = data.get('action')
+        if action == 'create': return calorie_challenges.create(data)
+        if action == 'join': return calorie_challenges.join(data)
+        if action == 'preview':
+            room = calorie_challenges.load(data.get('code', ''))
+            if room['cancelled'] or len(room['players']) != 1: raise ValueError('This invite is no longer available.')
+            return {k: room[k] for k in ('mode', 'target', 'days', 'timezone')}
+        if action == 'get':
+            room = calorie_challenges.load(data.get('code', ''))
+            member = calorie_challenges.member(room, data.get('key', ''))
+            return calorie_challenges.snapshot(room, member)
+        if action == 'update': return calorie_challenges.update(data)
+        raise ValueError('Unknown challenge action.')
+    except PermissionError as error: raise HTTPException(403, str(error))
+    except ValueError as error: raise HTTPException(400, str(error))
+
+
+@app.post('/rep-api/countries')
+async def countries(request: Request):
+    auth(request)
+    data = await payload(request)
+    try:
+        action = data.get('action')
+        if action == 'create': return country_quests.create(data)
+        if action == 'preview': return country_quests.preview(data)
+        if action == 'join': return country_quests.join(data)
+        if action == 'get':
+            room = country_quests.load(data.get('code', ''))
+            member_id = country_quests.member(room, data)
+            return country_quests.snapshot(room, member_id)
+        if action in ('sync', 'leave', 'close'): return country_quests.update(data)
+        raise ValueError('Unknown quest action.')
+    except PermissionError as error: raise HTTPException(403, str(error))
+    except ValueError as error: raise HTTPException(400, str(error))

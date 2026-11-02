@@ -10,16 +10,18 @@ export const BODY_PARTS = [
 ] as const;
 export type BodyPart = typeof BODY_PARTS[number]['id'];
 
+// Visual gradient matches to the supplied rank references, not official brand hex codes.
+// Keep the legacy `iron` ID for compatibility; its displayed starter rank is Wood.
 export const MUSCLE_TIERS = [
-  { id: 'iron', name: 'Iron', days: 0, color: '#919BA9', light: '#E0E6ED', dark: '#3E4858' },
-  { id: 'bronze', name: 'Bronze', days: 1, color: '#C88A55', light: '#F4CFAC', dark: '#6D3C22' },
-  { id: 'silver', name: 'Silver', days: 3, color: '#CCD9E3', light: '#F6FCFF', dark: '#637B90' },
-  { id: 'gold', name: 'Gold', days: 7, color: '#EBC45B', light: '#FFF0A5', dark: '#91621E' },
-  { id: 'platinum', name: 'Platinum', days: 15, color: '#54D7BD', light: '#C4FFF2', dark: '#176B68' },
-  { id: 'diamond', name: 'Diamond', days: 30, color: '#9A9CF5', light: '#E9E5FF', dark: '#4E4298' },
-  { id: 'champion', name: 'Champion', days: 60, color: '#D87DE6', light: '#F9D5FF', dark: '#7E3192' },
-  { id: 'titan', name: 'Titan', days: 100, color: '#EE657A', light: '#FFD3DA', dark: '#892638' },
-  { id: 'olympian', name: 'Olympian', days: 150, color: '#61CEE9', light: '#D4FAFF', dark: '#206D92' },
+  { id: 'iron', name: 'Wood', days: 0, color: '#A66D35', light: '#D3954A', dark: '#6C431F' },
+  { id: 'bronze', name: 'Bronze', days: 1, color: '#B7876A', light: '#DBB599', dark: '#855B43' },
+  { id: 'silver', name: 'Silver', days: 3, color: '#9BAFB5', light: '#D3DFE2', dark: '#6E8790' },
+  { id: 'gold', name: 'Gold', days: 7, color: '#F4D449', light: '#FFE879', dark: '#CCA528' },
+  { id: 'platinum', name: 'Platinum', days: 15, color: '#48C9B9', light: '#8CE8DD', dark: '#219C94' },
+  { id: 'diamond', name: 'Diamond', days: 30, color: '#7B68EC', light: '#BBB1FF', dark: '#5D47C9' },
+  { id: 'champion', name: 'Champion', days: 60, color: '#C86ADD', light: '#EBA0F1', dark: '#9F44C3' },
+  { id: 'titan', name: 'Titan', days: 100, color: '#E30020', light: '#F51030', dark: '#A80019' },
+  { id: 'olympian', name: 'Olympian', days: 150, color: '#50BBD0', light: '#98DDED', dark: '#2B8EAA' },
 ] as const;
 export type MuscleTier = typeof MUSCLE_TIERS[number];
 export type MuscleRank = {

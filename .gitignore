@@ -44,3 +44,6 @@ yarn-error.*
 .venv/
 __pycache__/
 server/models/
+
+# Private calorie challenge state
+server/data/
