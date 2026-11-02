@@ -1223,12 +1223,13 @@ export default function LogScreen() {
         onSaveTrackedWorkout={async (trackingData) => {
           try {
             const exerciseMap: Record<string, { id: string; name: string }> = {
+              boxing: { id: 'boxing', name: 'Shadowboxing' },
               pushups: { id: 'pushups', name: 'Pushups' },
               squats: { id: 'squats', name: 'Barbell Squat' },
               bicep_curls: { id: 'bicep_curls', name: 'Bicep Curls' },
             };
             const meta = exerciseMap[trackingData.exerciseType] || { id: 'pushups', name: 'Pushups' };
-            const defaultWeight = meta.id === 'pushups' ? 0 : meta.id === 'squats' ? 135 : 30;
+            const defaultWeight = (meta.id === 'pushups' || meta.id === 'boxing') ? 0 : meta.id === 'squats' ? 135 : 30;
 
             await saveWorkoutLog(userId, {
               exerciseId: meta.id,
@@ -1236,7 +1237,7 @@ export default function LogScreen() {
               reps: trackingData.repCount,
               weight: defaultWeight,
               weightUnit: effectiveWeightUnit,
-              notes: `AI Form Score: ${trackingData.averageFormScore}%`,
+              notes: trackingData.exerciseType === 'boxing' ? `Boxing: ${trackingData.boxingScore || 0} points, ${trackingData.repCount} hits, ${trackingData.boxingMisses || 0} misses; best combo ${trackingData.boxingBestCombo || 0}.` : trackingData.averageFormScore > 0 ? `AI Form Score: ${trackingData.averageFormScore}%` : 'Camera-counted reps; form score not assessed.',
               aiTracked: true,
               trackingData,
             });

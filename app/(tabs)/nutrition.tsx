@@ -1,3 +1,4 @@
+import { CalorieChallenges } from '@/components/CalorieChallenges';
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View,
@@ -411,6 +412,8 @@ export default function NutritionScreen() {
                 <Ionicons name="options-outline" size={20} color={colors.primary} />
               </TouchableOpacity>
             </View>
+
+            <CalorieChallenges compact />
 
             {/* Caloric Energy Balance: Entire box is progress bar + connected bottom notch with interactive day circles */}
             {(() => {

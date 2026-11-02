@@ -761,7 +761,7 @@ export const ProfileActivitySection: React.FC<ProfileActivitySectionProps> = ({
                                 >
                                   <Ionicons name="scan" size={11} color="#ffffff" />
                                   <Text style={{ fontSize: 10, fontWeight: '800', color: '#ffffff' }}>
-                                    AI CAMERA · {set.trackingData?.averageFormScore ? `${set.trackingData.averageFormScore}%` : 'VERIFIED'}
+                                    AI CAMERA · {set.trackingData?.averageFormScore ? `${set.trackingData.averageFormScore}%` : 'REPS ONLY'}
                                   </Text>
                                 </View>
                               )}
@@ -912,7 +912,7 @@ export const ProfileActivitySection: React.FC<ProfileActivitySectionProps> = ({
               reps: trackingData.repCount,
               weight: defaultWeight,
               weightUnit: unitSystem === 'metric' ? 'kg' : 'lb',
-              notes: `AI Form Score: ${trackingData.averageFormScore}%`,
+              notes: trackingData.averageFormScore > 0 ? `AI Form Score: ${trackingData.averageFormScore}%` : 'Camera-counted reps; form score not assessed.',
               aiTracked: true,
               trackingData,
             });

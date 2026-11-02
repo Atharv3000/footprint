@@ -1,3 +1,5 @@
+import { CountryQuests } from '@/components/CountryQuests';
+import { CalorieChallenges } from '@/components/CalorieChallenges';
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   StyleSheet,
@@ -1068,6 +1070,7 @@ export default function CommunityScreen() {
             {/* ── TAB 3: QUESTS ── */}
             {activeTab === 'quests' && (
               <View style={{ paddingBottom: 24 }}>
+                <View style={{ paddingHorizontal: 20, paddingTop: 12 }}><CalorieChallenges /><CountryQuests /></View>
                 {(() => {
                   const filteredQuests = quests.filter((q) => {
                     if (!searchQuery.trim()) return true;
