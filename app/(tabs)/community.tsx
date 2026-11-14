@@ -1,6 +1,6 @@
 import { CountryQuests } from '@/components/CountryQuests';
 import { CalorieChallenges } from '@/components/CalorieChallenges';
-import { FriendBarcodeShareModal } from '@/components/FriendBarcodeShareModal';
+import { FriendQrShareModal } from '@/components/FriendQrShareModal';
 import * as Linking from 'expo-linking';
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
@@ -590,7 +590,7 @@ export default function CommunityScreen() {
                 {/* Contextual Action Button based on active tab */}
                 {activeTab === 'friends' && (
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                    {/* Share Barcode / Friend Pass Button in top right */}
+                    {/* Share QR Code / Friend Pass Button in top right */}
                     <TouchableOpacity
                       style={[styles.retroActionBtn, { backgroundColor: colors.surfaceElevated }]}
                       onPress={() => {
@@ -598,7 +598,7 @@ export default function CommunityScreen() {
                         setShowBarcodeShareModal(true);
                       }}
                       activeOpacity={0.7}
-                      accessibilityLabel="Share Friend Barcode Pass"
+                      accessibilityLabel="Share Friend QR Pass"
                     >
                       <Ionicons name="share-outline" size={19} color={colors.text} />
                     </TouchableOpacity>
@@ -1954,8 +1954,8 @@ export default function CommunityScreen() {
             </View>
       </InteractiveBottomModal>
 
-      {/* ── MODAL: BARCODE / FRIEND PASS SHARE POPUP ── */}
-      <FriendBarcodeShareModal
+      {/* ── MODAL: TOP-DOCKED QR CODE / FRIEND PASS SHARE POPUP ── */}
+      <FriendQrShareModal
         visible={showBarcodeShareModal}
         onClose={() => setShowBarcodeShareModal(false)}
         username={myUsername || user?.name || 'user'}
