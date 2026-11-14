@@ -9,7 +9,7 @@ import * as SplashScreen from 'expo-splash-screen';
 import { useEffect } from 'react';
 import { Platform, View, StyleSheet } from 'react-native';
 import 'react-native-reanimated';
-import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { SafeAreaProvider, initialWindowMetrics } from 'react-native-safe-area-context';
 
 import { AuthProvider, useAuth } from '@/constants/AuthContext';
 import { ThemeProvider } from '@/constants/ThemeContext';
@@ -74,7 +74,7 @@ export default function RootLayout() {
   }
 
   return (
-    <SafeAreaProvider>
+    <SafeAreaProvider initialMetrics={initialWindowMetrics}>
       <AuthProvider>
         <ThemeProvider>
           <RootLayoutNav />

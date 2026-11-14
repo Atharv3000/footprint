@@ -1,3 +1,5 @@
+import { useScreenInsets } from '@/constants/useScreenInsets';
+import { AppModal as Modal } from '@/components/AppModal';
 import { CountryQuests } from '@/components/CountryQuests';
 import { CalorieChallenges } from '@/components/CalorieChallenges';
 import { FriendQrShareModal } from '@/components/FriendQrShareModal';
@@ -11,7 +13,6 @@ import {
   TouchableOpacity,
   FlatList,
   ScrollView,
-  Modal,
   Alert,
   Platform,
   RefreshControl,
@@ -81,20 +82,6 @@ export interface CommunityQuest {
 
 const INITIAL_QUESTS: CommunityQuest[] = [
   {
-    id: 'quest_1',
-    title: 'Weekend 15,000 Step Trek',
-    category: 'weekly',
-    description: 'Crush 15,000 steps this weekend with fellow community walkers.',
-    current: 11420,
-    target: 15000,
-    unit: 'steps',
-    reward: 'Gold Footprint Badge + 150 Pts',
-    icon: 'flame',
-    color: '#f97316',
-    daysLeft: 2,
-    joined: true,
-  },
-  {
     id: 'quest_2',
     title: 'Sunrise Stepper',
     category: 'daily',
@@ -106,6 +93,20 @@ const INITIAL_QUESTS: CommunityQuest[] = [
     icon: 'sunny',
     color: '#eab308',
     daysLeft: 1,
+    joined: true,
+  },
+  {
+    id: 'quest_1',
+    title: 'Weekend 15,000 Step Trek',
+    category: 'weekly',
+    description: 'Crush 15,000 steps this weekend with fellow community walkers.',
+    current: 11420,
+    target: 15000,
+    unit: 'steps',
+    reward: 'Gold Footprint Badge + 150 Pts',
+    icon: 'flame',
+    color: '#f97316',
+    daysLeft: 2,
     joined: true,
   },
   {
@@ -122,34 +123,6 @@ const INITIAL_QUESTS: CommunityQuest[] = [
     daysLeft: 4,
     joined: true,
   },
-  {
-    id: 'quest_4',
-    title: 'Trailfinder Discovery',
-    category: 'weekly',
-    description: 'Record walks across 3 distinct routes or parks in your area.',
-    current: 2,
-    target: 3,
-    unit: 'parks',
-    reward: 'Pathfinder Ribbon',
-    icon: 'compass',
-    color: '#10b981',
-    daysLeft: 5,
-    joined: false,
-  },
-  {
-    id: 'quest_5',
-    title: 'Twilight Stroll Milestone',
-    category: 'daily',
-    description: 'Take a relaxed evening walk of at least 2,500 steps after sunset.',
-    current: 0,
-    target: 2500,
-    unit: 'steps',
-    reward: 'Moonlight Pin',
-    icon: 'moon',
-    color: '#8b5cf6',
-    daysLeft: 1,
-    joined: false,
-  },
 ];
 
 const SQUAD_EMOJI_PICKER = ['👟', '🏃‍♂️', '⚡', '🌄', '🌲', '🏆', '🔥', '🚴', '🚀', '🎯', '🌿', '🧭'];
@@ -157,6 +130,11 @@ const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const FRIENDS_PAGE_WIDTH = SCREEN_WIDTH - 32;
 
 export default function CommunityScreen() {
+  const screenInsets = useScreenInsets();
+  const safeStyles = React.useMemo(() => ({ ...styles,
+    notifModalFullContainer: { ...styles.notifModalFullContainer, paddingTop: screenInsets.top + 12 },
+  }), [screenInsets.top, screenInsets.left, screenInsets.right]);
+
   const { user } = useAuth();
   const { colors, isDark } = useTheme();
 
@@ -217,15 +195,12 @@ export default function CommunityScreen() {
   // Barcode / Share Friend Pass Modal
   const [showBarcodeShareModal, setShowBarcodeShareModal] = useState<boolean>(false);
 
-  // Community 3-Way Tab switcher: 'friends' | 'squads' | 'quests'
-  const [activeTab, setActiveTab] = useState<'friends' | 'squads' | 'quests'>('friends');
-  const communityTabAnim = useRef(new Animated.Value(0)).current;
 
   // Unified Notifications Modal
   const [showNotificationsModal, setShowNotificationsModal] = useState<boolean>(false);
 
   // Quests list state
-  const [quests, setQuests] = useState<CommunityQuest[]>(INITIAL_QUESTS);
+  const [quests] = useState<CommunityQuest[]>(INITIAL_QUESTS);
 
   // Squads specific state
   const [selectedSquadType, setSelectedSquadType] = useState<SquadType>('open_invite');
@@ -236,34 +211,9 @@ export default function CommunityScreen() {
   const [selectedGroupForMember, setSelectedGroupForMember] = useState<SocialGroup | null>(null);
   const [memberInput, setMemberInput] = useState<string>('');
 
-  const switchCommunityTab = (tab: 'friends' | 'squads' | 'quests') => {
-    if (tab === activeTab) return;
-    Haptics.selectionAsync().catch(() => {});
-    setActiveTab(tab);
-    const target = tab === 'friends' ? 0 : tab === 'squads' ? 1 : 2;
-    Animated.timing(communityTabAnim, {
-      toValue: target,
-      duration: 220,
-      useNativeDriver: false,
-    }).start();
-  };
 
-  const handleToggleQuest = (questId: string) => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
-    setQuests((prev) =>
-      prev.map((q) => {
-        if (q.id === questId) {
-          const nextJoined = !q.joined;
-          return {
-            ...q,
-            joined: nextJoined,
-            current: nextJoined ? Math.max(q.current, Math.round(q.target * 0.15)) : q.current,
-          };
-        }
-        return q;
-      })
-    );
-  };
+
+
 
   // Selected friend for color customization modal
 
@@ -563,12 +513,10 @@ export default function CommunityScreen() {
         ListHeaderComponent={
           <View>
             {/* ── Community Header with Title & Top-Right Combined Notifications Bell ── */}
-            <View style={[styles.retroHeader, { paddingTop: Platform.OS === 'ios' ? 76 : 48 }]}>
-              <Text style={[styles.retroScreenTitle, { color: colors.text }]}>Community</Text>
+            <View style={[styles.retroHeader, { paddingTop: screenInsets.top + 16 }]}>
+              <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.75} style={[styles.retroScreenTitle, { color: colors.text, flexShrink: 1, marginRight: 8 }]}>Community</Text>
               <View style={styles.retroHeaderActions}>
-                {/* Contextual Action Button based on active tab */}
-                {activeTab === 'friends' && (
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                     {/* Share QR Code / Friend Pass Button in top right */}
                     <TouchableOpacity
                       style={[styles.retroActionBtn, { backgroundColor: colors.surfaceElevated }]}
@@ -580,6 +528,21 @@ export default function CommunityScreen() {
                       accessibilityLabel="Share Friend QR Pass"
                     >
                       <Ionicons name="share-outline" size={19} color={colors.text} />
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      accessibilityRole="button"
+                      accessibilityLabel={privacyStatus.isPrivate ? 'Privacy mode active. Manage location privacy' : 'Manage location privacy'}
+                      accessibilityHint={privacyStatus.isPrivate && privacyStatus.expiresAt ? `${formatCountdown(privacyStatus.remainingSeconds)} remaining` : 'Choose how long to hide your location'}
+                      style={[styles.retroActionBtn, { backgroundColor: privacyStatus.isPrivate ? colors.primary + '18' : colors.surfaceElevated }]}
+                      onPress={() => {
+                        Haptics.selectionAsync().catch(() => {});
+                        privacySelectionMadeRef.current = true;
+                        setShowPrivacyDurationModal(true);
+                      }}
+                      activeOpacity={0.7}
+                    >
+                      <Ionicons name={privacyStatus.isPrivate ? 'eye-off-outline' : 'eye-outline'} size={19} color={privacyStatus.isPrivate ? colors.primary : colors.text} />
                     </TouchableOpacity>
 
                     {/* Add Friend Manual Search Button */}
@@ -595,21 +558,8 @@ export default function CommunityScreen() {
                       <Ionicons name="person-add-outline" size={19} color={colors.text} />
                     </TouchableOpacity>
                   </View>
-                )}
 
-                {activeTab === 'squads' && (
-                  <TouchableOpacity
-                    style={[styles.retroActionBtn, { backgroundColor: colors.primary }]}
-                    onPress={() => {
-                      Haptics.selectionAsync().catch(() => {});
-                      setShowCreateGroupModal(true);
-                    }}
-                    activeOpacity={0.7}
-                    accessibilityLabel="New Squad"
-                  >
-                    <Ionicons name="add" size={20} color={isDark ? '#09090b' : '#ffffff'} />
-                  </TouchableOpacity>
-                )}
+
 
                 {/* Notifications Bell Icon combining Friends & Squads Notifications with badge in bottom-right */}
                 <TouchableOpacity
@@ -635,89 +585,7 @@ export default function CommunityScreen() {
 
             {/* ── LOWER SCREEN SECTION: like Profile tab (pure white in light mode, pure black in dark mode, with subtle top divider line) ── */}
             <View style={[styles.lowerScreenSection, { backgroundColor: isDark ? '#000000' : '#ffffff', borderTopColor: isDark ? '#1a1a1f' : '#ededf0' }]}>
-              {/* ── Full End-to-End Segmented Bar: Friends | Squads | Quests ── */}
-              <View
-                style={[
-                  styles.communitySubTabBar,
-                  {
-                    backgroundColor: isDark ? '#000000' : '#ffffff',
-                    borderBottomColor: isDark ? '#1f1f24' : '#e5e5ea',
-                  },
-                ]}
-              >
-                <TouchableOpacity
-                  style={styles.communitySubTabBtn}
-                  onPress={() => switchCommunityTab('friends')}
-                  activeOpacity={0.7}
-                >
-                  <Text
-                    style={[
-                      styles.communitySubTabText,
-                      {
-                        color: activeTab === 'friends' ? (isDark ? '#ffffff' : '#000000') : (isDark ? '#71717a' : '#9ca3af'),
-                        fontWeight: activeTab === 'friends' ? '800' : '600',
-                      },
-                    ]}
-                  >
-                    FRIENDS
-                  </Text>
-                </TouchableOpacity>
 
-                <TouchableOpacity
-                  style={styles.communitySubTabBtn}
-                  onPress={() => switchCommunityTab('squads')}
-                  activeOpacity={0.7}
-                >
-                  <Text
-                    style={[
-                      styles.communitySubTabText,
-                      {
-                        color: activeTab === 'squads' ? (isDark ? '#ffffff' : '#000000') : (isDark ? '#71717a' : '#9ca3af'),
-                        fontWeight: activeTab === 'squads' ? '800' : '600',
-                      },
-                    ]}
-                  >
-                    SQUADS
-                  </Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  style={styles.communitySubTabBtn}
-                  onPress={() => switchCommunityTab('quests')}
-                  activeOpacity={0.7}
-                >
-                  <Text
-                    style={[
-                      styles.communitySubTabText,
-                      {
-                        color: activeTab === 'quests' ? (isDark ? '#ffffff' : '#000000') : (isDark ? '#71717a' : '#9ca3af'),
-                        fontWeight: activeTab === 'quests' ? '800' : '600',
-                      },
-                    ]}
-                  >
-                    QUESTS
-                  </Text>
-                </TouchableOpacity>
-
-                {/* Animated Underline Indicator across the bar */}
-                <Animated.View
-                  style={[
-                    styles.communitySubTabIndicator,
-                    {
-                      backgroundColor: isDark ? '#ffffff' : '#000000',
-                      width: SCREEN_WIDTH / 3,
-                      transform: [
-                        {
-                          translateX: communityTabAnim.interpolate({
-                            inputRange: [0, 1, 2],
-                            outputRange: [0, SCREEN_WIDTH / 3, (SCREEN_WIDTH / 3) * 2],
-                          }),
-                        },
-                      ],
-                    },
-                  ]}
-                />
-              </View>
 
               <View style={styles.communityInnerContent}>
                 {/* ── Retro Pill Search Bar ── */}
@@ -725,13 +593,7 @@ export default function CommunityScreen() {
                   <Ionicons name="search" size={17} color={colors.textMuted} style={styles.retroSearchIcon} />
                   <TextInput
                     style={[styles.retroSearchInput, { color: colors.text }]}
-                    placeholder={
-                      activeTab === 'friends'
-                        ? 'Search friends or usernames'
-                        : activeTab === 'squads'
-                        ? 'Search squads or members'
-                        : 'Search quests & challenges'
-                    }
+                    placeholder="Search friends or challenges"
                     placeholderTextColor={colors.textMuted}
                     value={searchQuery}
                     onChangeText={setSearchQuery}
@@ -740,9 +602,12 @@ export default function CommunityScreen() {
                   />
                 </View>
 
-            {/* ── TAB 1: FRIENDS ── */}
-            {activeTab === 'friends' && (
-              <View>
+
+
+
+
+            <Text accessibilityRole="header" style={{ color: colors.text, fontFamily: BRAND_ROUNDED_FONT_EXTRA, fontSize: 16, fontWeight: '800', marginBottom: 12 }}>Friends</Text>
+            <View>
                 {/* Retro Circular Friend Grid / List (3 friends per tab) */}
                 {(() => {
                   const filteredFriends = friends.filter(
@@ -918,250 +783,14 @@ export default function CommunityScreen() {
                   );
                 })()}
 
-                {/* Privacy Mode Banner - Exact Format as Calorie Challenges */}
-                <TouchableOpacity
-                  onPress={() => {
-                    Haptics.selectionAsync().catch(() => {});
-                    setShowPrivacyDurationModal(true);
-                  }}
-                  activeOpacity={0.7}
-                  accessibilityRole="button"
-                  accessibilityLabel="Privacy Mode"
-                  style={[styles.privacyBanner, { backgroundColor: colors.surfaceElevated }]}
-                >
-                  <Ionicons
-                    name={privacyStatus.isPrivate ? 'eye-off-outline' : 'eye-outline'}
-                    size={20}
-                    color={privacyStatus.isPrivate ? '#10b981' : colors.primary}
-                  />
-                  <View style={{ flex: 1 }}>
-                    <Text style={[styles.privacyBannerTitle, { color: colors.text }]}>
-                      Privacy Mode{privacyStatus.isPrivate ? ' · Active' : ''}
-                    </Text>
-                    <Text style={[styles.privacyBannerCaption, { color: colors.textMuted }]}>
-                      {privacyStatus.isPrivate
-                        ? privacyStatus.expiresAt
-                          ? `${formatCountdown(privacyStatus.remainingSeconds)} left · Hiding location`
-                          : 'Hiding location until turned off'
-                        : 'Hide your live map radar position'}
-                    </Text>
-                  </View>
-                  <Ionicons name="chevron-forward" size={17} color={colors.textMuted} />
-                </TouchableOpacity>
 
-                {/* Calorie Challenges Prompt Banner below Privacy Mode */}
+              </View>
+
+            <View style={{ paddingBottom: 24 }}>
+                                {/* Calorie challenges */}
                 <View style={{ marginTop: 12, marginBottom: 8 }}>
                   <CalorieChallenges />
                 </View>
-              </View>
-            )}
-
-            {/* ── TAB 2: SQUADS ── */}
-            {activeTab === 'squads' && (
-              <View>
-                {(() => {
-                  const filteredSquads = groups.filter((g) => {
-                    if (!searchQuery.trim()) return true;
-                    const q = searchQuery.toLowerCase();
-                    return (
-                      g.name.toLowerCase().includes(q) ||
-                      g.description.toLowerCase().includes(q) ||
-                      g.memberUsernames.some((u) => u.toLowerCase().includes(q))
-                    );
-                  });
-
-                  if (filteredSquads.length === 0) {
-                    return (
-                      <View style={[styles.emptyCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-                        <Ionicons name="shield-outline" size={32} color={colors.textMuted} />
-                        <Text style={[styles.emptyTitle, { color: colors.text }]}>No Squads Found</Text>
-                        <Text style={[styles.emptyDesc, { color: colors.textMuted }]}>
-                          {searchQuery.trim()
-                            ? 'No squads match your search criteria.'
-                            : 'Create or join a walking squad to compete together on team ranks!'}
-                        </Text>
-                        <TouchableOpacity
-                          style={[styles.emptyActionBtn, { backgroundColor: colors.primary }]}
-                          onPress={() => {
-                            Haptics.selectionAsync().catch(() => {});
-                            setShowCreateGroupModal(true);
-                          }}
-                          activeOpacity={0.8}
-                        >
-                          <Text style={[styles.emptyActionBtnText, { color: isDark ? '#09090b' : '#ffffff' }]}>
-                            Create a Squad
-                          </Text>
-                        </TouchableOpacity>
-                      </View>
-                    );
-                  }
-
-                  return (
-                    <View style={{ gap: 12, paddingBottom: 20 }}>
-                      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 2, marginTop: 4 }}>
-                        <Text style={{ fontSize: 11, fontWeight: '800', letterSpacing: 0.8, color: colors.textMuted }}>
-                          ACTIVE SQUADS ({filteredSquads.length})
-                        </Text>
-                        <TouchableOpacity
-                          onPress={() => {
-                            Haptics.selectionAsync().catch(() => {});
-                            setShowCreateGroupModal(true);
-                          }}
-                          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                        >
-                          <Text style={{ fontSize: 12, fontWeight: '700', color: colors.primary }}>
-                            + New Squad
-                          </Text>
-                        </TouchableOpacity>
-                      </View>
-
-                      {filteredSquads.map((item) => {
-                        const metrics = computeSquadMetrics(item.memberUsernames, myUsername);
-                        const { memberCount, totalSteps, totalDistanceMiles, gradeInfo } = metrics;
-                        const isSelfMember = item.memberUsernames.includes(myUsername);
-
-                        return (
-                          <TouchableOpacity
-                            key={item.id}
-                            style={[
-                              styles.squadCardContainer,
-                              {
-                                backgroundColor: colors.surfaceElevated,
-                                borderColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)',
-                              },
-                            ]}
-                            onPress={() => {
-                              Haptics.selectionAsync().catch(() => {});
-                              setViewingSquad(item);
-                            }}
-                            activeOpacity={0.88}
-                          >
-                            {/* Card Top: Avatar / Grade Shield + Squad Identity + Status Badge */}
-                            <View style={styles.squadCardHeaderRow}>
-                              <View
-                                style={[
-                                  styles.squadCardGradeBadge,
-                                  {
-                                    backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)',
-                                    borderColor: gradeInfo.color,
-                                  },
-                                ]}
-                              >
-                                <Ionicons name="shield" size={12} color={gradeInfo.color} style={{ marginBottom: 1 }} />
-                                <Text style={[styles.squadCardGradeText, { color: gradeInfo.color }]}>
-                                  {gradeInfo.grade}
-                                </Text>
-                              </View>
-
-                              <View style={{ flex: 1, marginLeft: 12 }}>
-                                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 6 }}>
-                                  <Text style={[styles.squadCardTitle, { color: colors.text }]} numberOfLines={1}>
-                                    {item.name}
-                                  </Text>
-                                  {isSelfMember && (
-                                    <View style={[styles.squadActiveMemberBadge, { backgroundColor: `${colors.primary}20` }]}>
-                                      <View style={[styles.squadActiveDot, { backgroundColor: colors.primary }]} />
-                                      <Text style={[styles.squadActiveMemberText, { color: colors.primary }]}>
-                                        JOINED
-                                      </Text>
-                                    </View>
-                                  )}
-                                </View>
-
-                                <Text style={[styles.squadCardDesc, { color: colors.textMuted }]} numberOfLines={2}>
-                                  {item.description || 'Collaborate with squad members and climb weekly ranks together.'}
-                                </Text>
-                              </View>
-                            </View>
-
-                            {/* Crisp Stat Tiles Bar: Members | Total Steps | Total Miles Covered */}
-                            <View
-                              style={[
-                                styles.squadCardStatsBar,
-                                {
-                                  backgroundColor: isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.03)',
-                                },
-                              ]}
-                            >
-                              <View style={styles.squadCardStatCol}>
-                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                                  <Ionicons name="people-outline" size={13} color={colors.textMuted} />
-                                  <Text style={[styles.squadCardStatVal, { color: colors.text }]}>
-                                    {memberCount}
-                                  </Text>
-                                </View>
-                                <Text style={[styles.squadCardStatLabel, { color: colors.textMuted }]}>MEMBERS</Text>
-                              </View>
-
-                              <View style={[styles.squadCardStatDivider, { backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)' }]} />
-
-                              <View style={styles.squadCardStatCol}>
-                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                                  <Ionicons name="footsteps-outline" size={13} color={colors.primary} />
-                                  <Text style={[styles.squadCardStatVal, { color: colors.text }]}>
-                                    {totalSteps >= 1000 ? `${(totalSteps / 1000).toFixed(1)}k` : totalSteps}
-                                  </Text>
-                                </View>
-                                <Text style={[styles.squadCardStatLabel, { color: colors.textMuted }]}>TOTAL STEPS</Text>
-                              </View>
-
-                              <View style={[styles.squadCardStatDivider, { backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)' }]} />
-
-                              <View style={styles.squadCardStatCol}>
-                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                                  <Ionicons name="navigate-outline" size={13} color="#3b82f6" />
-                                  <Text style={[styles.squadCardStatVal, { color: colors.text }]}>
-                                    {totalDistanceMiles} mi
-                                  </Text>
-                                </View>
-                                <Text style={[styles.squadCardStatLabel, { color: colors.textMuted }]}>TOTAL MILES</Text>
-                              </View>
-                            </View>
-
-                            {/* Card Footer: Horizontally Scrollable Clean @handles (No Borders) */}
-                            <View style={styles.squadCardFooter}>
-                              <ScrollView
-                                horizontal
-                                showsHorizontalScrollIndicator={false}
-                                contentContainerStyle={styles.squadCardMembersScroll}
-                              >
-                                {item.memberUsernames.map((u) => {
-                                  const isSelf = u.toLowerCase() === (myUsername || '').toLowerCase();
-                                  return (
-                                    <View key={u} style={styles.memberHandleItem}>
-                                      <Text
-                                        style={[
-                                          styles.memberHandleText,
-                                          {
-                                            color: isSelf ? colors.primary : colors.textSecondary,
-                                            fontWeight: isSelf ? '700' : '500',
-                                          },
-                                        ]}
-                                      >
-                                        @{u}
-                                      </Text>
-                                    </View>
-                                  );
-                                })}
-                              </ScrollView>
-
-                              <View style={styles.squadCardActionChevron}>
-                                <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
-                              </View>
-                            </View>
-                          </TouchableOpacity>
-                        );
-                      })}
-
-                    </View>
-                  );
-                })()}
-              </View>
-            )}
-
-            {/* ── TAB 3: QUESTS ── */}
-            {activeTab === 'quests' && (
-              <View style={{ paddingBottom: 24 }}>
                 <View style={{ paddingTop: 4, marginBottom: 8 }}><CountryQuests /></View>
                 {(() => {
                   const filteredQuests = quests.filter((q) => {
@@ -1215,9 +844,7 @@ export default function CommunityScreen() {
                                   </Text>
                                 </View>
                                 <Text style={[styles.questTitle, { color: colors.text }]}>{quest.title}</Text>
-                                <Text style={[styles.questDesc, { color: colors.textMuted }]} numberOfLines={2}>
-                                  {quest.description}
-                                </Text>
+
                               </View>
                             </View>
 
@@ -1236,40 +863,7 @@ export default function CommunityScreen() {
                               </View>
                             </View>
 
-                            {/* Reward & Join / Done Button */}
-                            <View style={styles.questFooter}>
-                              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flex: 1 }}>
-                                <Ionicons name="gift-outline" size={14} color={quest.color} />
-                                <Text style={[styles.questRewardText, { color: colors.textSecondary }]} numberOfLines={1}>
-                                  {quest.reward}
-                                </Text>
-                              </View>
 
-                              <TouchableOpacity
-                                style={[
-                                  styles.questActionBtn,
-                                  quest.joined
-                                    ? { backgroundColor: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.06)' }
-                                    : { backgroundColor: colors.primary },
-                                ]}
-                                onPress={() => handleToggleQuest(quest.id)}
-                                activeOpacity={0.8}
-                              >
-                                <Ionicons
-                                  name={quest.joined ? 'checkmark-circle' : 'flag'}
-                                  size={13}
-                                  color={quest.joined ? colors.text : (isDark ? '#09090b' : '#ffffff')}
-                                />
-                                <Text
-                                  style={[
-                                    styles.questActionBtnText,
-                                    { color: quest.joined ? colors.text : (isDark ? '#09090b' : '#ffffff') },
-                                  ]}
-                                >
-                                  {quest.joined ? 'Joined' : 'Join'}
-                                </Text>
-                              </TouchableOpacity>
-                            </View>
                           </View>
                         );
                       })}
@@ -1277,7 +871,8 @@ export default function CommunityScreen() {
                   );
                 })()}
               </View>
-            )}
+
+
 
               </View>
             </View>
@@ -1804,7 +1399,7 @@ export default function CommunityScreen() {
         presentationStyle="pageSheet"
         onRequestClose={() => setShowNotificationsModal(false)}
       >
-        <View style={[styles.notifModalFullContainer, { backgroundColor: colors.background }]}>
+        <View style={[safeStyles.notifModalFullContainer, { backgroundColor: colors.background }]}>
           {/* Top Bar with Title, Counter, and Close Button */}
           <View style={[styles.notifModalHeaderBar, { borderBottomColor: colors.border }]}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
@@ -2992,7 +2587,7 @@ const styles = StyleSheet.create({
   retroHeaderActions: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 16,
+    gap: 8,
   },
   retroActionBtn: {
     width: 38,
@@ -3554,35 +3149,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingTop: 16,
   },
-  /* ── Community 3-Way SubTab Bar ── */
-  communitySubTabBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    height: 48,
-    position: 'relative',
-    borderBottomWidth: 1,
-    marginBottom: 0,
-  },
-  communitySubTabBtn: {
-    flex: 1,
-    height: '100%',
-    alignItems: 'center',
-    justifyContent: 'center',
-    zIndex: 2,
-  },
-  communitySubTabText: {
-    fontFamily: BRAND_ROUNDED_FONT_EXTRA,
-    fontSize: 14.5,
-    letterSpacing: -0.2,
-    textTransform: 'lowercase',
-  },
-  communitySubTabIndicator: {
-    position: 'absolute',
-    bottom: -1,
-    height: 3,
-    borderRadius: 1.5,
-    zIndex: 5,
-  },
+
+
+
+
   tabCounterPill: {
     paddingHorizontal: 6,
     paddingVertical: 1.5,
@@ -4008,11 +3578,6 @@ const styles = StyleSheet.create({
     letterSpacing: -0.2,
     marginTop: 2,
   },
-  questDesc: {
-    fontSize: 12,
-    lineHeight: 16,
-    marginTop: 3,
-  },
   questProgressSection: {
     marginTop: 14,
   },
@@ -4038,30 +3603,5 @@ const styles = StyleSheet.create({
   questProgressBar: {
     height: '100%',
     borderRadius: 3,
-  },
-  questFooter: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginTop: 14,
-    paddingTop: 10,
-    borderTopWidth: 1,
-    borderTopColor: 'rgba(128,128,128,0.1)',
-  },
-  questRewardText: {
-    fontSize: 11.5,
-    fontWeight: '600',
-  },
-  questActionBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-    borderRadius: 12,
-  },
-  questActionBtnText: {
-    fontSize: 12,
-    fontWeight: '800',
   },
 });

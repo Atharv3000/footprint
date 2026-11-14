@@ -1,3 +1,6 @@
+import { ExerciseDemo, ExerciseDemoProvider } from '@/components/ExerciseDemo';
+import { useScreenInsets } from '@/constants/useScreenInsets';
+import { AppModal as Modal } from '@/components/AppModal';
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
   StyleSheet,
@@ -7,14 +10,12 @@ import {
   TouchableOpacity,
   ScrollView,
   FlatList,
-  Platform,
   Alert,
-  Modal,
   Dimensions,
-  Image,
   Animated,
   LayoutAnimation,
   UIManager,
+  Keyboard,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
@@ -120,7 +121,7 @@ const ExerciseRowItem = React.memo(function ExerciseRowItem({
           >
             {item.name}
           </Text>
-          <Text style={[styles.exerciseListItemMeta, { color: textMutedColor }]}>
+          <Text numberOfLines={1} ellipsizeMode="tail" style={[styles.exerciseListItemMeta, { color: textMutedColor }]}>
             {item.category.toUpperCase()}
             {item.primaryMuscles ? ` · ${item.primaryMuscles.join(', ')}` : ''}
           </Text>
@@ -146,6 +147,8 @@ const ExerciseRowItem = React.memo(function ExerciseRowItem({
 });
 
 export default function LogScreen() {
+  const screenInsets = useScreenInsets();
+
   const { user, profile } = useAuth();
   const themeContext = useTheme();
   const colors = themeContext?.colors;
@@ -188,6 +191,7 @@ export default function LogScreen() {
   const [activeDropdown, setActiveDropdown] = useState<'muscle' | 'difficulty' | 'type' | null>(null);
 
   const [exerciseSearchQuery, setExerciseSearchQuery] = useState<string>('');
+  const [exerciseBrowserExpanded, setExerciseBrowserExpanded] = useState(false);
   const [isHeroExpanded, setIsHeroExpanded] = useState<boolean>(false);
   const heroExpandAnim = useRef(new Animated.Value(0)).current;
 
@@ -212,6 +216,7 @@ export default function LogScreen() {
   const [selectedExIdsForRoutine, setSelectedExIdsForRoutine] = useState<string[]>([]);
   const [batchSuccessMsg, setBatchSuccessMsg] = useState<string | null>(null);
   const [showCameraTracker, setShowCameraTracker] = useState<boolean>(false);
+  const [activeFitnessTool, setActiveFitnessTool] = useState<'soreness' | 'bodyFat' | 'aiForm'>('soreness');
 
   // Undo support state: stores IDs of the most recently logged entry/entries
   const [lastLoggedIds, setLastLoggedIds] = useState<string[]>([]);
@@ -475,6 +480,8 @@ export default function LogScreen() {
   const weightDiff = currentWeightNum - prevWeight;
 
   const handleSelectExercise = useCallback((exercise: ExerciseDefinition) => {
+    setExerciseBrowserExpanded(false);
+    Keyboard.dismiss();
     setSelectedExercise(exercise);
     
     // Check if we have prior log
@@ -727,6 +734,7 @@ export default function LogScreen() {
   }, [exerciseSearchQuery, selectedMuscleFilter, selectedDifficultyFilter, selectedTypeFilter]);
 
   return (
+    <ExerciseDemoProvider>
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       <ScrollView
         contentContainerStyle={styles.scrollContent}
@@ -734,71 +742,25 @@ export default function LogScreen() {
         keyboardShouldPersistTaps="handled"
       >
         {/* Header matching modern aesthetic */}
-        <View style={[styles.header, { paddingTop: Platform.OS === 'ios' ? 76 : 48 }]}>
+        <View style={[styles.header, { paddingTop: screenInsets.top + 16 }]}>
           <Text style={[styles.screenTitle, { color: colors.text }]}>Fitness Log</Text>
         </View>
 
-        {/* ── 3 PROMINENT QUICK ACTION TILES ── */}
-        <View style={styles.quickActionButtonsRow}>
-          {/* 1. Soreness / Body Recovery */}
-          <TouchableOpacity
-            style={[
-              styles.quickActionTile,
-              {
-                backgroundColor: colors.surfaceElevated,
-              },
-            ]}
-            onPress={() => {
-              Haptics.selectionAsync().catch(() => {});
-              setShowMuscleRecoveryModal(true);
-            }}
-            activeOpacity={0.8}
-          >
-            <Ionicons name="fitness" size={20} color="#f97316" />
-            <Text style={[styles.quickActionTitle, { color: colors.text }]} numberOfLines={1}>
-              Soreness
-            </Text>
-          </TouchableOpacity>
-
-          {/* 2. Body Fat / Vision Scan */}
-          <TouchableOpacity
-            style={[
-              styles.quickActionTile,
-              {
-                backgroundColor: colors.surfaceElevated,
-              },
-            ]}
-            onPress={() => {
-              Haptics.selectionAsync().catch(() => {});
-              setShowBodyFatModal(true);
-            }}
-            activeOpacity={0.8}
-          >
-            <Ionicons name="scan-circle-outline" size={21} color="#a855f7" />
-            <Text style={[styles.quickActionTitle, { color: colors.text }]} numberOfLines={1}>
-              Body Fat
-            </Text>
-          </TouchableOpacity>
-
-          {/* 3. AI Form Tracker */}
-          <TouchableOpacity
-            style={[
-              styles.quickActionTile,
-              {
-                backgroundColor: colors.surfaceElevated,
-              },
-            ]}
-            onPress={() => {
-              Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
-              setShowCameraTracker(true);
-            }}
-            activeOpacity={0.8}
-          >
-            <Ionicons name="play-forward" size={19} color="#10b981" />
-            <Text style={[styles.quickActionTitle, { color: colors.text }]} numberOfLines={1}>
-              AI Form
-            </Text>
-          </TouchableOpacity>
+        {/* ── FITNESS TOOLS ── */}
+        <View accessibilityLabel="Fitness tools" style={[styles.quickActionButtonsRow, { backgroundColor: colors.surfaceElevated }]}>
+          {([
+            { id: 'aiForm', color: '#10b981', label: 'AI Form', icon: 'videocam-outline', open: () => setShowCameraTracker(true) },
+            { id: 'bodyFat', color: '#a855f7', label: 'Body Fat', icon: 'scan-circle-outline', open: () => setShowBodyFatModal(true) },
+            { id: 'soreness', color: '#f97316', label: 'Soreness', icon: 'fitness-outline', open: () => setShowMuscleRecoveryModal(true) },
+          ] as const).map(tool => {
+            const selected = activeFitnessTool === tool.id;
+            return <TouchableOpacity key={tool.id} accessibilityRole="button" accessibilityState={{ selected }}
+              style={[styles.quickActionTile, { backgroundColor: selected ? tool.color + '18' : 'transparent' }]}
+              onPress={() => { Haptics.selectionAsync().catch(() => {}); setActiveFitnessTool(tool.id); tool.open(); }} activeOpacity={0.8}>
+              <Ionicons name={tool.icon} size={18} color={tool.color} />
+              <Text style={[styles.quickActionTitle, { color: tool.color }]} numberOfLines={1}>{tool.label}</Text>
+            </TouchableOpacity>;
+          })}
         </View>
 
         {/* ── SECTION 0: CUSTOM WORKOUT DAY PRESETS / ROUTINES (SLIDER: 3 VISIBLE AT ONCE, SNAPPY) ── */}
@@ -994,11 +956,7 @@ export default function LogScreen() {
             <View style={styles.stickmanHeroContent}>
               {selectedExercise.imageUrl ? (
                 <View style={[styles.stickmanVisualWrap, { backgroundColor: isDark ? '#141417' : '#f1f5f9' }]}>
-                  <Image
-                    source={{ uri: selectedExercise.imageUrl }}
-                    style={styles.heroExerciseImage}
-                    resizeMode="cover"
-                  />
+                  <ExerciseDemo imageUrl={selectedExercise.imageUrl} name={selectedExercise.name} size={104} controls />
                 </View>
               ) : null}
               <View style={styles.stickmanInfoCol}>
@@ -1329,6 +1287,15 @@ export default function LogScreen() {
         </View>
 
 
+        <TouchableOpacity accessibilityRole="button" accessibilityLabel="Change exercise" accessibilityState={{ expanded: exerciseBrowserExpanded }}
+          onPress={() => { if (exerciseBrowserExpanded) Keyboard.dismiss(); setExerciseBrowserExpanded(value => !value); Haptics.selectionAsync().catch(() => {}); }}
+          style={{ flexDirection: 'row', alignItems: 'center', gap: 9, minHeight: 44, paddingHorizontal: 14, paddingVertical: 10, borderRadius: 14, marginBottom: 12, backgroundColor: colors.surfaceElevated }}>
+          <Ionicons name="search-outline" size={17} color={colors.primary} />
+          <Text style={{ flex: 1, fontFamily: BRAND_ROUNDED_FONT_EXTRA, fontSize: 13, color: colors.text }}>Change exercise</Text>
+          <Text style={{ fontSize: 11, color: colors.textMuted }}>{exerciseBrowserExpanded ? 'Close' : 'Browse'}</Text>
+          <Ionicons name={exerciseBrowserExpanded ? 'chevron-up' : 'chevron-down'} size={16} color={colors.textMuted} />
+        </TouchableOpacity>
+        {exerciseBrowserExpanded && <View>
         {/* Results Counter Above Search Bar */}
         <View style={styles.resultsCountOnlyRow}>
           <Text style={[styles.unitBadge, { color: colors.textMuted }]}>
@@ -1666,6 +1633,8 @@ export default function LogScreen() {
             </ScrollView>
           )}
         </View>
+
+        </View>}
 
         {/* ── SECTION 2: INPUT REPS & WEIGHT (MULTIPLE SETS SUPPORTED) ── */}
         <View style={[styles.logInputCard, { backgroundColor: colors.surfaceElevated }]}>
@@ -2017,6 +1986,8 @@ export default function LogScreen() {
               <Animated.View style={{ transform: [{ scale: logButtonScale }] }}>
                 <TouchableOpacity
                   onPress={handleLogWorkout}
+                  accessibilityRole="button"
+                  accessibilityLabel={loggedSuccess ? `Logged ${totalSetsToLog} set${totalSetsToLog === 1 ? '' : 's'} for ${selectedExercise.name}` : `Log ${totalSetsToLog} set${totalSetsToLog === 1 ? '' : 's'} for ${selectedExercise.name}`}
                   activeOpacity={0.85}
                 >
                   <Animated.View style={[styles.logSubmitBtn, { backgroundColor: btnBg }]}>
@@ -2027,16 +1998,11 @@ export default function LogScreen() {
                         color={isDark ? '#09090b' : '#ffffff'}
                       />
                     </Animated.View>
-                    <Text
-                      style={[
-                        styles.logSubmitBtnText,
-                        { color: isDark ? '#09090b' : '#ffffff' },
-                      ]}
-                    >
-                      {loggedSuccess
-                        ? `Logged ${totalSetsToLog} Set${totalSetsToLog > 1 ? 's' : ''}!`
-                        : `Log ${totalSetsToLog} Set${totalSetsToLog > 1 ? 's' : ''} for ${selectedExercise.name}`}
-                    </Text>
+                    <View style={{ flexShrink: 1, minWidth: 0 }}>
+                      <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8} style={[styles.logSubmitBtnText, { color: isDark ? '#09090b' : '#ffffff' }]}>
+                        {loggedSuccess ? `Logged ${totalSetsToLog} Set${totalSetsToLog > 1 ? 's' : ''}!` : `Log ${totalSetsToLog} Set${totalSetsToLog > 1 ? 's' : ''}`}
+                      </Text>
+                    </View>
                   </Animated.View>
                 </TouchableOpacity>
               </Animated.View>
@@ -2134,7 +2100,7 @@ export default function LogScreen() {
                   >
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 }}>
                       {ex.imageUrl ? (
-                        <Image source={{ uri: ex.imageUrl }} style={{ width: 26, height: 26, borderRadius: 6 }} resizeMode="contain" />
+                        <ExerciseDemo imageUrl={ex.imageUrl} name={ex.name} size={26} radius={6} active={isSelected} />
                       ) : (
                         <Ionicons name="barbell-outline" size={18} color={isSelected ? newRoutineColor : colors.textMuted} />
                       )}
@@ -2279,7 +2245,7 @@ export default function LogScreen() {
                   >
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 }}>
                       {exDef?.imageUrl ? (
-                        <Image source={{ uri: exDef.imageUrl }} style={{ width: 22, height: 22, borderRadius: 5 }} />
+                        <ExerciseDemo imageUrl={exDef.imageUrl} name={exDef.name} size={22} radius={5} active={isSelected} />
                       ) : (
                         <Ionicons name="barbell-outline" size={16} color={isSelected ? selectedRoutineForOptions.color : colors.textMuted} />
                       )}
@@ -2396,6 +2362,7 @@ export default function LogScreen() {
         }}
       />
     </View>
+    </ExerciseDemoProvider>
   );
 }
 
@@ -2417,7 +2384,7 @@ const styles = StyleSheet.create({
     position: 'relative',
   },
   multiplierNumberCenterWrap: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -2456,7 +2423,9 @@ const styles = StyleSheet.create({
   },
   quickActionButtonsRow: {
     flexDirection: 'row',
-    gap: 9,
+    padding: 4,
+    borderRadius: 18,
+    gap: 4,
     marginBottom: 10,
   },
   quickActionTile: {
@@ -2464,16 +2433,15 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 8,
-    borderRadius: 16,
+    paddingVertical: 11,
+    borderRadius: 14,
     gap: 7,
-    height: 52,
+    minHeight: 42,
   },
   quickActionTitle: {
     fontFamily: BRAND_ROUNDED_FONT_EXTRA,
-    fontSize: 12.5,
-    fontWeight: '800',
-    letterSpacing: -0.2,
+    fontSize: 13,
+    flexShrink: 1,
   },
   quickActionIndividualBtn: {
     flex: 1,
@@ -3009,10 +2977,10 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     marginBottom: 20,
     overflow: 'hidden',
-    height: 275,
+    height: 160,
   },
   exerciseResultsScroll: {
-    height: 275,
+    height: 160,
   },
   exerciseDetailSlideWrap: {
     height: 275,
@@ -3150,8 +3118,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
   },
   exerciseListItemLeft: {
     flexDirection: 'row',
@@ -3169,7 +3137,7 @@ const styles = StyleSheet.create({
   },
   exerciseListItemName: {
     fontFamily: BRAND_ROUNDED_FONT_EXTRA,
-    fontSize: 14.5,
+    fontSize: 13,
     fontWeight: '800',
     letterSpacing: -0.3,
     lineHeight: 19,
@@ -3393,11 +3361,14 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    height: 50,
+    minHeight: 58,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
     borderRadius: 16,
     gap: 8,
   },
   logSubmitBtnText: {
+    textAlign: 'center',
     fontSize: 15,
     fontWeight: '800',
     letterSpacing: -0.2,

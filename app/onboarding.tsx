@@ -1,3 +1,4 @@
+import { useScreenInsets } from '@/constants/useScreenInsets';
 import React, { useState, useRef, useEffect } from 'react';
 import {
   View,
@@ -34,6 +35,11 @@ const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const TOTAL_STEPS = 5;
 
 export default function OnboardingScreen() {
+  const screenInsets = useScreenInsets();
+  const safeStyles = React.useMemo(() => ({ ...styles,
+    header: { ...styles.header, paddingTop: screenInsets.top + 12 , paddingLeft: screenInsets.left + 20, paddingRight: screenInsets.right + 20 },
+  }), [screenInsets.top, screenInsets.left, screenInsets.right]);
+
   const { user, profile, updateProfile } = useAuth();
   const themeContext = useTheme();
   const colors = themeContext?.colors;
@@ -195,7 +201,7 @@ export default function OnboardingScreen() {
   return (
     <View style={[styles.container, { backgroundColor: colors?.background || '#09090b' }]}>
       {/* Top Header */}
-      <View style={styles.header}>
+      <View style={safeStyles.header}>
         <View style={[styles.logoMark, { backgroundColor: colors?.surface || '#141417', borderColor: colors?.border || '#242429' }]}>
           <Ionicons name="scale-outline" size={20} color={colors?.primary || '#a3e635'} />
         </View>

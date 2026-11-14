@@ -1,9 +1,10 @@
+import { useScreenInsets } from '@/constants/useScreenInsets';
+import { AppModal as Modal } from '@/components/AppModal';
 import React, { useEffect, useRef, useState, useMemo } from 'react';
 import {
   View,
   Text,
   StyleSheet,
-  Modal,
   TouchableOpacity,
   Share,
   Animated,
@@ -58,6 +59,11 @@ export function FriendQrShareModal({
   avatarColor,
   isDark,
 }: FriendQrShareModalProps) {
+  const screenInsets = useScreenInsets();
+  const safeStyles = React.useMemo(() => ({ ...styles,
+    modalViewport: { ...styles.modalViewport, paddingTop: screenInsets.top + 16 , paddingLeft: screenInsets.left + 20, paddingRight: screenInsets.right + 20 },
+  }), [screenInsets.top, screenInsets.left, screenInsets.right]);
+
   const cleanUsername = (username || 'user').toLowerCase().replace(/^@/, '');
   const shareUrl = Linking.createURL(`friend?user=${cleanUsername}`);
 
@@ -161,8 +167,8 @@ export function FriendQrShareModal({
   const currentParticles = STATIC_FRAMES[activeFrameIndex];
 
   return (
-    <Modal visible={visible} transparent animationType="none" onRequestClose={handleClose}>
-      <View style={styles.modalViewport}>
+    <Modal visible={visible} transparent animationType="none" onRequestClose={handleClose} edgeToEdge>
+      <View style={safeStyles.modalViewport}>
         {/* Backdrop Tint */}
         <Animated.View
           style={[

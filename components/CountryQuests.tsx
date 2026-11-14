@@ -1,6 +1,7 @@
+import { AppModal as Modal } from '@/components/AppModal';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Alert, AppState, DeviceEventEmitter, FlatList, Modal, ScrollView, Share, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { ActivityIndicator, Alert, AppState, DeviceEventEmitter, FlatList, ScrollView, Share, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+
 import { useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '@/constants/AuthContext';
@@ -87,14 +88,14 @@ export function CountryQuests() {
         </View>
         <Text style={[s.sectionTitle, text]}>Country Quests</Text>
       </View>
-      {button(featured ? 'Manage' : 'Start Quest', show, true)}
+      {button(featured ? 'Manage' : 'Start', show, true)}
     </View>
     {!!error && <Text style={[s.caption, muted, { marginBottom: 10 }]}>Offline — showing last synced progress. Open Manage to retry.</Text>}
     {featured ? <TouchableOpacity activeOpacity={.9} accessibilityRole="button" accessibilityLabel={`Open ${featured.title}`} onPress={show}>{summary(featured)}</TouchableOpacity>
       : <TouchableOpacity activeOpacity={.9} onPress={() => { setPanel('create'); setOpen(true); }} style={[s.card, { backgroundColor: colors.surfaceElevated, borderColor: colors.border }]}>
         <Text style={[s.country, text]}>Pick a Country. Walk it Together.</Text><Text style={[s.caption, muted, { marginBottom: 10 }]}>Combine your friends' daily steps to trace a country border outline.</Text><CountryBorderMap country={country} height={180} /><Text style={[s.small, { color: colors.primary, marginTop: 12, fontWeight: '700' }]}>Choose your first border route →</Text>
       </TouchableOpacity>}
-    <Modal visible={open} animationType="slide" onRequestClose={() => setOpen(false)}><SafeAreaView style={{ flex: 1, backgroundColor: colors.background }}>
+    <Modal visible={open} animationType="slide" onRequestClose={() => setOpen(false)}><View style={{ flex: 1, backgroundColor: colors.background }}>
       <View style={[s.row, { padding: 20 }]}><TouchableOpacity accessibilityLabel={panel === 'home' ? 'Close country quests' : 'Back'} onPress={() => panel === 'home' ? setOpen(false) : setPanel(panel === 'countries' ? 'create' : 'home')}><Ionicons name={panel === 'home' ? 'close' : 'arrow-back'} size={25} color={colors.text} /></TouchableOpacity><Text style={[s.title, text, { flex: 1 }]}>{panel === 'countries' ? 'Choose a country' : panel === 'create' ? 'New country quest' : 'Country quests'}</Text>{busy && <ActivityIndicator color={colors.primary} />}</View>
       {panel === 'countries' ? <>
         <TextInput autoFocus accessibilityLabel="Search countries" placeholder="Search countries or regions" placeholderTextColor={colors.textMuted} value={search} onChangeText={setSearch} style={[s.input, text, { borderColor: colors.border, marginHorizontal: 20 }]} />
@@ -124,7 +125,7 @@ export function CountryQuests() {
         </>}
         <Text style={[s.caption, muted, { marginTop: 18 }]}>Virtual route using a simplified outline, including coastline. Distances and steps are estimates; islands are separate sections. No GPS routes or location data are shared. Made with Natural Earth.</Text>
       </ScrollView>}
-    </SafeAreaView></Modal>
+    </View></Modal>
   </>;
 }
 const s = StyleSheet.create({

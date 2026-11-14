@@ -1,3 +1,4 @@
+import { useScreenInsets } from '@/constants/useScreenInsets';
 import React, { useState, useCallback, useEffect, useMemo } from 'react';
 import {
   StyleSheet,
@@ -55,6 +56,8 @@ if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental
 }
 
 export default function ActivityScreen() {
+  const screenInsets = useScreenInsets();
+
   const { user, profile } = useAuth();
   const { colors, isDark } = useTheme();
 
@@ -268,7 +271,7 @@ export default function ActivityScreen() {
         showsVerticalScrollIndicator={false}
       >
         {/* Retro Header */}
-        <View style={[styles.header, { paddingTop: Platform.OS === 'ios' ? 76 : 48 }]}>
+        <View style={[styles.header, { paddingTop: screenInsets.top + 16 }]}>
           <View style={styles.headerRow}>
             <Text style={[styles.screenTitle, { color: colors.text }]}>Activity</Text>
 

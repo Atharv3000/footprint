@@ -1,15 +1,14 @@
+import { AppModal as Modal } from '@/components/AppModal';
 import React, { useState, useRef, useEffect } from 'react';
 import {
   View,
   Text,
   StyleSheet,
-  Modal,
   TouchableOpacity,
   Image,
   ActivityIndicator,
   ScrollView,
   TextInput,
-  Platform,
   Animated,
   Easing,
 } from 'react-native';

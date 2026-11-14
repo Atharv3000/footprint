@@ -1,3 +1,4 @@
+import { AppModal as Modal } from '@/components/AppModal';
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   StyleSheet,
@@ -5,7 +6,6 @@ import {
   Text,
   TouchableOpacity,
   ScrollView,
-  Modal,
   Animated,
   Dimensions,
   Platform,
@@ -721,7 +721,7 @@ export function SquadDetailScreen({
                 {
                   borderBottomColor: colors.border,
                   borderBottomWidth: StyleSheet.hairlineWidth,
-                  paddingTop: Platform.OS === 'ios' ? 56 : 36,
+                  paddingTop: 16,
                   backgroundColor: colors.surface,
                 },
               ]}
@@ -1810,7 +1810,7 @@ export function SquadDetailScreen({
           ) : (
           <ScrollView
             showsVerticalScrollIndicator={false}
-            contentContainerStyle={[styles.scrollContent, { paddingTop: Platform.OS === 'ios' ? 56 : 36, paddingBottom: 110 }]}
+            contentContainerStyle={[styles.scrollContent, { paddingTop: 16, paddingBottom: 110 }]}
           >
             {/* Top row with Back button on left, centered rating badge / ring */}
             <View style={{ width: '100%', position: 'relative', alignItems: 'center', marginBottom: 16 }}>

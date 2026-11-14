@@ -1,6 +1,9 @@
+import { AppModal as Modal } from '@/components/AppModal';
+import { useScreenInsets } from '@/constants/useScreenInsets';
+import { sheetMaxHeight } from '@/constants/safeAreaLayout';
+import { useSafeAreaFrame } from 'react-native-safe-area-context';
 import React, { useEffect, useRef } from 'react';
 import {
-  Modal,
   View,
   TouchableOpacity,
   StyleSheet,
@@ -13,6 +16,14 @@ import {
 } from 'react-native';
 
 const SCREEN_HEIGHT = Dimensions.get('window').height;
+
+// Render below AppModal's provider so nested page-sheet presentations use
+// this modal's actual frame/insets instead of the presenting screen's values.
+function SafeSheetBounds({ requested, children }: { requested: unknown; children: (height: number) => React.ReactNode }) {
+  const insets = useScreenInsets();
+  const frame = useSafeAreaFrame();
+  return <>{children(sheetMaxHeight(frame.height, insets.top, requested))}</>;
+}
 
 interface InteractiveBottomModalProps {
   visible: boolean;
@@ -154,8 +165,10 @@ export const InteractiveBottomModal: React.FC<InteractiveBottomModalProps> = ({
       transparent
       animationType="none"
       onRequestClose={startCloseAnimation}
+      edgeToEdge
     >
-      <View style={styles.rootContainer} pointerEvents="box-none">
+      <SafeSheetBounds requested={maxHeight ?? StyleSheet.flatten(cardStyle)?.maxHeight}>
+      {safeMaxHeight => <View style={styles.rootContainer} pointerEvents="box-none">
         {/* Animated fading backdrop (tap outside to slide down & close) */}
         <Animated.View
           style={[
@@ -179,6 +192,7 @@ export const InteractiveBottomModal: React.FC<InteractiveBottomModalProps> = ({
             (maxHeight !== undefined ? { maxHeight } : undefined) as any,
             disableInternalPadding && { paddingHorizontal: 0, paddingBottom: 0 },
             {
+              maxHeight: safeMaxHeight,
               transform: [{ translateY }],
             },
           ]}
@@ -190,7 +204,8 @@ export const InteractiveBottomModal: React.FC<InteractiveBottomModalProps> = ({
 
           {children}
         </Animated.View>
-      </View>
+      </View>}
+      </SafeSheetBounds>
     </Modal>
   );
 };

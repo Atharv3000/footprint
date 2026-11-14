@@ -1,13 +1,12 @@
+import { AppModal as Modal } from '@/components/AppModal';
 import React, { useState, useMemo, useRef } from 'react';
 import {
   StyleSheet,
   View,
   Text,
-  Modal,
   TouchableOpacity,
   ScrollView,
   Dimensions,
-  Platform,
   Animated,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -1749,7 +1748,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 16,
-    paddingTop: Platform.OS === 'ios' ? 54 : 20,
+    paddingTop: 12,
     paddingBottom: 8,
     borderBottomWidth: StyleSheet.hairlineWidth,
   },

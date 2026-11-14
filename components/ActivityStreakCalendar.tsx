@@ -1,3 +1,4 @@
+import { AppModal as Modal } from '@/components/AppModal';
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
   View,
@@ -6,7 +7,6 @@ import {
   StyleSheet,
   ScrollView,
   Image,
-  Modal,
   TextInput,
   Alert,
 } from 'react-native';
@@ -29,6 +29,7 @@ import { metersToMiles, metersToKm } from '@/constants/userProfile';
 
 
 interface ActivityStreakCalendarProps {
+  showPhotos?: boolean;
   userId?: string;
   stepsGoal: number;
   distanceGoalKm: number;
@@ -61,6 +62,7 @@ function formatDuration(seconds: number): string {
 }
 
 export function ActivityStreakCalendar({
+  showPhotos = true,
   userId,
   stepsGoal,
   distanceGoalKm,
@@ -563,7 +565,7 @@ export function ActivityStreakCalendar({
           </View>
 
           {/* Quick Progress Photo Button */}
-          <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 4 }}>
+          {showPhotos && <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 4 }}>
             <TouchableOpacity
               style={[styles.quickCameraBtn, { backgroundColor: isDark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.05)', borderColor: colors.border }]}
               onPress={(e) => {
@@ -575,7 +577,7 @@ export function ActivityStreakCalendar({
               <Ionicons name="camera" size={12} color={colors.primary} />
               <Text style={[styles.quickCameraBtnText, { color: colors.text }]}>Photo</Text>
             </TouchableOpacity>
-          </View>
+          </View>}
         </View>
 
 
@@ -823,7 +825,7 @@ export function ActivityStreakCalendar({
             )}
 
             {/* Progress Photos for this date */}
-            <View style={{ marginTop: 14 }}>
+            {showPhotos && <View style={{ marginTop: 14 }}>
               <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
                 <Text style={[styles.walksListHeader, { color: colors.textMuted }]}>
                   PROGRESS PHOTOS ({progressPhotosMap[modalFocusedDate]?.length || 0})
@@ -901,7 +903,7 @@ export function ActivityStreakCalendar({
                   )}
                 </View>
               )}
-            </View>
+            </View>}
           </View>
         </ScrollView>
       </InteractiveBottomModal>

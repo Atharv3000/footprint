@@ -1,3 +1,6 @@
+import { ProfileProgressSection } from '@/components/ProfileProgressSection';
+import { useScreenInsets } from '@/constants/useScreenInsets';
+import { AppModal as Modal } from '@/components/AppModal';
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   StyleSheet,
@@ -9,7 +12,6 @@ import {
   Platform,
   Alert,
   Image,
-  Modal,
   Animated,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -17,7 +19,7 @@ import * as Haptics from 'expo-haptics';
 import * as ImagePicker from 'expo-image-picker';
 import { router, useFocusEffect } from 'expo-router';
 import { useAuth } from '@/constants/AuthContext';
-import { useTheme, SERIF_FONT } from '@/constants/ThemeContext';
+import { useTheme, SERIF_FONT, BRAND_ROUNDED_FONT_EXTRA } from '@/constants/ThemeContext';
 import {
   UnitSystem,
   GenderOption,
@@ -51,6 +53,11 @@ import { ProfileActivitySection } from '@/components/ProfileActivitySection';
 import { MuscleRanksSection } from '@/components/MuscleRanksSection';
 
 export default function ProfileScreen() {
+  const screenInsets = useScreenInsets();
+  const safeStyles = React.useMemo(() => ({ ...styles,
+    scrollContent: { ...styles.scrollContent, paddingTop: screenInsets.top + 16 },
+  }), [screenInsets.top, screenInsets.left, screenInsets.right]);
+
   const { user, profile, signOut, updateProfile, isAppleAvailable, isGoogleConfigured } = useAuth();
   const { colors, theme, setTheme, isDark } = useTheme();
 
@@ -87,22 +94,16 @@ export default function ProfileScreen() {
   const [nameInput, setNameInput] = useState<string>('');
   const [usernameLoading, setUsernameLoading] = useState<boolean>(false);
 
-  // Active Profile Sub-tab: 'activity' | 'insights' | 'badges' with animated indicator
-  const [activeSubTab, setActiveSubTab] = useState<'activity' | 'insights' | 'badges'>('activity');
-  const tabAnim = useRef(new Animated.Value(0)).current; // activity, insights, badges
+  // Active Profile Sub-tab: 'activity' | 'progress' | 'insights' | 'badges' with animated indicator
+  const [activeSubTab, setActiveSubTab] = useState<'activity' | 'progress' | 'insights' | 'badges'>('activity');
   const [badges, setBadges] = useState<BadgeDefinition[]>([]);
   const [selectedBadge, setSelectedBadge] = useState<BadgeDefinition | null>(null);
 
-  const switchTab = (tab: 'activity' | 'insights' | 'badges') => {
+  const switchTab = (tab: 'activity' | 'progress' | 'insights' | 'badges') => {
     if (tab === activeSubTab) return;
     Haptics.selectionAsync().catch(() => {});
     setActiveSubTab(tab);
-    const targetVal = tab === 'activity' ? 0 : tab === 'insights' ? 1 : 2;
-    Animated.timing(tabAnim, {
-      toValue: targetVal,
-      duration: 220,
-      useNativeDriver: false,
-    }).start();
+
   };
 
   const effectiveUserId = user?.id || 'guest_user';
@@ -358,7 +359,7 @@ export default function ProfileScreen() {
   return (
     <ScrollView
       style={[styles.container, { backgroundColor: colors.background }]}
-      contentContainerStyle={styles.scrollContent}
+      contentContainerStyle={safeStyles.scrollContent}
       scrollEnabled={scrollEnabled}
     >
       {/* ── Retro Profile Header ── */}
@@ -386,28 +387,6 @@ export default function ProfileScreen() {
             </Text>
             <Text style={[styles.retroProfileHandle, { color: colors.textMuted }]}>
               @{username || 'walker'}
-            </Text>
-          </View>
-        </View>
-
-        {/* Retro Metadata Rows with Clean Icons */}
-        <View style={styles.retroMetaList}>
-          <View style={styles.retroMetaRow}>
-            <Ionicons name="calendar-outline" size={14} color={colors.textMuted} style={styles.retroMetaIcon} />
-            <Text style={[styles.retroMetaText, { color: colors.text }]}>
-              Account: <Text style={{ color: colors.textSecondary }}>{providerLabel} ({user?.email || 'authenticated'})</Text>
-            </Text>
-          </View>
-          <View style={styles.retroMetaRow}>
-            <Ionicons name="time-outline" size={14} color={colors.textMuted} style={styles.retroMetaIcon} />
-            <Text style={[styles.retroMetaText, { color: colors.text }]}>
-              Joined: <Text style={{ color: colors.textSecondary }}>{profile.joinedAt || 'September 2026'}</Text>
-            </Text>
-          </View>
-          <View style={styles.retroMetaRow}>
-            <Ionicons name="flame-outline" size={14} color={colors.textMuted} style={styles.retroMetaIcon} />
-            <Text style={[styles.retroMetaText, { color: colors.text }]}>
-              Est. Burn: <Text style={{ color: colors.textSecondary }}>~{sampleBurn30Min} kcal for 30 min</Text>
             </Text>
           </View>
         </View>
@@ -781,33 +760,21 @@ export default function ProfileScreen() {
       </InteractiveBottomModal>
 
       {/* ── LOWER SCREEN CONTAINER (Sub-tab bar and entire content below it: pure white in light mode, pure black in dark mode) ── */}
-      <View style={[styles.lowerScreenSection, { backgroundColor: isDark ? '#000000' : '#ffffff', borderTopColor: isDark ? '#1a1a1f' : '#ededf0' }]}>
-        {/* Animated Sub-Tab Selector: activity, insights, badges */}
-        <View style={[styles.subTabBarContainer, { backgroundColor: isDark ? '#000000' : '#ffffff', borderBottomColor: isDark ? '#1f1f24' : '#e5e5ea' }]}>
-          {(['activity', 'insights', 'badges'] as const).map(tab => (
-            <TouchableOpacity key={tab} accessibilityRole="tab" accessibilityState={{ selected: activeSubTab === tab }}
-              style={styles.subTabBtn} onPress={() => switchTab(tab)} activeOpacity={0.75}>
-              <Text style={[styles.subTabText, {
-                color: activeSubTab === tab ? (isDark ? '#ffffff' : '#000000') : (isDark ? '#71717a' : '#9ca3af'),
-                fontWeight: activeSubTab === tab ? '800' : '600',
-              }]}>{tab.toUpperCase()}</Text>
-            </TouchableOpacity>
-          ))}
-
-          {/* Animated line highlighted under what is selected */}
-          <Animated.View
-            style={[
-              styles.subTabHighlightLine,
-              {
-                backgroundColor: isDark ? '#ffffff' : '#000000',
-                left: tabAnim.interpolate({
-                  inputRange: [0, 1, 2],
-                  outputRange: ['0%', '33.333%', '66.666%'],
-                }),
-                width: '33.333%',
-              },
-            ]}
-          />
+      <View style={[styles.lowerScreenSection, { backgroundColor: isDark ? '#000000' : '#ffffff' }]}>
+        <View accessibilityRole="tablist" style={[styles.subTabBarContainer, { backgroundColor: colors.surfaceElevated }]}>
+          {([
+            { id: 'activity', label: 'Activity', icon: 'fitness-outline' },
+            { id: 'progress', label: 'Progress', icon: 'images-outline' },
+            { id: 'insights', label: 'Insights', icon: 'stats-chart-outline' },
+            { id: 'badges', label: 'Badges', icon: 'ribbon-outline' },
+          ] as const).map(tab => {
+            const selected = activeSubTab === tab.id;
+            return <TouchableOpacity key={tab.id} accessibilityRole="tab" accessibilityState={{ selected }}
+              style={[styles.subTabBtn, { backgroundColor: selected ? colors.primaryBg : 'transparent' }]} onPress={() => switchTab(tab.id)} activeOpacity={0.75}>
+              <Ionicons name={tab.icon} size={16} color={selected ? colors.primary : colors.textMuted} />
+              <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.85} style={[styles.subTabText, { color: selected ? colors.primary : colors.textMuted }]}>{tab.label}</Text>
+            </TouchableOpacity>;
+          })}
         </View>
 
         {/* ── PERSISTENT SUB-TAB CONTENT: ACTIVITY vs INSIGHTS vs BADGES ── */}
@@ -820,6 +787,8 @@ export default function ProfileScreen() {
           />
         </View>
 
+        <View style={[activeSubTab !== 'progress' && { display: 'none' }]}><ProfileProgressSection userId={effectiveUserId} active={activeSubTab === 'progress'} /></View>
+
         <View style={[activeSubTab !== 'insights' && { display: 'none' }]}>
           <InsightsSection
             key="ins_section"
@@ -831,6 +800,11 @@ export default function ProfileScreen() {
         </View>
 
         <View style={[styles.badgesSectionContainer, activeSubTab !== 'badges' && { display: 'none' }]}>
+          <View style={{ marginHorizontal: -16 }}>
+            <MuscleRanksSection userId={effectiveUserId} active={activeSubTab === 'badges'} />
+          </View>
+
+          <Text accessibilityRole="header" style={{ color: colors.text, fontSize: 22, fontWeight: '700', marginBottom: 16 }}>Badges</Text>
           {/* Badges Header Summary */}
           <View style={[styles.badgesSummaryBanner, { backgroundColor: isDark ? '#0d0d10' : '#f8f8fb', borderColor: isDark ? '#232328' : '#e8e8ed' }]}>
             <View style={styles.badgesSummaryCol}>
@@ -866,9 +840,6 @@ export default function ProfileScreen() {
               />
             ))}
           </View>
-
-          {/* Muscle Ranks Section placed at the bottom of the Badges tab */}
-          <MuscleRanksSection userId={effectiveUserId} active={activeSubTab === 'badges'} />
 
           {/* BADGE DETAIL POPUP BOTTOM SHEET */}
           <InteractiveBottomModal
@@ -1784,36 +1755,30 @@ const styles = StyleSheet.create({
     paddingTop: 4,
     paddingBottom: 60,
     minHeight: 600,
-    borderTopWidth: 1,
   },
   /* ── Sub-tab bar (Activity vs Badges) with animated highlight underline ── */
   subTabBarContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    height: 48,
-    position: 'relative',
-    borderBottomWidth: 1,
+    padding: 4,
+    gap: 4,
+    borderRadius: 18,
+    marginHorizontal: 16,
     marginBottom: 16,
-  },
-  subTabHighlightLine: {
-    position: 'absolute',
-    bottom: -1,
-    width: '50%',
-    height: 3,
-    borderRadius: 1.5,
-    zIndex: 5,
   },
   subTabBtn: {
     flex: 1,
-    height: '100%',
+    flexDirection: 'row',
+    paddingVertical: 11,
+    borderRadius: 14,
+    gap: 4,
     alignItems: 'center',
     justifyContent: 'center',
-    zIndex: 2,
   },
   subTabText: {
-    fontSize: 14.5,
-    letterSpacing: -0.2,
-    textTransform: 'lowercase',
+    fontFamily: BRAND_ROUNDED_FONT_EXTRA,
+    fontSize: 12,
+    flexShrink: 1,
   },
   activityTabWrapper: {
     paddingHorizontal: 16,

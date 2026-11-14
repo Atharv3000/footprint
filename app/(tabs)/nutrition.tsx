@@ -1,3 +1,6 @@
+import { AppModal as Modal } from '@/components/AppModal';
+import { NutritionPet } from '@/components/NutritionPet';
+import { useFocusEffect } from 'expo-router';
 import { CalorieChallenges } from '@/components/CalorieChallenges';
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
@@ -9,10 +12,10 @@ import {
   RefreshControl,
   Image,
   Alert,
-  Modal,
-  Platform,
   Dimensions,
   Animated,
+  AppState,
+  DeviceEventEmitter,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -20,6 +23,7 @@ import * as Haptics from 'expo-haptics';
 import Svg, { Circle, Defs, LinearGradient as SvgLinearGradient, Stop } from 'react-native-svg';
 import { useTheme, BRAND_ROUNDED_FONT_EXTRA, BRAND_ROUNDED_FONT } from '@/constants/ThemeContext';
 import {
+  MEAL_LOGS_CHANGED,
   NutritionTargets,
   MealLog,
   MealType,
@@ -51,7 +55,14 @@ export default function NutritionScreen() {
   const themeContext = useTheme();
   const colors = themeContext?.colors;
   const isDark = themeContext?.isDark ?? colors?.isDark ?? true;
-  const { profile } = useAuth();
+  const { profile, user } = useAuth();
+  const [activeTab, setActiveTab] = useState<'tracker' | 'pet'>('tracker');
+  const [screenActive, setScreenActive] = useState(false);
+  const [foreground, setForeground] = useState(AppState.currentState === 'active');
+  const [nutritionReady, setNutritionReady] = useState(false);
+  const [nutritionError, setNutritionError] = useState('');
+  const dataRequest = useRef(0);
+  const mainScroll = useRef<React.ElementRef<typeof ScrollView>>(null);
 
   const [targets, setTargets] = useState<NutritionTargets>(DEFAULT_NUTRITION_TARGETS);
   const [meals, setMeals] = useState<MealLog[]>([]);
@@ -68,7 +79,7 @@ export default function NutritionScreen() {
   const [showHistoryModal, setShowHistoryModal] = useState<boolean>(false);
   const [activeMealType, setActiveMealType] = useState<MealType>('breakfast');
 
-  const todayKey = getTodayDateKey();
+  const [todayKey, setTodayKey] = useState(getTodayDateKey);
   const [selectedDateKey, setSelectedDateKey] = useState<string>(todayKey);
   const [dailyTotalsMap, setDailyTotalsMap] = useState<Record<string, { cals: number; metGoal: boolean }>>({});
 
@@ -209,7 +220,7 @@ export default function NutritionScreen() {
       ? `+${isUS ? absMonthlyLbs + ' lbs in a mo' : absMonthlyKg + ' kg in a mo'}`
       : isLoss
       ? `-${isUS ? absMonthlyLbs + ' lbs in a mo' : absMonthlyKg + ' kg in a mo'}`
-      : 'Maintain in a mo';
+      : 'Maintain weight';
 
     return {
       curDailyAvg,
@@ -228,6 +239,7 @@ export default function NutritionScreen() {
 
   const loadAllNutritionData = useCallback(
     async (targetKey = selectedDateKey) => {
+      const request = ++dataRequest.current;
       try {
         const [loadedTargets, loadedMeals, loadedWater, loadedQuiz, allMealsRaw] = await Promise.all([
           loadNutritionTargets(),
@@ -236,6 +248,9 @@ export default function NutritionScreen() {
           loadSavedQuiz(),
           loadMealLogs(),
         ]);
+        if (request !== dataRequest.current) return;
+        setNutritionReady(true);
+        setNutritionError('');
         setTargets(loadedTargets);
         setMeals(loadedMeals);
         setAllMealsHistory(allMealsRaw);
@@ -252,15 +267,35 @@ export default function NutritionScreen() {
         });
         setDailyTotalsMap(totals);
       } catch (e) {
+        if (request !== dataRequest.current) return;
+        setNutritionError('Your diary could not load. Please try again.');
+        setNutritionReady(false);
         console.error('Error loading nutrition data:', e);
       }
     },
     [selectedDateKey]
   );
 
-  useEffect(() => {
-    loadAllNutritionData(selectedDateKey);
-  }, [selectedDateKey, loadAllNutritionData]);
+  useFocusEffect(useCallback(() => {
+    setScreenActive(true);
+    setForeground(AppState.currentState === 'active');
+    const refreshDay = () => {
+      const next = getTodayDateKey();
+      if (next !== todayKey) {
+        setTodayKey(next);
+        setSelectedDateKey(previous => previous === todayKey ? next : previous);
+      }
+    };
+    refreshDay();
+    void loadAllNutritionData(selectedDateKey);
+    const mealsChanged = DeviceEventEmitter.addListener(MEAL_LOGS_CHANGED, () => { void loadAllNutritionData(selectedDateKey); });
+    const appState = AppState.addEventListener('change', state => {
+      setForeground(state === 'active');
+      if (state === 'active') { refreshDay(); void loadAllNutritionData(selectedDateKey); }
+    });
+    const timer = setInterval(refreshDay, 30000);
+    return () => { setScreenActive(false); dataRequest.current++; mealsChanged.remove(); appState.remove(); clearInterval(timer); };
+  }, [loadAllNutritionData, selectedDateKey, todayKey]));
 
   const handleSelectDate = (newKey: string) => {
     if (newKey === selectedDateKey) return;
@@ -303,7 +338,7 @@ export default function NutritionScreen() {
         onPress: async () => {
           Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning).catch(() => {});
           await deleteMealLog(meal.id);
-          setMeals((prev) => prev.filter((m) => m.id !== meal.id));
+          await loadAllNutritionData(selectedDateKey);
         },
       },
     ]);
@@ -321,6 +356,7 @@ export default function NutritionScreen() {
   return (
     <SafeAreaView style={[styles.safeArea, { backgroundColor: colors.background }]} edges={['top']}>
       <ScrollView
+        ref={mainScroll}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />}
@@ -330,7 +366,7 @@ export default function NutritionScreen() {
           <View style={{ flex: 1 }}>
             <Text style={[styles.pageTitle, { color: colors.text }]}>Calorie Tracker</Text>
             <Text style={[styles.pageSubtitle, { color: colors.textMuted }]}>
-              {isSelectedToday
+              {activeTab === 'pet' ? "Today's companion" : isSelectedToday
                 ? `Today • ${selectedDateObj.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })}`
                 : selectedDateObj.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric', year: 'numeric' })}
             </Text>
@@ -347,6 +383,13 @@ export default function NutritionScreen() {
           </TouchableOpacity>
         </View>
 
+        <View accessibilityRole="tablist" style={{ flexDirection: 'row', padding: 4, borderRadius: 18, backgroundColor: colors.surfaceElevated, gap: 4 }}>
+          {(['tracker', 'pet'] as const).map(tab => <TouchableOpacity key={tab} accessibilityRole="tab" accessibilityState={{ selected: activeTab === tab }} onPress={() => { setActiveTab(tab); mainScroll.current?.scrollTo({ y: 0, animated: false }); Haptics.selectionAsync().catch(() => {}); }} style={{ flex: 1, paddingVertical: 11, borderRadius: 14, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7, backgroundColor: activeTab === tab ? colors.primaryBg : 'transparent' }}>
+            <Ionicons name={tab === 'tracker' ? 'stats-chart-outline' : 'paw-outline'} size={18} color={activeTab === tab ? colors.primary : colors.textMuted} />
+            <Text style={{ fontFamily: BRAND_ROUNDED_FONT_EXTRA, fontSize: 13, color: activeTab === tab ? colors.primary : colors.textMuted }}>{tab === 'tracker' ? 'Tracker' : 'Pet'}</Text>
+          </TouchableOpacity>)}
+        </View>
+        <View style={{ gap: 14, display: activeTab === 'tracker' ? 'flex' : 'none' }}>
         {/* INTEGRATED DATE SELECTOR BAR: Isolated directly on the background (no bubble container around row) */}
         <View style={styles.dateBarRow}>
           <ScrollView
@@ -464,7 +507,7 @@ export default function NutritionScreen() {
           </ScrollView>
         </View>
 
-        {/* CALORIC ENERGY BALANCE: Clean standalone card (No days below it) */}
+        {/* Calorie summary and challenges in one card */}
         {(() => {
           const remainingCals = Math.max(0, targets.dailyCalories - totalCaloriesConsumed);
           const barFillColor = colors.primary;
@@ -478,6 +521,7 @@ export default function NutritionScreen() {
                 },
               ]}
             >
+              <View style={{ position: 'relative', minHeight: 88, overflow: 'hidden' }}>
               {isOverGoal ? (
                 <>
                   <View
@@ -503,7 +547,7 @@ export default function NutritionScreen() {
                         borderTopLeftRadius: 0,
                         borderBottomLeftRadius: 0,
                         borderTopRightRadius: 20,
-                        borderBottomRightRadius: 20,
+                        borderBottomRightRadius: 0,
                       },
                     ]}
                   />
@@ -517,7 +561,7 @@ export default function NutritionScreen() {
                       backgroundColor: barFillColor,
                       opacity: isDark ? 0.75 : 0.65,
                       borderTopRightRadius: calorieBasePercent >= 100 ? 20 : 0,
-                      borderBottomRightRadius: calorieBasePercent >= 100 ? 20 : 0,
+                      borderBottomRightRadius: 0,
                     },
                   ]}
                 />
@@ -554,6 +598,10 @@ export default function NutritionScreen() {
                     kcal remaining
                   </Text>
                 </View>
+              </View>
+              </View>
+              <View style={{ borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border }}>
+                <CalorieChallenges compact embedded />
               </View>
             </View>
           );
@@ -891,11 +939,13 @@ export default function NutritionScreen() {
             </View>
           </View>
 
-          {/* Calorie Challenges moved to bottom of Calorie Tracker */}
-          <View style={{ marginTop: 14 }}>
-            <CalorieChallenges compact />
-          </View>
+
         </View>
+        </View>
+        {activeTab === 'pet' && <NutritionPet userId={user?.id || 'guest'} meals={allMealsHistory} target={targets.dailyCalories} goal={savedQuiz?.goal || 'maintain'} todayKey={todayKey} ready={nutritionReady} error={nutritionError}
+          active={screenActive && foreground && !showLogModal && !showQuizModal && !showCustomizerModal && !showWaterModal && !showHistoryModal}
+          onLogMeal={() => { setSelectedDateKey(todayKey); const hour = new Date().getHours(); openLogChoice(hour < 11 ? 'breakfast' : hour < 16 ? 'lunch' : hour < 21 ? 'dinner' : 'snack'); }}
+          onAdjustGoal={() => setShowQuizModal(true)} onRetry={() => { void loadAllNutritionData(selectedDateKey); }} />}
       </ScrollView>
 
       {/* Full-Page Food Logging Screen */}
@@ -903,9 +953,7 @@ export default function NutritionScreen() {
         visible={showLogModal}
         initialMealType={activeMealType}
         onClose={() => setShowLogModal(false)}
-        onMealSaved={(newMeal) => {
-          setMeals((prev) => [newMeal, ...prev]);
-        }}
+        onMealSaved={() => { void loadAllNutritionData(selectedDateKey); }}
       />
 
       {/* Quiz Modal with Notches */}
@@ -913,7 +961,7 @@ export default function NutritionScreen() {
         visible={showQuizModal}
         initialAnswers={savedQuiz}
         onClose={() => setShowQuizModal(false)}
-        onSaved={(newTargets) => setTargets(newTargets)}
+        onSaved={(newTargets) => { setTargets(newTargets); void loadAllNutritionData(selectedDateKey); }}
       />
 
       {/* Macro Ratio Customizer Modal */}
@@ -921,7 +969,7 @@ export default function NutritionScreen() {
         visible={showCustomizerModal}
         targets={targets}
         onClose={() => setShowCustomizerModal(false)}
-        onSaved={(newTargets) => setTargets(newTargets)}
+        onSaved={(newTargets) => { setTargets(newTargets); void loadAllNutritionData(selectedDateKey); }}
       />
 
       {/* Water Container Grid Logging Modal */}
@@ -951,6 +999,7 @@ const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
   },
+  sectionTitle: { fontFamily: BRAND_ROUNDED_FONT_EXTRA, fontSize: 18, fontWeight: '800' },
   scrollHeader: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1039,7 +1088,7 @@ const styles = StyleSheet.create({
     bottom: 0,
     left: 0,
     borderTopLeftRadius: 20,
-    borderBottomLeftRadius: 20,
+    borderBottomLeftRadius: 0,
     borderTopRightRadius: 0,
     borderBottomRightRadius: 0,
   },

@@ -1,15 +1,15 @@
+import { ExerciseDemo } from '@/components/ExerciseDemo';
+import { AppModal as Modal } from '@/components/AppModal';
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import {
   StyleSheet,
   View,
   Text,
   TouchableOpacity,
-  Modal,
   ScrollView,
   TextInput,
   Platform,
   Alert,
-  Image,
   Animated,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -742,6 +742,7 @@ export function WorkoutSessionModal({
               >
                 {/* Exercise Card Header */}
                 <View style={styles.exCardHeader}>
+                  <View style={{ marginRight: 10 }}><ExerciseDemo imageUrl={item.imageUrl} name={item.name} size={44} active={visible && !showAddExerciseModal} /></View>
                   <View style={{ flex: 1 }}>
                     <Text style={[styles.exName, { color: colors.text }]}>{item.name}</Text>
                     <Text style={[styles.exMuscles, { color: colors.textMuted }]}>
@@ -1184,11 +1185,7 @@ export function WorkoutSessionModal({
                     <View style={styles.stickmanHeroContent}>
                       {previewingExercise.imageUrl ? (
                         <View style={[styles.stickmanVisualWrap, { backgroundColor: isDark ? '#141417' : '#f1f5f9' }]}>
-                          <Image
-                            source={{ uri: previewingExercise.imageUrl }}
-                            style={styles.heroExerciseImage}
-                            resizeMode="cover"
-                          />
+                          <ExerciseDemo imageUrl={previewingExercise.imageUrl} name={previewingExercise.name} size={58} active={visible && showAddExerciseModal} controls />
                         </View>
                       ) : null}
                       <View style={styles.stickmanInfoCol}>
@@ -1673,7 +1670,7 @@ const styles = StyleSheet.create({
     position: 'relative',
   },
   multiplierNumberCenterWrap: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     alignItems: 'center',
     justifyContent: 'center',
   },

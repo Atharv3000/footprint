@@ -1,9 +1,9 @@
+import { AppModal as Modal } from '@/components/AppModal';
 import React, { useState } from 'react';
 import {
   View,
   Text,
   StyleSheet,
-  Modal,
   TouchableOpacity,
   TextInput,
   ActivityIndicator,

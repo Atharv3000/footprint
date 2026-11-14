@@ -1,3 +1,5 @@
+import { useScreenInsets } from '@/constants/useScreenInsets';
+import { AppModal as Modal } from '@/components/AppModal';
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import {
   StyleSheet,
@@ -6,7 +8,6 @@ import {
   TextInput,
   TouchableOpacity,
   ActivityIndicator,
-  Modal,
   Linking,
   Platform,
   ScrollView,
@@ -617,6 +618,15 @@ const sliderStyles = StyleSheet.create({
 // ---------------------------------------------------------------------------
 
 export default function TrackScreen() {
+  const screenInsets = useScreenInsets();
+  const safeStyles = React.useMemo(() => ({ ...styles,
+    topNavCardContainer: { ...styles.topNavCardContainer, paddingTop: screenInsets.top + 12 , left: screenInsets.left + 0, right: screenInsets.right + 0, paddingLeft: screenInsets.left + 16, paddingRight: screenInsets.right + 16 },
+    unifiedTopBar: { ...styles.unifiedTopBar, top: screenInsets.top + 18 , left: screenInsets.left + 14, right: screenInsets.right + 14, paddingLeft: screenInsets.left + 4, paddingRight: screenInsets.right + 4 },
+    searchResultsDropdown: { ...styles.searchResultsDropdown, top: screenInsets.top + 72 , left: screenInsets.left + 8, right: screenInsets.right + 8 },
+    topHudContainer: { ...styles.topHudContainer, top: screenInsets.top + 70 , left: screenInsets.left + 14, right: screenInsets.right + 14 },
+    directionsPanel: { ...styles.directionsPanel, top: screenInsets.top + 170 , left: screenInsets.left + 14, right: screenInsets.right + 14 },
+  }), [screenInsets.top, screenInsets.left, screenInsets.right]);
+
   const { user } = useAuth();
   const [location, setLocation] = useState<Location.LocationObject | null>(null);
   const [heading, setHeading] = useState<number>(0);
@@ -2304,7 +2314,7 @@ export default function TrackScreen() {
       {selectedRoute && selectedRoute.steps && selectedRoute.steps.length > 0 && (
         <Animated.View
           style={[
-            styles.topNavCardContainer,
+            safeStyles.topNavCardContainer,
             {
               backgroundColor: themeColors.cardBg,
               borderBottomColor: '#38bdf8',
@@ -2439,7 +2449,7 @@ export default function TrackScreen() {
       {!isRecording && (!selectedRoute || isAddingStopMode) && (
         <Animated.View
           style={[
-            styles.unifiedTopBar,
+            safeStyles.unifiedTopBar,
             {
               backgroundColor: themeColors.cardBg,
               borderColor: themeColors.border,
@@ -2766,7 +2776,7 @@ export default function TrackScreen() {
           {searchResults.length > 0 && (
             <Animated.View
               style={[
-                styles.searchResultsDropdown,
+                safeStyles.searchResultsDropdown,
                 {
                   backgroundColor: themeColors.surface,
                   borderColor: themeColors.border,
@@ -2886,8 +2896,8 @@ export default function TrackScreen() {
       {/* Floating Secondary Map HUD Bar */}
       <View
         style={[
-          styles.topHudContainer,
-          (selectedRoute || isRecording) && { top: Platform.OS === 'ios' ? 122 : 88 },
+          safeStyles.topHudContainer,
+          (selectedRoute || isRecording) && { top: screenInsets.top + 78 },
           { justifyContent: 'flex-end' },
         ]}
       >
@@ -3014,11 +3024,11 @@ export default function TrackScreen() {
       {selectedRoute && showDirections && selectedRoute.steps && selectedRoute.steps.length > 0 && (
         <View
           style={[
-            styles.directionsPanel,
+            safeStyles.directionsPanel,
             {
               backgroundColor: themeColors.cardBg,
               borderColor: themeColors.border,
-              top: Platform.OS === 'ios' ? 172 : 138,
+              top: screenInsets.top + 128,
             },
           ]}
         >

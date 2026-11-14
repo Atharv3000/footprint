@@ -1,16 +1,15 @@
+import { AppModal as Modal } from '@/components/AppModal';
 import React, { useState, useRef, useMemo, useEffect } from 'react';
 import {
   View,
   Text,
   StyleSheet,
-  Modal,
   TouchableOpacity,
   ScrollView,
-  Platform,
   PanResponder,
   ActivityIndicator,
 } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { useTheme } from '@/constants/ThemeContext';
@@ -136,8 +135,6 @@ export function MacroCustomizerModal({
   const colors = themeContext?.colors;
   const isDark = themeContext?.isDark ?? colors?.isDark ?? true;
   const { profile, updateProfile } = useAuth();
-  const insets = useSafeAreaInsets();
-  const topInset = Math.max(insets.top, Platform.OS === 'ios' ? 44 : 24);
 
   const isUS = profile?.unitSystem === 'us_customary';
   const weightUnit = isUS ? 'lbs' : 'kg';
@@ -604,7 +601,7 @@ export function MacroCustomizerModal({
       presentationStyle="fullScreen"
       onRequestClose={onClose}
     >
-      <View style={[styles.container, { backgroundColor: colors.background, paddingTop: topInset, paddingBottom: Math.max(insets.bottom, 20) }]}>
+      <View style={[styles.container, { backgroundColor: colors.background, paddingBottom: 20 }]}>
         
         {/* Clean Header: Back Button on Left (or disabled placeholder on step 1), Progress Notches in Center, Exit/Close Icon on Right */}
         <View style={styles.header}>

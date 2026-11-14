@@ -1,0 +1,13 @@
+# Simplified exercise animations
+
+Fitness Log uses locally bundled vector figures that move their limbs, torso and head. There is no photo/video playback, image crossfade, GIF or remote media request in the demo component. The existing 885 exercise entries resolve to 873 unique illustrated movements; some entries share a source exercise. Main previews retain play/pause controls, and routine/session previews use the same renderer.
+
+`exerciseVectorPoses.json` stores seventeen joints per pose. Most were extracted offline from the app's existing public-domain exercise images with the already-installed MediaPipe Pose Landmarker full model. This is inference, not model training; the phone neither loads nor runs that model. Twenty illustrations were hand-refined, including the main curl, squat, bench press, pulldown, leg curl, pushup and nine cropped/undetected source examples. The original model confidence values are recorded for the remaining extracted poses. These are approximate movement illustrations, not independently validated technique coaching. Perspective/occlusion in source imagery may simplify or distort exercise variations.
+
+Source imagery/catalog: https://github.com/yuhonas/free-exercise-db (public-domain/Unlicense). MediaPipe documentation: https://ai.google.dev/edge/mediapipe/solutions/vision/pose_landmarker. GymVisual was a style reference; no GymVisual assets were downloaded or bundled.
+
+`ExerciseFigure.tsx` draws rounded SVG limbs, muted far-side limbs, highlighted target regions and simple weights/supports for hand-refined movements. Animated joint coordinates interpolate continuously across the stored poses, with eased transitions and brief holds. Bicycle pedals and ankle circles use closed multi-pose cycles. Unknown custom images show a neutral placeholder rather than another exercise's motion.
+
+The shared playback provider suspends animation off the Fitness Log screen, in the background, and with Reduce Motion enabled. Pausing freezes the illustration. All geometry is available offline, with no new dependencies. The photo assets and frame lookup from the previous implementation are no longer used.
+
+Validation: `node scripts/test-exercise-demo.cjs` checks full catalog coverage, finite/bounded geometry, key movement semantics (anchored feet, elbows, knees/hands), unknown-source handling and seamless cyclic endpoints. Previews of key movements were visually reviewed against source poses. Device check: select a curl, squat, press and pulldown; pause/resume; switch quickly between exercises; open a routine workout; background the app and enable Reduce Motion.

@@ -1,3 +1,5 @@
+import { useScreenInsets } from '@/constants/useScreenInsets';
+
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   StyleSheet,
@@ -7,7 +9,6 @@ import {
   TouchableOpacity,
   FlatList,
   ScrollView,
-  Modal,
   Alert,
   Platform,
   RefreshControl,
@@ -34,6 +35,8 @@ const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const SQUADS_PAGE_WIDTH = SCREEN_WIDTH - 32;
 
 export default function SquadsScreen() {
+  const screenInsets = useScreenInsets();
+
   const { user } = useAuth();
   const { colors, isDark } = useTheme();
 
@@ -151,7 +154,7 @@ export default function SquadsScreen() {
         ListHeaderComponent={
           <View>
             {/* Retro Header styled identically to other tabs */}
-            <View style={[styles.retroHeader, { paddingTop: Platform.OS === 'ios' ? 76 : 48 }]}>
+            <View style={[styles.retroHeader, { paddingTop: screenInsets.top + 16 }]}>
               <Text style={[styles.retroScreenTitle, { color: colors.text }]}>Squads</Text>
               <TouchableOpacity
                 style={[styles.retroCreateBtn, { backgroundColor: colors.primary }]}

@@ -1,3 +1,5 @@
+import { useScreenInsets } from '@/constants/useScreenInsets';
+import { AppModal as Modal } from '@/components/AppModal';
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   StyleSheet,
@@ -8,7 +10,6 @@ import {
   Platform,
   Alert,
   RefreshControl,
-  Modal,
   Dimensions,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -91,6 +92,8 @@ function getRegionForCoordinates(points: Array<{ latitude: number; longitude: nu
 }
 
 export default function HistoryScreen() {
+  const screenInsets = useScreenInsets();
+
   const { user, profile } = useAuth();
   const { colors, isDark, theme, showsBuildings } = useTheme();
   const [walks, setWalks] = useState<WalkRecord[]>([]);
@@ -281,7 +284,7 @@ export default function HistoryScreen() {
         ListHeaderComponent={
           <View>
             {/* Serif Scrollable Title */}
-            <Text style={[styles.screenTitle, { color: colors.text, paddingTop: Platform.OS === 'ios' ? 76 : 48, paddingBottom: 16 }]}>Workout Log</Text>
+            <Text style={[styles.screenTitle, { color: colors.text, paddingTop: screenInsets.top + 16, paddingBottom: 16 }]}>Workout Log</Text>
 
             {/* Summary Banner */}
             <View style={[styles.summaryBanner, { backgroundColor: colors.card, borderColor: colors.border }]}>

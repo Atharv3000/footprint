@@ -21,22 +21,14 @@ import {
 import { WalkHistorySection } from '@/components/WalkHistorySection';
 import { WeightLineChart } from '@/components/WeightLineChart';
 import { StickmanWorkoutIcon } from '@/components/StickmanWorkoutIcon';
-import { InteractiveBottomModal } from '@/components/InteractiveBottomModal';
 import { CameraFormTrackerModal } from '@/components/CameraFormTrackerModal';
-import { AppleHealthSyncModal } from '@/components/AppleHealthSyncModal';
-import { ProgressPhotoGalleryModal } from '@/components/ProgressPhotoGalleryModal';
 import {
   DEFAULT_EXERCISES,
   CORE_FEATURED_EXERCISE_IDS,
   WorkoutLogEntry,
-  ProgressPhoto,
   saveWorkoutLog,
   loadWorkoutLogs,
   loadVisibleExerciseIds,
-  saveVisibleExerciseIds,
-  loadProgressPhotos,
-  deleteProgressPhoto,
-  updateProgressPhoto,
   loadWeightLogs,
 } from '@/constants/workoutStorage';
 import { loadDaySteps, loadWeekSteps, getWeekDates, dateString } from '@/constants/stepsStorage';
@@ -68,12 +60,12 @@ export const ProfileActivitySection: React.FC<ProfileActivitySectionProps> = ({
   // Accordion expansion states
   const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({
     steps: false,
-    distance: false,
-    weight: true,
-    bmi: false,
+    weight: false,
     history: false,
+    exercises: false,
   });
 
+  const [movementMetric, setMovementMetric] = useState<'steps' | 'distance'>('steps');
   const [weekOffset, setWeekOffset] = useState<number>(0);
   const [stepsSummary, setStepsSummary] = useState<{ today: number; weekChangePct: number }>({
     today: 0,
@@ -87,12 +79,7 @@ export const ProfileActivitySection: React.FC<ProfileActivitySectionProps> = ({
 
   const [workoutLogs, setWorkoutLogs] = useState<WorkoutLogEntry[]>([]);
   const [visibleExerciseIds, setVisibleExerciseIds] = useState<string[]>(CORE_FEATURED_EXERCISE_IDS);
-  const [showVisibilityModal, setShowVisibilityModal] = useState<boolean>(false);
   const [showAiCameraModal, setShowAiCameraModal] = useState<boolean>(false);
-  const [showAppleHealthModal, setShowAppleHealthModal] = useState<boolean>(false);
-  const [showDirectGalleryModal, setShowDirectGalleryModal] = useState<boolean>(false);
-  const [activityPhotos, setActivityPhotos] = useState<ProgressPhoto[]>([]);
-  const [galleryActivePhotoId, setGalleryActivePhotoId] = useState<string | undefined>(undefined);
   const [weightSummary, setWeightSummary] = useState<{ changeStr: string; changeVal: number; isLoss: boolean }>({
     changeStr: '0.0',
     changeVal: 0,
@@ -129,10 +116,6 @@ export const ProfileActivitySection: React.FC<ProfileActivitySectionProps> = ({
     return { val: rounded, str: rounded.toFixed(1), category, color };
   }, [profile.weightKg, profile.heightCm]);
 
-  const triggerTakePhotoRef = React.useRef<(() => void) | null>(null);
-  const triggerCapturePhotoRef = React.useRef<(() => void) | null>(null);
-  const triggerUploadPhotoRef = React.useRef<(() => void) | null>(null);
-  const triggerOpenGalleryRef = React.useRef<((photoId?: string) => void) | null>(null);
 
   const distanceUnit: 'mi' | 'km' = unitSystem === 'us_customary' ? 'mi' : 'km';
   const effectiveDistanceGoal = unitSystem === 'us_customary'
@@ -141,21 +124,19 @@ export const ProfileActivitySection: React.FC<ProfileActivitySectionProps> = ({
 
   const loadData = useCallback(async () => {
     try {
-      const [logs, ids, todayData, curWeekData, prevWeekData, allWalks, photos, weightLogs] = await Promise.all([
+      const [logs, ids, todayData, curWeekData, prevWeekData, allWalks, weightLogs] = await Promise.all([
         loadWorkoutLogs(userId),
         loadVisibleExerciseIds(userId),
         loadDaySteps(userId, dateString(0)),
         loadWeekSteps(userId, getWeekDates(0)),
         loadWeekSteps(userId, getWeekDates(-1)),
         loadWalks(userId),
-        loadProgressPhotos(userId),
         loadWeightLogs(userId),
       ]);
 
       setWorkoutLogs(logs);
       setVisibleExerciseIds(ids);
       setWalksCount(allWalks.length);
-      setActivityPhotos(photos);
 
       if (weightLogs && weightLogs.length >= 2) {
         const firstEntry = weightLogs[0];
@@ -233,17 +214,6 @@ export const ProfileActivitySection: React.FC<ProfileActivitySectionProps> = ({
     }));
   };
 
-  const handleToggleExerciseVisibility = async (id: string) => {
-    Haptics.selectionAsync().catch(() => {});
-    const nextIds = visibleExerciseIds.includes(id)
-      ? visibleExerciseIds.filter((item) => item !== id)
-      : [...visibleExerciseIds, id];
-
-    if (nextIds.length === 0) return;
-    setVisibleExerciseIds(nextIds);
-    await saveVisibleExerciseIds(userId, nextIds);
-  };
-
   const logsByExercise = useMemo(() => {
     const map: Record<string, WorkoutLogEntry[]> = {};
     for (const log of workoutLogs) {
@@ -271,85 +241,9 @@ export const ProfileActivitySection: React.FC<ProfileActivitySectionProps> = ({
 
   return (
     <View style={styles.container}>
-      {/* Action Buttons Row: Photos, Health Sync, Filter */}
-      <View style={styles.topActionsRow}>
-        <TouchableOpacity
-          style={[
-            styles.filterIconButton,
-            {
-              backgroundColor: isDark ? '#1a1a20' : '#f0f0f5',
-              borderColor: isDark ? '#2e2e38' : '#e0e0ea',
-            },
-          ]}
-          activeOpacity={0.7}
-          onPress={() => {
-            Haptics.selectionAsync().catch(() => {});
-            if (triggerTakePhotoRef.current) triggerTakePhotoRef.current();
-          }}
-        >
-          <Ionicons name="camera-outline" size={17} color={colors.text} />
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={[
-            styles.filterIconButton,
-            {
-              backgroundColor: colors.primary + '18',
-              borderColor: colors.primary + '40',
-            },
-          ]}
-          activeOpacity={0.7}
-          onPress={() => {
-            Haptics.selectionAsync().catch(() => {});
-            loadProgressPhotos(userId).then((photos) => {
-              setActivityPhotos(photos);
-              setGalleryActivePhotoId(photos[0]?.id);
-              setShowDirectGalleryModal(true);
-            });
-          }}
-        >
-          <Ionicons name="images" size={16} color={colors.primary} />
-          <Text style={[styles.filterBtnText, { color: colors.primary }]}>Photos</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={[
-            styles.filterIconButton,
-            {
-              backgroundColor: isDark ? 'rgba(239, 68, 68, 0.12)' : '#fee2e2',
-              borderColor: isDark ? 'rgba(239, 68, 68, 0.35)' : '#fca5a5',
-            },
-          ]}
-          activeOpacity={0.7}
-          onPress={() => {
-            Haptics.selectionAsync().catch(() => {});
-            setShowAppleHealthModal(true);
-          }}
-        >
-          <Ionicons name="heart" size={16} color="#ef4444" />
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={[
-            styles.filterIconButton,
-            {
-              backgroundColor: isDark ? '#1a1a20' : '#f0f0f5',
-              borderColor: isDark ? '#2e2e38' : '#e0e0ea',
-            },
-          ]}
-          activeOpacity={0.7}
-          onPress={() => {
-            Haptics.selectionAsync().catch(() => {});
-            setShowVisibilityModal(true);
-          }}
-        >
-          <Ionicons name="options-outline" size={17} color={colors.text} />
-          <Text style={[styles.filterBtnText, { color: colors.text }]}>Filter</Text>
-        </TouchableOpacity>
-      </View>
-
       {/* Mini Streak Calendar */}
       <ActivityStreakCalendar
+        showPhotos={false}
         key={`cal_${refreshKey}`}
         userId={userId}
         stepsGoal={stepsGoal}
@@ -360,29 +254,7 @@ export const ProfileActivitySection: React.FC<ProfileActivitySectionProps> = ({
           setSelectedCalendarDate(d === selectedCalendarDate ? undefined : d);
         }}
         onOpenAiCamera={() => setShowAiCameraModal(true)}
-        onTakePhotoRef={(fn) => {
-          triggerTakePhotoRef.current = fn;
-        }}
-        onCapturePhotoRef={(fn) => {
-          triggerCapturePhotoRef.current = fn;
-        }}
-        onUploadPhotoRef={(fn) => {
-          triggerUploadPhotoRef.current = fn;
-        }}
-        onOpenGalleryRef={(fn) => {
-          triggerOpenGalleryRef.current = fn;
-        }}
-        onPhotoAdded={async () => {
-          const updated = await loadProgressPhotos(userId);
-          setActivityPhotos(updated);
-        }}
-        onOpenGallery={(photoId) => {
-          loadProgressPhotos(userId).then((photos) => {
-            setActivityPhotos(photos);
-            setGalleryActivePhotoId(photoId || photos[0]?.id);
-            setShowDirectGalleryModal(true);
-          });
-        }}
+
       />
 
       {selectedCalendarDate && (
@@ -410,53 +282,29 @@ export const ProfileActivitySection: React.FC<ProfileActivitySectionProps> = ({
           },
         ]}
       >
-        {/* 1. STEPS STRIP */}
-        <View
-          style={[
-            styles.stripRowWrapper,
-            {
-              borderBottomColor: isDark ? '#222228' : '#ededf2',
-              backgroundColor: isDark ? '#141417' : '#ffffff',
-            },
-          ]}
-        >
-          <TouchableOpacity
-            style={styles.stripHeaderTouchable}
-            activeOpacity={0.7}
-            onPress={() => toggleSection('steps')}
-          >
+        <View style={[styles.stripRowWrapper, { borderBottomColor: isDark ? '#222228' : '#ededf2', backgroundColor: isDark ? '#141417' : '#ffffff' }]}>
+          <TouchableOpacity accessibilityRole="button" accessibilityLabel="Steps and distance" accessibilityState={{ expanded: !!expandedSections.steps }} style={styles.stripHeaderTouchable} activeOpacity={0.7} onPress={() => toggleSection('steps')}>
             <View style={styles.stripHeaderLeft}>
               <Ionicons name="footsteps" size={20} color={colors.primary} />
-              <View>
-                <Text style={[styles.stripTitle, { color: colors.text }]}>steps</Text>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2 }}>
-                  <Text style={{ fontSize: 9.5, color: colors.textMuted }}>
-                    {stepsSummary.weekChangePct >= 0 ? '▲' : '▼'}
-                  </Text>
-                  <Text style={[styles.stripSubtitle, { color: colors.textMuted }]}>
-                    {stepsSummary.weekChangePct >= 0 ? `+${stepsSummary.weekChangePct}%` : `${stepsSummary.weekChangePct}%`} vs last week
-                  </Text>
-                </View>
+              <View style={{ flex: 1, minWidth: 0 }}>
+                <Text style={[styles.stripTitle, { color: colors.text, textTransform: 'none' }]}>Movement</Text>
+                <Text style={[styles.stripSubtitle, { color: colors.textMuted }]}>{stepsSummary.today.toLocaleString()} steps | {distanceSummary.today} {distanceUnit} today</Text>
               </View>
             </View>
-
-            <View style={styles.stripHeaderRight}>
-              <View style={[styles.measurementBoxFilled, { backgroundColor: colors.primary }]}>
-                <Text style={[styles.measurementValueTextFilled, { color: isDark ? '#09090b' : '#ffffff' }]}>
-                  {stepsSummary.today.toLocaleString()}
-                  <Text style={[styles.measurementUnitTextFilled, { color: isDark ? '#09090b' : '#ffffff' }]}> steps</Text>
-                </Text>
-              </View>
-            </View>
+            <Ionicons name={expandedSections.steps ? 'chevron-up' : 'chevron-down'} size={18} color={colors.textMuted} />
           </TouchableOpacity>
-
-          {expandedSections.steps && (
-            <View style={[styles.expandedContentWrap, { backgroundColor: isDark ? '#0d0d10' : '#f8f8fb' }]}>
+          {expandedSections.steps && <View style={[styles.expandedContentWrap, { backgroundColor: isDark ? '#0d0d10' : '#f8f8fb' }]}>
+            <View accessibilityRole="tablist" style={{ flexDirection: 'row', padding: 4, borderRadius: 18, backgroundColor: colors.surfaceElevated, gap: 4, marginBottom: 12 }}>
+              {(['steps','distance'] as const).map(metric => <TouchableOpacity key={metric} accessibilityRole="tab" accessibilityState={{ selected: movementMetric === metric }} onPress={() => { setMovementMetric(metric); Haptics.selectionAsync().catch(() => {}); }} style={{ flex: 1, paddingVertical: 10, borderRadius: 14, alignItems: 'center', backgroundColor: movementMetric === metric ? colors.primaryBg : 'transparent' }}>
+                <Text style={{ fontSize: 12, fontWeight: '700', color: movementMetric === metric ? colors.primary : colors.textMuted }}>{metric === 'steps' ? 'Steps' : 'Distance'}</Text>
+              </TouchableOpacity>)}
+            </View>
+            <Text style={[styles.stripSubtitle, { color: colors.textMuted, marginBottom: 12 }]}>{movementMetric === 'steps' ? stepsSummary.weekChangePct : distanceSummary.weekChangePct}% vs last week</Text>
               <WeeklyBarChart
                 userId={userId}
                 stepsGoal={stepsGoal}
                 distanceGoal={effectiveDistanceGoal}
-                metricMode="steps"
+                metricMode={movementMetric}
                 distanceUnit={distanceUnit}
                 weekOffset={weekOffset}
                 onWeekOffsetChange={setWeekOffset}
@@ -468,7 +316,7 @@ export const ProfileActivitySection: React.FC<ProfileActivitySectionProps> = ({
                   userId={userId}
                   stepsGoal={stepsGoal}
                   distanceGoal={effectiveDistanceGoal}
-                  metricMode="steps"
+                  metricMode={movementMetric}
                   distanceUnit={distanceUnit}
                   selectedDate={activeDate}
                   onDayChange={(d) => setSelectedCalendarDate(d)}
@@ -479,184 +327,28 @@ export const ProfileActivitySection: React.FC<ProfileActivitySectionProps> = ({
                   userId={userId}
                   stepsGoal={stepsGoal}
                   distanceGoal={effectiveDistanceGoal}
-                  metricMode="steps"
+                  metricMode={movementMetric}
                   distanceUnit={distanceUnit}
                   selectedDate={activeDate}
                 />
               </View>
-            </View>
-          )}
+          </View>}
         </View>
 
-        {/* 2. DISTANCE STRIP */}
-        <View
-          style={[
-            styles.stripRowWrapper,
-            {
-              borderBottomColor: isDark ? '#222228' : '#ededf2',
-              backgroundColor: isDark ? '#141417' : '#ffffff',
-            },
-          ]}
-        >
-          <TouchableOpacity
-            style={styles.stripHeaderTouchable}
-            activeOpacity={0.7}
-            onPress={() => toggleSection('distance')}
-          >
-            <View style={styles.stripHeaderLeft}>
-              <Ionicons name="navigate" size={20} color={colors.primary} />
-              <View>
-                <Text style={[styles.stripTitle, { color: colors.text }]}>distance</Text>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2 }}>
-                  <Text style={{ fontSize: 9.5, color: colors.textMuted }}>
-                    {distanceSummary.weekChangePct >= 0 ? '▲' : '▼'}
-                  </Text>
-                  <Text style={[styles.stripSubtitle, { color: colors.textMuted }]}>
-                    {distanceSummary.weekChangePct >= 0 ? `+${distanceSummary.weekChangePct}%` : `${distanceSummary.weekChangePct}%`} vs last week
-                  </Text>
-                </View>
-              </View>
-            </View>
-
-            <View style={styles.stripHeaderRight}>
-              <View style={[styles.measurementBoxFilled, { backgroundColor: colors.primary }]}>
-                <Text style={[styles.measurementValueTextFilled, { color: isDark ? '#09090b' : '#ffffff' }]}>
-                  {distanceSummary.today}
-                  <Text style={[styles.measurementUnitTextFilled, { color: isDark ? '#09090b' : '#ffffff' }]}> {distanceUnit}</Text>
-                </Text>
-              </View>
-            </View>
-          </TouchableOpacity>
-
-          {expandedSections.distance && (
-            <View style={[styles.expandedContentWrap, { backgroundColor: isDark ? '#0d0d10' : '#f8f8fb' }]}>
-              <WeeklyBarChart
-                userId={userId}
-                stepsGoal={stepsGoal}
-                distanceGoal={effectiveDistanceGoal}
-                metricMode="distance"
-                distanceUnit={distanceUnit}
-                weekOffset={weekOffset}
-                onWeekOffsetChange={setWeekOffset}
-                selectedDate={activeDate}
-                onDaySelect={(d) => setSelectedCalendarDate(d)}
-              />
-              <View style={{ marginTop: 14 }}>
-                <HourlyBarChart
-                  userId={userId}
-                  stepsGoal={stepsGoal}
-                  distanceGoal={effectiveDistanceGoal}
-                  metricMode="distance"
-                  distanceUnit={distanceUnit}
-                  selectedDate={activeDate}
-                  onDayChange={(d) => setSelectedCalendarDate(d)}
-                />
-              </View>
-              <View style={{ marginTop: 14 }}>
-                <CumulativeLineChart
-                  userId={userId}
-                  stepsGoal={stepsGoal}
-                  distanceGoal={effectiveDistanceGoal}
-                  metricMode="distance"
-                  distanceUnit={distanceUnit}
-                  selectedDate={activeDate}
-                />
-              </View>
-            </View>
-          )}
-        </View>
-
-        {/* 2.5 BODY WEIGHT STRIP */}
-        <View
-          style={[
-            styles.stripRowWrapper,
-            {
-              borderBottomColor: isDark ? '#222228' : '#ededf2',
-              backgroundColor: isDark ? '#141417' : '#ffffff',
-            },
-          ]}
-        >
-          <TouchableOpacity
-            style={styles.stripHeaderTouchable}
-            activeOpacity={0.7}
-            onPress={() => toggleSection('weight')}
-          >
+        <View style={[styles.stripRowWrapper, { borderBottomColor: isDark ? '#222228' : '#ededf2', backgroundColor: isDark ? '#141417' : '#ffffff' }]}>
+          <TouchableOpacity accessibilityRole="button" accessibilityLabel="Body weight and BMI" accessibilityState={{ expanded: !!expandedSections.weight }} style={styles.stripHeaderTouchable} activeOpacity={0.7} onPress={() => toggleSection('weight')}>
             <View style={styles.stripHeaderLeft}>
               <Ionicons name="scale-outline" size={20} color={colors.primary} />
-              <View>
-                <Text style={[styles.stripTitle, { color: colors.text }]}>body weight</Text>
-                <Text style={[styles.stripSubtitle, { color: colors.textMuted }]}>
-                  {weightSummary.changeStr}
-                </Text>
+              <View style={{ flex: 1, minWidth: 0 }}>
+                <Text style={[styles.stripTitle, { color: colors.text, textTransform: 'none' }]}>Body Stats</Text>
+                <Text style={[styles.stripSubtitle, { color: colors.textMuted }]}>{profile.weightKg ? unitSystem === 'us_customary' ? Math.round(profile.weightKg * 2.20462) : Math.round(profile.weightKg * 10) / 10 : '--'} {unitSystem === 'us_customary' ? 'lb' : 'kg'} | BMI {bmiData.str}</Text>
               </View>
             </View>
-
-            <View style={styles.stripHeaderRight}>
-              <View style={[styles.measurementBoxFilled, { backgroundColor: colors.primary }]}>
-                <Text style={[styles.measurementValueTextFilled, { color: isDark ? '#09090b' : '#ffffff' }]}>
-                  {profile.weightKg
-                    ? unitSystem === 'us_customary'
-                      ? Math.round(profile.weightKg * 2.20462)
-                      : Math.round(profile.weightKg * 10) / 10
-                    : '--'}
-                  <Text style={[styles.measurementUnitTextFilled, { color: isDark ? '#09090b' : '#ffffff' }]}>
-                    {unitSystem === 'us_customary' ? ' lb' : ' kg'}
-                  </Text>
-                </Text>
-              </View>
-            </View>
+            <Ionicons name={expandedSections.weight ? 'chevron-up' : 'chevron-down'} size={18} color={colors.textMuted} />
           </TouchableOpacity>
-
-          {expandedSections.weight && (
-            <View style={[styles.expandedContentWrap, { backgroundColor: isDark ? '#0d0d10' : '#f8f8fb' }]}>
-              <WeightLineChart
-                userId={userId}
-                unitSystem={unitSystem}
-                currentWeightKg={profile.weightKg}
-              />
-            </View>
-          )}
-        </View>
-
-        {/* 2.6 BMI STRIP */}
-        <View
-          style={[
-            styles.stripRowWrapper,
-            {
-              borderBottomColor: isDark ? "#222228" : "#ededf2",
-              backgroundColor: isDark ? "#141417" : "#ffffff",
-            },
-          ]}
-        >
-          <TouchableOpacity
-            style={styles.stripHeaderTouchable}
-            activeOpacity={0.7}
-            onPress={() => toggleSection("bmi")}
-          >
-            <View style={styles.stripHeaderLeft}>
-              <Ionicons name="body-outline" size={20} color={colors.primary} />
-              <View>
-                <Text style={[styles.stripTitle, { color: colors.text }]}>bmi</Text>
-                <Text style={[styles.stripSubtitle, { color: bmiData.color }]}>
-                  {bmiData.category} range
-                </Text>
-              </View>
-            </View>
-
-            <View style={styles.stripHeaderRight}>
-              <View style={[styles.measurementBoxFilled, { backgroundColor: colors.primary }]}>
-                <Text style={[styles.measurementValueTextFilled, { color: isDark ? "#09090b" : "#ffffff" }]}>
-                  {bmiData.str}
-                  <Text style={[styles.measurementUnitTextFilled, { color: isDark ? "#09090b" : "#ffffff" }]}>
-                    {" "}bmi
-                  </Text>
-                </Text>
-              </View>
-            </View>
-          </TouchableOpacity>
-
-          {expandedSections.bmi && (
-            <View style={[styles.expandedContentWrap, { backgroundColor: isDark ? "#0d0d10" : "#f8f8fb" }]}>
+          {expandedSections.weight && <View style={[styles.expandedContentWrap, { backgroundColor: isDark ? '#0d0d10' : '#f8f8fb', gap: 16 }]}>
+            <Text style={[styles.stripSubtitle, { color: colors.textMuted }]}>{weightSummary.changeStr}</Text>
+            <WeightLineChart userId={userId} unitSystem={unitSystem} currentWeightKg={profile.weightKg} />
               <View style={styles.bmiGaugeContainer}>
                 <View style={styles.bmiGaugeHeader}>
                   <Text style={[styles.bmiGaugeScoreText, { color: colors.text }]}>
@@ -707,8 +399,7 @@ export const ProfileActivitySection: React.FC<ProfileActivitySectionProps> = ({
                   </View>
                 </View>
               </View>
-            </View>
-          )}
+          </View>}
         </View>
 
         {/* 3. HISTORY STRIP */}
@@ -729,7 +420,7 @@ export const ProfileActivitySection: React.FC<ProfileActivitySectionProps> = ({
             <View style={styles.stripHeaderLeft}>
               <Ionicons name="time" size={20} color={colors.primary} />
               <View>
-                <Text style={[styles.stripTitle, { color: colors.text }]}>history</Text>
+                <Text style={[styles.stripTitle, { color: colors.text, textTransform: 'none' }]}>History</Text>
                 <Text style={[styles.stripSubtitle, { color: colors.textMuted }]}>
                   {walksCount} routes & GPS walks recorded
                 </Text>
@@ -756,7 +447,20 @@ export const ProfileActivitySection: React.FC<ProfileActivitySectionProps> = ({
           )}
         </View>
 
-        {/* 4+. WORKOUT EXERCISE STRIPS */}
+        <View style={{ backgroundColor: isDark ? '#141417' : '#ffffff' }}>
+          <TouchableOpacity accessibilityRole="button" accessibilityLabel="Exercises" accessibilityState={{ expanded: !!expandedSections.exercises }}
+            style={styles.stripHeaderTouchable} activeOpacity={0.7} onPress={() => toggleSection('exercises')}>
+            <View style={styles.stripHeaderLeft}>
+              <Ionicons name="barbell-outline" size={20} color={colors.primary} />
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.stripTitle, { color: colors.text, textTransform: 'none' }]}>Exercises</Text>
+                <Text numberOfLines={1} style={[styles.stripSubtitle, { color: colors.textMuted }]}>{orderedExerciseDefinitions.length} exercises | {Object.values(logsByExercise).reduce((total, logs) => total + logs.length, 0)} logged sets</Text>
+              </View>
+            </View>
+            <Ionicons name={expandedSections.exercises ? 'chevron-up' : 'chevron-down'} size={18} color={colors.textMuted} />
+          </TouchableOpacity>
+          {expandedSections.exercises && <View style={{ borderTopWidth: 1, borderTopColor: isDark ? '#222228' : '#ededf2' }}>
+        {/* Individual exercise progress and history */}
         {orderedExerciseDefinitions.map((ex, exIndex) => {
           const logsForEx = logsByExercise[ex.id] || [];
           const hasLogs = logsForEx.length > 0;
@@ -960,61 +664,9 @@ export const ProfileActivitySection: React.FC<ProfileActivitySectionProps> = ({
             </View>
           );
         })}
-      </View>
-
-      {/* Select Workouts to Show Modal */}
-      <InteractiveBottomModal
-        visible={showVisibilityModal}
-        onDismiss={() => setShowVisibilityModal(false)}
-        handleColor={colors.border}
-        cardStyle={[styles.modalSheetCard, { backgroundColor: colors.surface, borderColor: colors.border }]}
-      >
-        <View style={styles.modalContent}>
-          <Text style={[styles.modalHeading, { color: colors.text }]}>Visible Workouts</Text>
-          <Text style={[styles.modalDesc, { color: colors.textMuted }]}>
-            Choose which exercises appear in your workout logs and activity feed:
-          </Text>
-          <View style={styles.modalScroll}>
-            {DEFAULT_EXERCISES.slice(0, 40).map((ex) => {
-              const isChecked = visibleExerciseIds.includes(ex.id);
-              return (
-                <TouchableOpacity
-                  key={ex.id}
-                  style={[
-                    styles.modalExerciseItem,
-                    {
-                      backgroundColor: isDark ? '#1c1c22' : '#f7f7fa',
-                      borderColor: isChecked ? colors.tint : isDark ? '#2c2c34' : '#e4e4eb',
-                    },
-                  ]}
-                  activeOpacity={0.7}
-                  onPress={() => handleToggleExerciseVisibility(ex.id)}
-                >
-                  <View style={styles.modalExerciseInfo}>
-                    <Text style={[styles.modalExerciseName, { color: colors.text }]}>
-                      {ex.name}
-                    </Text>
-                    <Text style={[styles.modalExerciseCategory, { color: colors.textMuted }]}>
-                      {ex.category.toUpperCase()} · default {ex.defaultWeight} lbs
-                    </Text>
-                  </View>
-                  <View
-                    style={[
-                      styles.checkboxWrap,
-                      {
-                        backgroundColor: isChecked ? colors.tint : 'transparent',
-                        borderColor: isChecked ? colors.tint : isDark ? '#555' : '#bbb',
-                      },
-                    ]}
-                  >
-                    {isChecked && <Ionicons name="checkmark" size={16} color="#ffffff" />}
-                  </View>
-                </TouchableOpacity>
-              );
-            })}
-          </View>
+          </View>}
         </View>
-      </InteractiveBottomModal>
+      </View>
 
       {/* AI Camera Form Tracker Modal */}
       <CameraFormTrackerModal
@@ -1041,7 +693,7 @@ export const ProfileActivitySection: React.FC<ProfileActivitySectionProps> = ({
               trackingData,
             });
 
-            setExpandedSections((prev) => ({ ...prev, [meta.id]: true }));
+            setExpandedSections((prev) => ({ ...prev, exercises: true, [meta.id]: true }));
             loadData();
           } catch (e) {
             console.warn('Failed to save AI tracked workout', e);
@@ -1049,52 +701,7 @@ export const ProfileActivitySection: React.FC<ProfileActivitySectionProps> = ({
         }}
       />
 
-      {/* Apple Health Sync Modal */}
-      <AppleHealthSyncModal
-        visible={showAppleHealthModal}
-        onClose={() => setShowAppleHealthModal(false)}
-        userId={userId}
-        onSyncCompleted={() => {
-          setRefreshKey((k) => k + 1);
-          loadData();
-        }}
-      />
 
-      {/* Progress Photo Gallery Modal */}
-      <ProgressPhotoGalleryModal
-        visible={showDirectGalleryModal}
-        onClose={() => setShowDirectGalleryModal(false)}
-        photos={activityPhotos}
-        initialPhotoId={galleryActivePhotoId}
-        onDeletePhoto={async (photoId) => {
-          await deleteProgressPhoto(userId, photoId);
-          const updated = await loadProgressPhotos(userId);
-          setActivityPhotos(updated);
-          setRefreshKey((k) => k + 1);
-        }}
-        onUpdatePhoto={async (photoId, updates) => {
-          await updateProgressPhoto(userId, photoId, updates);
-          const updated = await loadProgressPhotos(userId);
-          setActivityPhotos(updated);
-          setRefreshKey((k) => k + 1);
-        }}
-        onUploadNewPhoto={() => {
-          setShowDirectGalleryModal(false);
-          if (triggerUploadPhotoRef.current) {
-            triggerUploadPhotoRef.current();
-          } else if (triggerTakePhotoRef.current) {
-            triggerTakePhotoRef.current();
-          }
-        }}
-        onCaptureNewPhoto={() => {
-          setShowDirectGalleryModal(false);
-          if (triggerCapturePhotoRef.current) {
-            triggerCapturePhotoRef.current();
-          } else if (triggerTakePhotoRef.current) {
-            triggerTakePhotoRef.current();
-          }
-        }}
-      />
     </View>
   );
 };
@@ -1107,7 +714,7 @@ const styles = StyleSheet.create({
   topActionsRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'flex-end',
+    justifyContent: 'flex-start',
     gap: 8,
     marginBottom: 12,
     paddingHorizontal: 4,

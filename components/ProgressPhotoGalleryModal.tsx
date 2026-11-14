@@ -1,3 +1,4 @@
+import { AppModal as Modal } from '@/components/AppModal';
 import React, { useState, useRef, useMemo, useEffect } from 'react';
 import {
   StyleSheet,
@@ -5,7 +6,6 @@ import {
   Text,
   Image,
   TouchableOpacity,
-  Modal,
   Dimensions,
   ScrollView,
   PanResponder,
@@ -37,6 +37,7 @@ interface ProgressPhotoGalleryModalProps {
   onClose: () => void;
   photos: ProgressPhoto[];
   initialPhotoId?: string;
+  initialViewMode?: 'single' | 'compare';
   onDeletePhoto: (photoId: string) => void;
   onUploadNewPhoto: () => void;
   onCaptureNewPhoto: () => void;
@@ -48,6 +49,7 @@ export function ProgressPhotoGalleryModal({
   onClose,
   photos,
   initialPhotoId,
+  initialViewMode = 'single',
   onDeletePhoto,
   onUploadNewPhoto,
   onCaptureNewPhoto,
@@ -126,7 +128,7 @@ export function ProgressPhotoGalleryModal({
   // Sync index and viewMode when photos change or modal opens
   useEffect(() => {
     if (visible) {
-      setViewMode('single');
+      setViewMode(initialViewMode);
       if (initialPhotoId && sortedPhotos.length > 0) {
         const idx = sortedPhotos.findIndex((p) => p.id === initialPhotoId);
         setActivePhotoIndex(idx >= 0 ? idx : sortedPhotos.length - 1);
@@ -134,7 +136,7 @@ export function ProgressPhotoGalleryModal({
         setActivePhotoIndex(sortedPhotos.length - 1);
       }
     }
-  }, [visible, initialPhotoId, sortedPhotos]);
+  }, [visible, initialPhotoId, initialViewMode, sortedPhotos]);
 
   // Run AI Muscle Isolation whenever 'muscles' mode is active or muscle selection changes
   useEffect(() => {
@@ -848,7 +850,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 16,
-    paddingTop: Platform.OS === 'ios' ? 52 : 36,
+    paddingTop: 12,
     paddingBottom: 14,
     backgroundColor: '#000000',
     borderBottomWidth: 1,
@@ -1133,7 +1135,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#000000',
   },
   reticleFrame: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     padding: 8,
     justifyContent: 'space-between',
   },

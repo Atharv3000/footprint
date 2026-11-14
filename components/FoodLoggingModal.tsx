@@ -1,18 +1,16 @@
+import { AppModal as Modal } from '@/components/AppModal';
 import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
   StyleSheet,
-  Modal,
   TouchableOpacity,
   Image,
   ScrollView,
   TextInput,
-  Platform,
   Dimensions,
   Animated,
   Easing,
-  SafeAreaView,
   ActivityIndicator,
   Keyboard,
   KeyboardAvoidingView,
@@ -393,7 +391,7 @@ export function FoodLoggingModal({
 
   return (
     <Modal visible={visible} animationType="slide" presentationStyle="fullScreen" onRequestClose={handleResetAndClose}>
-      <SafeAreaView style={[styles.safeArea, { backgroundColor: '#09090b' }]}>
+      <View style={[styles.safeArea, { backgroundColor: '#09090b' }]}>
         <View style={styles.fullPageContainer}>
           {/* Top Bar Floating Controls */}
           <View style={styles.topBar}>
@@ -1091,7 +1089,7 @@ export function FoodLoggingModal({
             )}
           </ScrollView>
         </View>
-      </SafeAreaView>
+      </View>
     </Modal>
   );
 }
@@ -1123,7 +1121,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 10,
     position: 'absolute',
-    top: Platform.OS === 'ios' ? 44 : 10,
+    top: 0,
     left: 0,
     right: 0,
     zIndex: 30,

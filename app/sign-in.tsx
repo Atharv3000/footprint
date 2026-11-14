@@ -1,3 +1,4 @@
+import { useScreenInsets } from '@/constants/useScreenInsets';
 import React, { useState } from 'react';
 import {
   View,
@@ -28,6 +29,13 @@ const BG_IMAGE = require('@/assets/images/auth_bg.jpg');
 type AuthMode = 'landing' | 'signin' | 'signup';
 
 export default function SignInScreen() {
+  const screenInsets = useScreenInsets();
+  const safeStyles = React.useMemo(() => ({ ...styles,
+    landingLayout: { ...styles.landingLayout, paddingTop: screenInsets.top + 24 , paddingLeft: screenInsets.left + 20, paddingRight: screenInsets.right + 20 },
+    formScroll: { ...styles.formScroll, paddingTop: screenInsets.top + 12 , paddingLeft: screenInsets.left + 20, paddingRight: screenInsets.right + 20 },
+    farTopLeftBackBtn: { ...styles.farTopLeftBackBtn, top: screenInsets.top + 8 , left: screenInsets.left + 16 },
+  }), [screenInsets.top, screenInsets.left, screenInsets.right]);
+
   const {
     signInWithApple,
     signInWithGoogle,
@@ -214,7 +222,7 @@ export default function SignInScreen() {
         {/* Back Button pinned to top left - glides and fades in with form */}
         <Animated.View
           style={[
-            styles.farTopLeftBackBtn,
+            safeStyles.farTopLeftBackBtn,
             {
               opacity: backBtnOpacity,
               transform: [{ translateY: modeTransitionAnim.interpolate({ inputRange: [0, 1], outputRange: [-20, 0] }) }],
@@ -240,7 +248,7 @@ export default function SignInScreen() {
         <Animated.View
           style={[
             StyleSheet.absoluteFill,
-            styles.landingLayout,
+            safeStyles.landingLayout,
             {
               opacity: landingCardOpacity,
               transform: [{ translateY: landingCardTranslateY }],
@@ -338,7 +346,7 @@ export default function SignInScreen() {
           pointerEvents={mode === 'landing' ? 'none' : 'auto'}
         >
           <ScrollView
-            contentContainerStyle={styles.formScroll}
+            contentContainerStyle={safeStyles.formScroll}
             keyboardShouldPersistTaps="handled"
             showsVerticalScrollIndicator={false}
           >

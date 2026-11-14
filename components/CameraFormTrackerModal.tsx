@@ -1,6 +1,8 @@
+import { useScreenInsets } from '@/constants/useScreenInsets';
+import { AppModal as Modal } from '@/components/AppModal';
 import { BoxingPads } from '@/components/BoxingPads';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Alert, AppState, Image, Linking, Modal, Share, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { Alert, AppState, Image, Linking, Share, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as Haptics from 'expo-haptics';
@@ -35,6 +37,12 @@ function Action({ children, onPress, disabled = false, secondary = false }: {
 }
 
 export function CameraFormTrackerModal({ visible, onClose, onSaveTrackedWorkout }: Props) {
+  const screenInsets = useScreenInsets();
+  const safeStyles = React.useMemo(() => ({ ...styles,
+    topBar: { ...styles.topBar, top: screenInsets.top + 8 , left: screenInsets.left + 12, right: screenInsets.right + 12 },
+    hudOverlay: { ...styles.hudOverlay, top: screenInsets.top + 54 , left: screenInsets.left + 16, right: screenInsets.right + 16 },
+  }), [screenInsets.top, screenInsets.left, screenInsets.right]);
+
   const { user } = useAuth();
   const { colors } = useTheme();
   const [isUltraWide, setIsUltraWide] = useState(false);
@@ -340,7 +348,7 @@ export function CameraFormTrackerModal({ visible, onClose, onSaveTrackedWorkout 
     : exercise === 'pushups' || mode === 'battle' ? 'Place the phone low beside you. Turn your body side-on; show one complete arm and your hips. Begin in a straight-arm plank.'
     : exercise === 'squats' ? 'Place your phone at waist height. Keep hips, knees and ankles in view.' : 'Frame your shoulders, elbows and wrists. Extend, curl, then extend fully.';
 
-  return <Modal visible={visible} animationType="slide" presentationStyle="fullScreen" onRequestClose={close}>
+  return <Modal visible={visible} animationType="slide" presentationStyle="fullScreen" onRequestClose={close} edgeToEdge>
     <View style={styles.container} onLayout={event => setViewSize(event.nativeEvent.layout)}>
       {visible && active && permission?.granted && !cameraError ? <>
         <CameraView ref={camera} key={facing} style={cameraStyle} facing={facing} mirror={false}
@@ -417,7 +425,7 @@ export function CameraFormTrackerModal({ visible, onClose, onSaveTrackedWorkout 
         }}><Text style={styles.grantBtnText}>{cameraError ? 'Retry camera' : permission?.canAskAgain === false ? 'Open settings' : 'Grant Camera Permission'}</Text></TouchableOpacity>
       </View>}
 
-      <View style={styles.topBar}>
+      <View style={safeStyles.topBar}>
         <TouchableOpacity accessibilityLabel="Close rep tracker" style={styles.circleIconButton} onPress={close}>
           <Ionicons name="close" size={24} color="#fff" />
         </TouchableOpacity>
@@ -463,7 +471,7 @@ export function CameraFormTrackerModal({ visible, onClose, onSaveTrackedWorkout 
         </View>
       </View>
 
-      <View style={styles.hudOverlay}>
+      <View style={safeStyles.hudOverlay}>
         {battle ? <View style={[styles.hudStatCard, { flexDirection: 'column', alignItems: 'stretch', gap: 10 }]}>
           <View style={s.between}><Text style={styles.hudLabel}>YOU · {ownReps}</Text><Text style={styles.hudLabel}>{opponentName.toUpperCase()} · {opponent ? battle.counts[opponent] || 0 : 0}</Text></View>
           <View accessibilityRole="progressbar" accessibilityLabel="Your share of the push-up battle" accessibilityValue={{ min: 0, max: 100, now: Math.round(share * 100) }} style={s.bar}>
