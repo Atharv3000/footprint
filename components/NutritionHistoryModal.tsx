@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef } from 'react';
 import {
   StyleSheet,
   View,
@@ -8,11 +8,12 @@ import {
   ScrollView,
   Dimensions,
   Platform,
+  Animated,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import Svg, { Circle, G } from 'react-native-svg';
-import { useTheme } from '@/constants/ThemeContext';
+import { useTheme, BRAND_ROUNDED_FONT_EXTRA } from '@/constants/ThemeContext';
 import { MealLog, MealType, NutritionTargets } from '@/constants/nutritionStorage';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -48,12 +49,25 @@ export function NutritionHistoryModal({
 }: NutritionHistoryModalProps) {
   const { colors, isDark } = useTheme();
   const [timeRange, setTimeRange] = useState<TimeRange>('weekly');
+  const tabAnim = useRef(new Animated.Value(1)).current; // 0 = daily, 1 = weekly, 2 = monthly
   const [dayOffset, setDayOffset] = useState<number>(0); // 0 = today, -1 = yesterday
   const [weekOffset, setWeekOffset] = useState<number>(0); // 0 = this week, -1 = last week
   const [monthOffset, setMonthOffset] = useState<number>(0); // 0 = this month, -1 = last month
   const [selectedDayKey, setSelectedDayKey] = useState<string | null>(null);
   const [showWeeklyCalLabels, setShowWeeklyCalLabels] = useState<boolean>(false);
   const [showMonthlyCalLabels, setShowMonthlyCalLabels] = useState<boolean>(false);
+
+  const switchTimeRange = (range: TimeRange) => {
+    Haptics.selectionAsync().catch(() => {});
+    setTimeRange(range);
+    const targetIdx = range === 'daily' ? 0 : range === 'weekly' ? 1 : 2;
+    Animated.spring(tabAnim, {
+      toValue: targetIdx,
+      useNativeDriver: false,
+      friction: 8,
+      tension: 60,
+    }).start();
+  };
 
   // Helper date formatter: YYYY-MM-DD
   const formatDateKey = (d: Date): string => {
@@ -149,8 +163,8 @@ export function NutritionHistoryModal({
   // Donut chart geometry & segment calculations for daily calories
   const donutSegments = useMemo(() => {
     const total = dailyStats.total;
-    const size = 190;
-    const strokeWidth = 22;
+    const size = 156;
+    const strokeWidth = 17;
     const radius = (size - strokeWidth) / 2;
     const circumference = 2 * Math.PI * radius;
 
@@ -367,15 +381,15 @@ export function NutritionHistoryModal({
     return activeMonthDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
   }, [activeMonthDate]);
 
-  // Divide the month into ~4-5 weeks for stacked monthly bar chart
-  const monthlyWeeks = useMemo(() => {
+  // 28-31 daily bars for monthly calorie history
+  const monthlyDays = useMemo(() => {
     const y = activeMonthDate.getFullYear();
     const m = activeMonthDate.getMonth();
     const totalDaysInMonth = new Date(y, m + 1, 0).getDate();
 
-    const weeks: {
-      label: string;
-      sub: string;
+    const days: {
+      day: number;
+      dateKey: string;
       total: number;
       breakfast: number;
       lunch: number;
@@ -384,61 +398,32 @@ export function NutritionHistoryModal({
       protein: number;
       carbs: number;
       fat: number;
-      daysCount: number;
     }[] = [];
 
-    let currentWeek = 1;
-    for (let day = 1; day <= totalDaysInMonth; day += 7) {
-      const endDay = Math.min(day + 6, totalDaysInMonth);
-      let tot = 0;
-      let bf = 0;
-      let ln = 0;
-      let dn = 0;
-      let sn = 0;
-      let prot = 0;
-      let carbs = 0;
-      let fat = 0;
-      let daysCount = 0;
-
-      for (let d = day; d <= endDay; d++) {
-        const dt = new Date(y, m, d);
-        const k = formatDateKey(dt);
-        const st = dailyMealStats[k];
-        if (st && st.total > 0) {
-          tot += st.total;
-          bf += st.breakfast;
-          ln += st.lunch;
-          dn += st.dinner;
-          sn += st.snack;
-          prot += st.protein;
-          carbs += st.carbs;
-          fat += st.fat;
-          daysCount += 1;
-        }
-      }
-
-      weeks.push({
-        label: `W${currentWeek}`,
-        sub: `${m + 1}/${day}-${endDay}`,
-        total: tot,
-        breakfast: bf,
-        lunch: ln,
-        dinner: dn,
-        snack: sn,
-        protein: prot,
-        carbs: carbs,
-        fat: fat,
-        daysCount,
+    for (let day = 1; day <= totalDaysInMonth; day++) {
+      const dt = new Date(y, m, day);
+      const k = formatDateKey(dt);
+      const st = dailyMealStats[k];
+      days.push({
+        day,
+        dateKey: k,
+        total: st?.total || 0,
+        breakfast: st?.breakfast || 0,
+        lunch: st?.lunch || 0,
+        dinner: st?.dinner || 0,
+        snack: st?.snack || 0,
+        protein: st?.protein || 0,
+        carbs: st?.carbs || 0,
+        fat: st?.fat || 0,
       });
-      currentWeek += 1;
     }
-    return weeks;
+    return days;
   }, [activeMonthDate, dailyMealStats]);
 
-  const maxMonthWeekCals = useMemo(() => {
-    const highest = Math.max(...monthlyWeeks.map((w) => w.total), 1);
-    return Math.max(highest * 1.18, 5000);
-  }, [monthlyWeeks]);
+  const maxMonthDayCals = useMemo(() => {
+    const highest = Math.max(...monthlyDays.map((d) => d.total), targets.dailyCalories);
+    return Math.max(highest * 1.18, 2000);
+  }, [monthlyDays, targets.dailyCalories]);
 
   const monthlyStats = useMemo(() => {
     const y = activeMonthDate.getFullYear();
@@ -534,7 +519,7 @@ export function NutritionHistoryModal({
       <View
         style={[
           styles.chartCard,
-          { backgroundColor: colors.surfaceElevated, borderColor: colors.border },
+          { backgroundColor: colors.surfaceElevated },
         ]}
       >
         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 14 }}>
@@ -617,62 +602,60 @@ export function NutritionHistoryModal({
           </TouchableOpacity>
           <View style={styles.headerTitleWrap}>
             <Text style={[styles.headerTitle, { color: colors.text }]}>Calorie History</Text>
-            <Text style={[styles.headerSubtitle, { color: colors.textMuted }]}>
-              {timeRange === 'daily'
-                ? 'Daily Meal Breakdown'
-                : timeRange === 'weekly'
-                ? 'Weekly Stacked Meal Intake'
-                : 'Monthly Stacked Overview'}
-            </Text>
           </View>
           <View style={{ width: 40 }} />
         </View>
 
-        {/* TIME RANGE SEGMENTED TOGGLE (Daily / Weekly / Monthly) */}
-        <View style={styles.toggleSegmentWrapper}>
-          <View
-            style={[
-              styles.toggleSegmentContainer,
-              { backgroundColor: isDark ? '#18181b' : '#e4e4e7', borderColor: colors.border },
-            ]}
-          >
-            {(['daily', 'weekly', 'monthly'] as TimeRange[]).map((tab) => {
-              const isActive = timeRange === tab;
-              const title = tab.charAt(0).toUpperCase() + tab.slice(1);
-              return (
-                <TouchableOpacity
-                  key={tab}
+        {/* Sub-Tab Bar matching Community / Profile: daily | weekly | monthly */}
+        <View
+          style={[
+            styles.subTabBarContainer,
+            {
+              backgroundColor: isDark ? '#000000' : '#ffffff',
+              borderBottomColor: isDark ? '#1f1f24' : '#e5e5ea',
+            },
+          ]}
+        >
+          {(['daily', 'weekly', 'monthly'] as TimeRange[]).map((tab) => {
+            const isActive = timeRange === tab;
+            return (
+              <TouchableOpacity
+                key={tab}
+                accessibilityRole="tab"
+                accessibilityState={{ selected: isActive }}
+                style={styles.subTabBtn}
+                onPress={() => switchTimeRange(tab)}
+                activeOpacity={0.75}
+              >
+                <Text
                   style={[
-                    styles.toggleSegmentBtn,
-                    isActive && {
-                      backgroundColor: colors.surfaceElevated,
-                      shadowColor: '#000',
-                      shadowOffset: { width: 0, height: 2 },
-                      shadowOpacity: 0.15,
-                      shadowRadius: 4,
-                      elevation: 3,
+                    styles.subTabText,
+                    {
+                      color: isActive ? (isDark ? '#ffffff' : '#000000') : (isDark ? '#71717a' : '#9ca3af'),
+                      fontWeight: isActive ? '800' : '600',
                     },
                   ]}
-                  activeOpacity={0.8}
-                  onPress={() => {
-                    Haptics.selectionAsync().catch(() => {});
-                    setTimeRange(tab);
-                    setSelectedDayKey(null);
-                  }}
                 >
-                  <Text
-                    style={[
-                      styles.toggleSegmentText,
-                      { color: isActive ? colors.primary : colors.textMuted },
-                      isActive && { fontWeight: '800' },
-                    ]}
-                  >
-                    {title}
-                  </Text>
-                </TouchableOpacity>
-              );
-            })}
-          </View>
+                  {tab}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+
+          {/* Animated Highlight Line under what is selected */}
+          <Animated.View
+            style={[
+              styles.subTabHighlightLine,
+              {
+                backgroundColor: isDark ? '#ffffff' : '#000000',
+                left: tabAnim.interpolate({
+                  inputRange: [0, 1, 2],
+                  outputRange: ['0%', '33.33%', '66.66%'],
+                }),
+                width: '33.33%',
+              },
+            ]}
+          />
         </View>
 
         <ScrollView contentContainerStyle={styles.scrollBody} showsVerticalScrollIndicator={false}>
@@ -685,7 +668,7 @@ export function NutritionHistoryModal({
               <View
                 style={[
                   styles.navCard,
-                  { backgroundColor: colors.surfaceElevated, borderColor: colors.border },
+                  { backgroundColor: colors.surfaceElevated },
                 ]}
               >
                 <TouchableOpacity
@@ -727,7 +710,7 @@ export function NutritionHistoryModal({
               <View
                 style={[
                   styles.chartCard,
-                  { backgroundColor: colors.surfaceElevated, borderColor: colors.border },
+                  { backgroundColor: colors.surfaceElevated },
                 ]}
               >
                 <View style={styles.donutContainer}>
@@ -780,23 +763,12 @@ export function NutritionHistoryModal({
                     <Text style={[styles.donutCenterUnit, { color: colors.textMuted }]}>
                       TOTAL KCAL
                     </Text>
-                    <View
-                      style={[
-                        styles.donutGoalPill,
-                        {
-                          backgroundColor:
-                            dailyStats.total > targets.dailyCalories
-                              ? 'rgba(239,68,68,0.15)'
-                              : 'rgba(34,197,94,0.15)',
-                        },
-                      ]}
-                    >
+                    <View style={styles.donutGoalPill}>
                       <Text
                         style={[
                           styles.donutGoalPillText,
                           {
-                            color:
-                              dailyStats.total > targets.dailyCalories ? '#ef4444' : '#22c55e',
+                            color: colors.textMuted,
                           },
                         ]}
                       >
@@ -827,7 +799,6 @@ export function NutritionHistoryModal({
                             styles.donutMealRow,
                             {
                               backgroundColor: isDark ? '#18181b' : '#f4f4f5',
-                              borderColor: colors.border,
                             },
                           ]}
                         >
@@ -889,7 +860,7 @@ export function NutritionHistoryModal({
               <View
                 style={[
                   styles.navCard,
-                  { backgroundColor: colors.surfaceElevated, borderColor: colors.border },
+                  { backgroundColor: colors.surfaceElevated },
                 ]}
               >
                 <TouchableOpacity
@@ -934,7 +905,7 @@ export function NutritionHistoryModal({
                 <View
                   style={[
                     styles.summaryChip,
-                    { backgroundColor: colors.surfaceElevated, borderColor: colors.border },
+                    { backgroundColor: colors.surfaceElevated },
                   ]}
                 >
                   <Text style={[styles.summaryChipLabel, { color: colors.textMuted }]}>
@@ -949,7 +920,7 @@ export function NutritionHistoryModal({
                 <View
                   style={[
                     styles.summaryChip,
-                    { backgroundColor: colors.surfaceElevated, borderColor: colors.border },
+                    { backgroundColor: colors.surfaceElevated },
                   ]}
                 >
                   <Text style={[styles.summaryChipLabel, { color: colors.textMuted }]}>
@@ -964,7 +935,7 @@ export function NutritionHistoryModal({
                 <View
                   style={[
                     styles.summaryChip,
-                    { backgroundColor: colors.surfaceElevated, borderColor: colors.border },
+                    { backgroundColor: colors.surfaceElevated },
                   ]}
                 >
                   <Text style={[styles.summaryChipLabel, { color: colors.textMuted }]}>
@@ -981,7 +952,7 @@ export function NutritionHistoryModal({
               <TouchableOpacity
                 style={[
                   styles.chartCard,
-                  { backgroundColor: colors.surfaceElevated, borderColor: colors.border },
+                  { backgroundColor: colors.surfaceElevated },
                 ]}
                 activeOpacity={0.96}
                 onPress={() => {
@@ -990,33 +961,7 @@ export function NutritionHistoryModal({
                 }}
               >
                 {/* Header Row: Legend + Tap Hint */}
-                <View style={styles.chartHeaderRow}>
-                  <View style={styles.legendRow}>
-                    {(['breakfast', 'lunch', 'dinner', 'snack'] as MealType[]).map((type) => (
-                      <View key={type} style={styles.legendItem}>
-                        <View
-                          style={[
-                            styles.legendColorDot,
-                            { backgroundColor: MEAL_COLORS[type].color },
-                          ]}
-                        />
-                        <Text style={[styles.legendText, { color: colors.textMuted }]}>
-                          {MEAL_COLORS[type].label}
-                        </Text>
-                      </View>
-                    ))}
-                  </View>
-                  <View style={styles.chartToggleHintBadge}>
-                    <Ionicons
-                      name={showWeeklyCalLabels ? 'eye' : 'eye-outline'}
-                      size={12}
-                      color={colors.textMuted}
-                    />
-                    <Text style={[styles.chartToggleHintText, { color: colors.textMuted }]}>
-                      {showWeeklyCalLabels ? 'Hide cals' : 'Tap to show cals'}
-                    </Text>
-                  </View>
-                </View>
+
 
                 {/* Bars Area with Goal Guideline */}
                 <View style={styles.barsContainer}>
@@ -1070,20 +1015,29 @@ export function NutritionHistoryModal({
                             setSelectedDayKey(isSelected ? null : d.dateKey);
                           }}
                         >
-                          {/* Number Above Bar (Toggleable on graph click) */}
-                          <View style={styles.barTopValSlot}>
-                            {showWeeklyCalLabels && d.stats.total > 0 && (
+                          {/* Number in black roundish rectangle placed right above where bar ends only when toggled on */}
+                          {showWeeklyCalLabels && d.stats.total > 0 && (
+                            <View
+                              style={[
+                                styles.barFloatingBadge,
+                                {
+                                  bottom: totalH + 4,
+                                  backgroundColor: isDark ? 'rgba(0,0,0,0.85)' : '#09090b',
+                                },
+                              ]}
+                            >
                               <Text
                                 style={[
-                                  styles.barTopValText,
-                                  { color: isSelected ? colors.primary : colors.text },
+                                  styles.barFloatingBadgeText,
+                                  { color: '#ffffff' },
                                 ]}
                                 numberOfLines={1}
                               >
                                 {d.stats.total}
                               </Text>
-                            )}
-                          </View>
+                            </View>
+                          )}
+
 
                           <View style={[styles.barTrack, { height: BAR_MAX_HEIGHT }]}>
                             {hasData ? (
@@ -1160,13 +1114,8 @@ export function NutritionHistoryModal({
                       );
                     })}
 
-                    {/* Vertical Divider */}
-                    <View
-                      style={[
-                        styles.avgBarDivider,
-                        { backgroundColor: colors.border },
-                      ]}
-                    />
+                    {/* Vertical Divider removed per user request */}
+
 
                     {/* 8th AVERAGE BAR */}
                     {(() => {
@@ -1313,7 +1262,7 @@ export function NutritionHistoryModal({
               <View
                 style={[
                   styles.chartCard,
-                  { backgroundColor: colors.surfaceElevated, borderColor: colors.border },
+                  { backgroundColor: colors.surfaceElevated },
                 ]}
               >
                 <Text style={[styles.breakdownHeaderTitle, { color: colors.text, marginBottom: 12 }]}>
@@ -1449,7 +1398,7 @@ export function NutritionHistoryModal({
               <View
                 style={[
                   styles.navCard,
-                  { backgroundColor: colors.surfaceElevated, borderColor: colors.border },
+                  { backgroundColor: colors.surfaceElevated },
                 ]}
               >
                 <TouchableOpacity
@@ -1490,7 +1439,7 @@ export function NutritionHistoryModal({
                 <View
                   style={[
                     styles.summaryChip,
-                    { backgroundColor: colors.surfaceElevated, borderColor: colors.border },
+                    { backgroundColor: colors.surfaceElevated },
                   ]}
                 >
                   <Text style={[styles.summaryChipLabel, { color: colors.textMuted }]}>
@@ -1505,7 +1454,7 @@ export function NutritionHistoryModal({
                 <View
                   style={[
                     styles.summaryChip,
-                    { backgroundColor: colors.surfaceElevated, borderColor: colors.border },
+                    { backgroundColor: colors.surfaceElevated },
                   ]}
                 >
                   <Text style={[styles.summaryChipLabel, { color: colors.textMuted }]}>
@@ -1520,7 +1469,7 @@ export function NutritionHistoryModal({
                 <View
                   style={[
                     styles.summaryChip,
-                    { backgroundColor: colors.surfaceElevated, borderColor: colors.border },
+                    { backgroundColor: colors.surfaceElevated },
                   ]}
                 >
                   <Text style={[styles.summaryChipLabel, { color: colors.textMuted }]}>
@@ -1533,75 +1482,76 @@ export function NutritionHistoryModal({
                 </View>
               </View>
 
-              {/* Monthly Stacked Bar Chart (Tap graph to toggle number of cals above bars) */}
-              <TouchableOpacity
+              {/* Monthly Stacked Bar Chart (~30 Skinny Daily Columns) */}
+              <View
                 style={[
                   styles.chartCard,
-                  { backgroundColor: colors.surfaceElevated, borderColor: colors.border },
+                  { backgroundColor: colors.surfaceElevated, paddingTop: 18 },
                 ]}
-                activeOpacity={0.96}
-                onPress={() => {
-                  Haptics.selectionAsync().catch(() => {});
-                  setShowMonthlyCalLabels((prev) => !prev);
-                }}
               >
-                {/* Header Row: Legend + Tap Hint */}
-                <View style={styles.chartHeaderRow}>
-                  <View style={styles.legendRow}>
-                    {(['breakfast', 'lunch', 'dinner', 'snack'] as MealType[]).map((type) => (
-                      <View key={type} style={styles.legendItem}>
+                {/* Calorie Goal Guideline across the month */}
+                <View style={[styles.barsContainer, { height: BAR_MAX_HEIGHT + 36 }]}>
+                  {(() => {
+                    const goalRatio = targets.dailyCalories / maxMonthDayCals;
+                    const goalBottomPx = Math.min(
+                      BAR_MAX_HEIGHT,
+                      Math.max(10, goalRatio * BAR_MAX_HEIGHT)
+                    );
+                    return (
+                      <View
+                        style={[styles.goalGuidelineRow, { bottom: goalBottomPx }]}
+                        pointerEvents="none"
+                      >
                         <View
                           style={[
-                            styles.legendColorDot,
-                            { backgroundColor: MEAL_COLORS[type].color },
+                            styles.goalDashedLine,
+                            { borderColor: colors.textMuted + '40' },
                           ]}
                         />
-                        <Text style={[styles.legendText, { color: colors.textMuted }]}>
-                          {MEAL_COLORS[type].label}
+                        <Text style={[styles.goalLineLabel, { color: colors.textMuted }]}>
+                          Goal {targets.dailyCalories}
                         </Text>
                       </View>
-                    ))}
-                  </View>
-                  <View style={styles.chartToggleHintBadge}>
-                    <Ionicons
-                      name={showMonthlyCalLabels ? 'eye' : 'eye-outline'}
-                      size={12}
-                      color={colors.textMuted}
-                    />
-                    <Text style={[styles.chartToggleHintText, { color: colors.textMuted }]}>
-                      {showMonthlyCalLabels ? 'Hide cals' : 'Tap to show cals'}
-                    </Text>
-                  </View>
-                </View>
+                    );
+                  })()}
 
-                {/* Monthly Stacked Bars */}
-                <View style={styles.barsContainer}>
-                  <View style={styles.barsRow}>
-                    {monthlyWeeks.map((wk, idx) => {
-                      const hasData = wk.total > 0;
-                      const bfH = (wk.breakfast / maxMonthWeekCals) * BAR_MAX_HEIGHT;
-                      const lnchH = (wk.lunch / maxMonthWeekCals) * BAR_MAX_HEIGHT;
-                      const dinH = (wk.dinner / maxMonthWeekCals) * BAR_MAX_HEIGHT;
-                      const snkH = (wk.snack / maxMonthWeekCals) * BAR_MAX_HEIGHT;
+                  <View style={[styles.barsRow, { alignItems: 'flex-end', justifyContent: 'space-between', paddingHorizontal: 0 }]}>
+                    {monthlyDays.map((d) => {
+                      const hasData = d.total > 0;
+                      const bfH = (d.breakfast / maxMonthDayCals) * BAR_MAX_HEIGHT;
+                      const lnchH = (d.lunch / maxMonthDayCals) * BAR_MAX_HEIGHT;
+                      const dinH = (d.dinner / maxMonthDayCals) * BAR_MAX_HEIGHT;
+                      const snkH = (d.snack / maxMonthDayCals) * BAR_MAX_HEIGHT;
                       const totalH = Math.max(hasData ? 6 : 0, bfH + lnchH + dinH + snkH);
 
                       return (
-                        <View key={idx} style={styles.barColTouchable}>
-                          {/* Number Above Bar */}
-                          <View style={styles.barTopValSlot}>
-                            {showMonthlyCalLabels && wk.total > 0 && (
+                        <View key={d.dateKey} style={styles.monthlySkinnyBarCol}>
+                          {/* Number in black roundish rectangle placed right above where bar ends */}
+                          {hasData && (
+                            <View
+                              style={[
+                                styles.barFloatingBadge,
+                                {
+                                  bottom: totalH + 4,
+                                  backgroundColor: isDark ? 'rgba(0,0,0,0.85)' : '#09090b',
+                                },
+                              ]}
+                            >
                               <Text
-                                style={[styles.barTopValText, { color: colors.text }]}
+                                style={[
+                                  styles.barFloatingBadgeText,
+                                  { color: '#ffffff' },
+                                ]}
                                 numberOfLines={1}
                               >
-                                {wk.total}
+                                {d.total}
                               </Text>
-                            )}
-                          </View>
+                            </View>
+                          )}
 
-                          <View style={[styles.barTrack, { height: BAR_MAX_HEIGHT, width: 20 }]}>
+                          <View style={[styles.barTrack, { height: BAR_MAX_HEIGHT, width: 6, marginBottom: 0 }]}>
                             {hasData ? (
-                              <View style={[styles.stackedBarWrap, { height: totalH, width: 20 }]}>
+                              <View style={[styles.stackedBarWrap, { height: totalH, width: 6, borderRadius: 3 }]}>
                                 {snkH > 0 && (
                                   <View
                                     style={{
@@ -1639,29 +1589,23 @@ export function NutritionHistoryModal({
                               <View
                                 style={[
                                   styles.emptyBarPip,
-                                  { backgroundColor: isDark ? '#27272a' : '#e4e4e7', width: 20 },
+                                  { backgroundColor: isDark ? '#27272a' : '#e4e4e7', width: 6, height: 3, borderRadius: 1.5 },
                                 ]}
                               />
                             )}
                           </View>
-                          <Text style={[styles.barDayLabel, { color: colors.text }]}>
-                            {wk.label}
-                          </Text>
-                          <Text style={[styles.barDateSub, { color: colors.textMuted }]}>
-                            {wk.sub}
-                          </Text>
                         </View>
                       );
                     })}
                   </View>
                 </View>
-              </TouchableOpacity>
+              </View>
 
               {/* 4 MEAL CATEGORIES & PERCENTAGE BREAKDOWN OVER THIS MONTH */}
               <View
                 style={[
                   styles.chartCard,
-                  { backgroundColor: colors.surfaceElevated, borderColor: colors.border },
+                  { backgroundColor: colors.surfaceElevated },
                 ]}
               >
                 <Text style={[styles.breakdownHeaderTitle, { color: colors.text, marginBottom: 12 }]}>
@@ -1728,7 +1672,7 @@ export function NutritionHistoryModal({
           <View
             style={[
               styles.projectionInsightCard,
-              { backgroundColor: colors.surfaceElevated, borderColor: colors.border },
+              { backgroundColor: colors.surfaceElevated },
             ]}
           >
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 }}>
@@ -1806,7 +1750,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: 16,
     paddingTop: Platform.OS === 'ios' ? 54 : 20,
-    paddingBottom: 14,
+    paddingBottom: 8,
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
   closeBtn: {
@@ -1824,33 +1768,34 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     letterSpacing: -0.3,
   },
-  headerSubtitle: {
-    fontSize: 12,
-    fontWeight: '500',
-    marginTop: 2,
-  },
-  // Segmented Toggle
-  toggleSegmentWrapper: {
-    paddingHorizontal: 16,
-    paddingTop: 12,
-    paddingBottom: 6,
-  },
-  toggleSegmentContainer: {
+  // Full Sub-Tab Bar matching Community & Profile tabs
+  subTabBarContainer: {
     flexDirection: 'row',
-    borderRadius: 14,
-    padding: 3,
-    borderWidth: 1,
+    alignItems: 'center',
+    height: 44,
+    position: 'relative',
+    borderBottomWidth: 1,
+    marginBottom: 6,
   },
-  toggleSegmentBtn: {
+  subTabBtn: {
     flex: 1,
-    paddingVertical: 8,
+    height: '100%',
     alignItems: 'center',
     justifyContent: 'center',
-    borderRadius: 11,
+    zIndex: 2,
   },
-  toggleSegmentText: {
-    fontSize: 13,
-    fontWeight: '600',
+  subTabText: {
+    fontFamily: BRAND_ROUNDED_FONT_EXTRA,
+    fontSize: 14,
+    letterSpacing: -0.2,
+    textTransform: 'lowercase',
+  },
+  subTabHighlightLine: {
+    position: 'absolute',
+    bottom: -1,
+    height: 2.5,
+    borderRadius: 1.5,
+    zIndex: 5,
   },
   scrollBody: {
     paddingHorizontal: 16,
@@ -1866,8 +1811,7 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     paddingHorizontal: 16,
     borderRadius: 16,
-    borderWidth: 1,
-  },
+      },
   navArrowBtn: {
     width: 36,
     height: 36,
@@ -1901,8 +1845,7 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     paddingHorizontal: 10,
     borderRadius: 14,
-    borderWidth: 1,
-    alignItems: 'center',
+        alignItems: 'center',
   },
   summaryChipLabel: {
     fontSize: 9.5,
@@ -1917,8 +1860,7 @@ const styles = StyleSheet.create({
   // Chart Card
   chartCard: {
     borderRadius: 20,
-    borderWidth: 1,
-    padding: 16,
+        padding: 16,
     marginTop: 14,
   },
   chartHeaderRow: {
@@ -1940,12 +1882,12 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: '600',
   },
-  // Donut Chart Styles
+  // Donut Chart Styles (Compacted layout)
   donutContainer: {
     alignItems: 'center',
     justifyContent: 'center',
     position: 'relative',
-    marginVertical: 12,
+    marginVertical: 4,
   },
   donutCenterWrap: {
     position: 'absolute',
@@ -1953,66 +1895,66 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   donutCenterCals: {
-    fontSize: 32,
+    fontSize: 26,
     fontWeight: '900',
-    letterSpacing: -0.8,
+    letterSpacing: -0.6,
   },
   donutCenterUnit: {
-    fontSize: 10,
+    fontSize: 9.5,
     fontWeight: '800',
     letterSpacing: 0.5,
     marginTop: -2,
-    marginBottom: 4,
+    marginBottom: 2,
   },
   donutGoalPill: {
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 10,
+    paddingHorizontal: 6,
+    paddingVertical: 1,
+    backgroundColor: 'transparent',
   },
   donutGoalPillText: {
-    fontSize: 11,
-    fontWeight: '800',
+    fontSize: 10.5,
+    fontWeight: '700',
+    letterSpacing: 0.1,
   },
   donutBreakdownSection: {
-    marginTop: 8,
+    marginTop: 6,
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: 'rgba(150, 150, 150, 0.2)',
-    paddingTop: 14,
+    paddingTop: 10,
   },
   breakdownHeaderTitle: {
-    fontSize: 15,
+    fontSize: 13,
     fontWeight: '800',
     letterSpacing: -0.2,
-    marginBottom: 10,
+    marginBottom: 8,
   },
   donutLegendGrid: {
-    gap: 8,
+    gap: 6,
   },
   donutMealRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingVertical: 10,
-    paddingHorizontal: 14,
-    borderRadius: 14,
-    borderWidth: 1,
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    borderRadius: 12,
   },
   donutMealLeft: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
+    gap: 8,
   },
   donutMealDot: {
-    width: 12,
-    height: 12,
-    borderRadius: 6,
+    width: 9,
+    height: 9,
+    borderRadius: 4.5,
   },
   donutMealName: {
-    fontSize: 14,
+    fontSize: 12.5,
     fontWeight: '700',
   },
   donutMealCals: {
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '500',
     marginTop: 1,
   },
@@ -2021,12 +1963,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   donutPctBadge: {
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 8,
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 6,
   },
   donutPctText: {
-    fontSize: 13,
+    fontSize: 11.5,
     fontWeight: '800',
   },
   // Weekly Chart Legend
@@ -2049,6 +1991,34 @@ const styles = StyleSheet.create({
   legendText: {
     fontSize: 11,
     fontWeight: '600',
+  },
+  monthlySkinnyBarCol: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    position: 'relative',
+    height: BAR_MAX_HEIGHT + 24,
+  },
+  barFloatingBadge: {
+    position: 'absolute',
+    alignSelf: 'center',
+    paddingHorizontal: 4,
+    paddingVertical: 2,
+    borderRadius: 6,
+    zIndex: 10,
+    minWidth: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.25,
+    shadowRadius: 2,
+    elevation: 3,
+  },
+  barFloatingBadgeText: {
+    fontSize: 8,
+    fontWeight: '800',
+    letterSpacing: -0.3,
   },
   barsContainer: {
     position: 'relative',
@@ -2176,8 +2146,7 @@ const styles = StyleSheet.create({
   // Detail Card
   detailCard: {
     borderRadius: 20,
-    borderWidth: 1.5,
-    padding: 16,
+        padding: 16,
     gap: 14,
     marginTop: 14,
   },
@@ -2231,8 +2200,7 @@ const styles = StyleSheet.create({
   // Projection Card
   projectionInsightCard: {
     borderRadius: 20,
-    borderWidth: 1,
-    padding: 16,
+        padding: 16,
     marginTop: 14,
   },
   projectionTitle: {

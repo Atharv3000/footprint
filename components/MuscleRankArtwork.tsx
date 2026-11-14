@@ -55,8 +55,8 @@ export function MuscleRankBody({ ranks, selected, onSelect, back, palette }: {
     <Ellipse cx="100" cy="389" rx="40" ry="5" fill="#000" fillOpacity=".5" />
     <Path d="M89 48 L88 63 L69 70 Q53 73 46 90 L40 135 L35 160 L30 201 L34 215 L40 218 L47 210 L49 193 L58 159 L63 128 L70 157 L65 188 L61 217 L64 263 L69 287 L68 329 L73 370 L66 378 L63 386 Q74 392 88 383 L88 367 L95 319 L98 283 L100 246 L102 283 L105 319 L112 367 L112 383 Q126 392 137 386 L134 378 L127 370 L132 329 L131 287 L136 263 L139 217 L135 188 L130 157 L137 128 L142 159 L151 193 L153 210 L160 218 L166 215 L170 201 L165 160 L160 135 L154 90 Q147 73 131 70 L112 63 L111 48 Z"
       fill="#7D8793" stroke="#B7C0CB" strokeWidth=".7" />
-    <Ellipse cx="100" cy="29" rx="17" ry="22" fill="#BBC3CC" />
-    <Path d="M86 46 L90 58 L100 64 L110 58 L114 46" fill="#9CA6B2" />
+    <Ellipse cx="100" cy="29" rx="17" ry="22" fill="#7D8793" stroke="#B7C0CB" strokeWidth=".7" />
+    <Path d="M86 46 L90 58 L100 64 L110 58 L114 46" fill="#7D8793" stroke="#B7C0CB" strokeWidth=".7" />
     {panel('shoulders', shoulders)}
     {panel('arms', arms)}
     {back ? <>

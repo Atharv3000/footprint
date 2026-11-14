@@ -61,7 +61,8 @@ import {
   syncMyProfileToSupabase,
 } from '@/constants/socialEngine';
 import { supabase } from '@/constants/supabaseClient';
-import { SquadDetailScreen, calculateSquadGrade } from '@/components/SquadDetailScreen';
+import { SquadDetailScreen, calculateSquadGrade, computeSquadMetrics } from '@/components/SquadDetailScreen';
+
 
 export interface CommunityQuest {
   id: string;
@@ -272,39 +273,9 @@ export default function CommunityScreen() {
     expiresAt: null,
     remainingSeconds: 0,
   });
-  const [privacyDurationSliderHours, setPrivacyDurationSliderHours] = useState<number>(4);
-  const privacySliderTrackWidthRef = useRef<number>(260);
-  const privacySliderStartXRef = useRef<number>(0);
+  const [showPrivacyDurationModal, setShowPrivacyDurationModal] = useState<boolean>(false);
+  const privacySelectionMadeRef = useRef<boolean>(false);
 
-  const calculatePrivacyHoursFromX = (pageX: number) => {
-    const width = privacySliderTrackWidthRef.current || 260;
-    const startX = privacySliderStartXRef.current || 0;
-    const relX = Math.max(0, Math.min(width, pageX - startX));
-    const ratio = relX / width;
-    // Map ratio to 1 to 24 hours: 1, 2, 4, 8, 12, 16, 24 or continuous rounded
-    const rawHours = 1 + ratio * 23;
-    const rounded = Math.round(rawHours);
-    return Math.max(1, Math.min(24, rounded));
-  };
-
-  const privacySliderPanResponder = useRef(
-    PanResponder.create({
-      onStartShouldSetPanResponder: () => true,
-      onMoveShouldSetPanResponder: () => true,
-      onPanResponderGrant: (evt) => {
-        Haptics.selectionAsync().catch(() => {});
-        const hours = calculatePrivacyHoursFromX(evt.nativeEvent.pageX);
-        setPrivacyDurationSliderHours(hours);
-      },
-      onPanResponderMove: (evt) => {
-        const hours = calculatePrivacyHoursFromX(evt.nativeEvent.pageX);
-        setPrivacyDurationSliderHours(hours);
-      },
-      onPanResponderRelease: () => {
-        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
-      },
-    })
-  ).current;
 
   const userId = user?.id || 'guest_user';
 
@@ -415,14 +386,18 @@ export default function CommunityScreen() {
     setRefreshing(false);
   };
 
-  // Called when tapping the privacy switch or activate button
-  const handleTogglePrivacy = async (turningOn: boolean, customHours?: number | null) => {
+  // Called when tapping the privacy switch/pill
+  const handleTogglePrivacy = async (turningOn: boolean) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
     if (turningOn) {
-      const hours = customHours !== undefined ? customHours : privacyDurationSliderHours;
-      const res = await setLocationPrivacy(userId, true, hours);
-      setPrivacyStatus(res);
-      await syncMyProfileToSupabase(userId, { location_private: true });
+      // Immediately slide/toggle switch ON so it feels responsive and active
+      setPrivacyStatus((prev) => ({
+        ...prev,
+        isPrivate: true,
+      }));
+      // Reset selection flag and open duration dropup menu
+      privacySelectionMadeRef.current = false;
+      setShowPrivacyDurationModal(true);
     } else {
       // Turn off privacy
       const res = await setLocationPrivacy(userId, false);
@@ -431,13 +406,16 @@ export default function CommunityScreen() {
     }
   };
 
-  // Called when user selects a duration or adjusts slider
+  // Called when user selects a duration pill or indefinite
   const handleSelectPrivacyDuration = async (durationHours: number | null) => {
+    privacySelectionMadeRef.current = true;
+    setShowPrivacyDurationModal(false);
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
     const res = await setLocationPrivacy(userId, true, durationHours);
     setPrivacyStatus(res);
     await syncMyProfileToSupabase(userId, { location_private: true });
   };
+
 
   // Format seconds to human hours and minutes (e.g. "2h 15m left" or "45m left", no seconds)
   const formatCountdown = (totalSec: number) => {
@@ -576,6 +554,7 @@ export default function CommunityScreen() {
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       <FlatList
+
         ref={mainScrollRef}
         data={[]}
         keyExtractor={(_, i) => `empty_${i}`}
@@ -632,7 +611,7 @@ export default function CommunityScreen() {
                   </TouchableOpacity>
                 )}
 
-                {/* Notifications Bell Icon combining Friends & Squads Notifications with badge in top-right */}
+                {/* Notifications Bell Icon combining Friends & Squads Notifications with badge in bottom-right */}
                 <TouchableOpacity
                   style={[styles.retroActionBtn, { backgroundColor: colors.surfaceElevated }]}
                   onPress={() => {
@@ -654,110 +633,112 @@ export default function CommunityScreen() {
               </View>
             </View>
 
-            {/* ── Full End-to-End Segmented Bar: Friends | Squads | Quests ── */}
-            <View
-              style={[
-                styles.communitySubTabBar,
-                {
-                  backgroundColor: isDark ? '#000000' : '#ffffff',
-                  borderBottomColor: 'transparent',
-                  borderTopColor: 'transparent',
-                },
-              ]}
-            >
-              <TouchableOpacity
-                style={styles.communitySubTabBtn}
-                onPress={() => switchCommunityTab('friends')}
-                activeOpacity={0.7}
-              >
-                <Text
-                  style={[
-                    styles.communitySubTabText,
-                    {
-                      color: activeTab === 'friends' ? colors.text : colors.textMuted,
-                      fontWeight: activeTab === 'friends' ? '800' : '600',
-                    },
-                  ]}
-                >
-                  FRIENDS
-                </Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={styles.communitySubTabBtn}
-                onPress={() => switchCommunityTab('squads')}
-                activeOpacity={0.7}
-              >
-                <Text
-                  style={[
-                    styles.communitySubTabText,
-                    {
-                      color: activeTab === 'squads' ? colors.text : colors.textMuted,
-                      fontWeight: activeTab === 'squads' ? '800' : '600',
-                    },
-                  ]}
-                >
-                  SQUADS
-                </Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={styles.communitySubTabBtn}
-                onPress={() => switchCommunityTab('quests')}
-                activeOpacity={0.7}
-              >
-                <Text
-                  style={[
-                    styles.communitySubTabText,
-                    {
-                      color: activeTab === 'quests' ? colors.text : colors.textMuted,
-                      fontWeight: activeTab === 'quests' ? '800' : '600',
-                    },
-                  ]}
-                >
-                  QUESTS
-                </Text>
-              </TouchableOpacity>
-
-              {/* Animated Underline Indicator across the bar */}
-              <Animated.View
+            {/* ── LOWER SCREEN SECTION: like Profile tab (pure white in light mode, pure black in dark mode, with subtle top divider line) ── */}
+            <View style={[styles.lowerScreenSection, { backgroundColor: isDark ? '#000000' : '#ffffff', borderTopColor: isDark ? '#1a1a1f' : '#ededf0' }]}>
+              {/* ── Full End-to-End Segmented Bar: Friends | Squads | Quests ── */}
+              <View
                 style={[
-                  styles.communitySubTabIndicator,
+                  styles.communitySubTabBar,
                   {
-                    backgroundColor: isDark ? '#ffffff' : '#000000',
-                    width: SCREEN_WIDTH / 3,
-                    transform: [
-                      {
-                        translateX: communityTabAnim.interpolate({
-                          inputRange: [0, 1, 2],
-                          outputRange: [0, SCREEN_WIDTH / 3, (SCREEN_WIDTH / 3) * 2],
-                        }),
-                      },
-                    ],
+                    backgroundColor: isDark ? '#000000' : '#ffffff',
+                    borderBottomColor: isDark ? '#1f1f24' : '#e5e5ea',
                   },
                 ]}
-              />
-            </View>
+              >
+                <TouchableOpacity
+                  style={styles.communitySubTabBtn}
+                  onPress={() => switchCommunityTab('friends')}
+                  activeOpacity={0.7}
+                >
+                  <Text
+                    style={[
+                      styles.communitySubTabText,
+                      {
+                        color: activeTab === 'friends' ? (isDark ? '#ffffff' : '#000000') : (isDark ? '#71717a' : '#9ca3af'),
+                        fontWeight: activeTab === 'friends' ? '800' : '600',
+                      },
+                    ]}
+                  >
+                    FRIENDS
+                  </Text>
+                </TouchableOpacity>
 
-            {/* ── Retro Pill Search Bar ── */}
-            <View style={[styles.retroSearchContainer, { backgroundColor: colors.surfaceElevated }]}>
-              <Ionicons name="search" size={17} color={colors.textMuted} style={styles.retroSearchIcon} />
-              <TextInput
-                style={[styles.retroSearchInput, { color: colors.text }]}
-                placeholder={
-                  activeTab === 'friends'
-                    ? 'Search friends or usernames'
-                    : activeTab === 'squads'
-                    ? 'Search squads or members'
-                    : 'Search quests & challenges'
-                }
-                placeholderTextColor={colors.textMuted}
-                value={searchQuery}
-                onChangeText={setSearchQuery}
-                autoCorrect={false}
-                clearButtonMode="while-editing"
-              />
-            </View>
+                <TouchableOpacity
+                  style={styles.communitySubTabBtn}
+                  onPress={() => switchCommunityTab('squads')}
+                  activeOpacity={0.7}
+                >
+                  <Text
+                    style={[
+                      styles.communitySubTabText,
+                      {
+                        color: activeTab === 'squads' ? (isDark ? '#ffffff' : '#000000') : (isDark ? '#71717a' : '#9ca3af'),
+                        fontWeight: activeTab === 'squads' ? '800' : '600',
+                      },
+                    ]}
+                  >
+                    SQUADS
+                  </Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={styles.communitySubTabBtn}
+                  onPress={() => switchCommunityTab('quests')}
+                  activeOpacity={0.7}
+                >
+                  <Text
+                    style={[
+                      styles.communitySubTabText,
+                      {
+                        color: activeTab === 'quests' ? (isDark ? '#ffffff' : '#000000') : (isDark ? '#71717a' : '#9ca3af'),
+                        fontWeight: activeTab === 'quests' ? '800' : '600',
+                      },
+                    ]}
+                  >
+                    QUESTS
+                  </Text>
+                </TouchableOpacity>
+
+                {/* Animated Underline Indicator across the bar */}
+                <Animated.View
+                  style={[
+                    styles.communitySubTabIndicator,
+                    {
+                      backgroundColor: isDark ? '#ffffff' : '#000000',
+                      width: SCREEN_WIDTH / 3,
+                      transform: [
+                        {
+                          translateX: communityTabAnim.interpolate({
+                            inputRange: [0, 1, 2],
+                            outputRange: [0, SCREEN_WIDTH / 3, (SCREEN_WIDTH / 3) * 2],
+                          }),
+                        },
+                      ],
+                    },
+                  ]}
+                />
+              </View>
+
+              <View style={styles.communityInnerContent}>
+                {/* ── Retro Pill Search Bar ── */}
+                <View style={[styles.retroSearchContainer, { backgroundColor: colors.surfaceElevated }]}>
+                  <Ionicons name="search" size={17} color={colors.textMuted} style={styles.retroSearchIcon} />
+                  <TextInput
+                    style={[styles.retroSearchInput, { color: colors.text }]}
+                    placeholder={
+                      activeTab === 'friends'
+                        ? 'Search friends or usernames'
+                        : activeTab === 'squads'
+                        ? 'Search squads or members'
+                        : 'Search quests & challenges'
+                    }
+                    placeholderTextColor={colors.textMuted}
+                    value={searchQuery}
+                    onChangeText={setSearchQuery}
+                    autoCorrect={false}
+                    clearButtonMode="while-editing"
+                  />
+                </View>
 
             {/* ── TAB 1: FRIENDS ── */}
             {activeTab === 'friends' && (
@@ -937,228 +918,36 @@ export default function CommunityScreen() {
                   );
                 })()}
 
-                {/* Privacy Card with Integral Tactile Slider */}
-                <View
-                  style={[
-                    styles.privacyRichCard,
-                    {
-                      backgroundColor: privacyStatus.isPrivate
-                        ? (isDark ? '#064e3b' : '#ecfdf5')
-                        : colors.surfaceElevated,
-                      borderColor: privacyStatus.isPrivate ? '#10b981' : colors.border,
-                    },
-                  ]}
+                {/* Privacy Mode Banner - Exact Format as Calorie Challenges */}
+                <TouchableOpacity
+                  onPress={() => {
+                    Haptics.selectionAsync().catch(() => {});
+                    setShowPrivacyDurationModal(true);
+                  }}
+                  activeOpacity={0.7}
+                  accessibilityRole="button"
+                  accessibilityLabel="Privacy Mode"
+                  style={[styles.privacyBanner, { backgroundColor: colors.surfaceElevated }]}
                 >
-                  <View style={styles.privacyCompactHeader}>
-                    <View
-                      style={[
-                        styles.privacyIconWrapSmall,
-                        {
-                          backgroundColor: privacyStatus.isPrivate
-                            ? '#10b981'
-                            : (isDark ? '#27272a' : '#e4e4e7'),
-                        },
-                      ]}
-                    >
-                      <Ionicons
-                        name={privacyStatus.isPrivate ? 'eye-off' : 'eye'}
-                        size={19}
-                        color={privacyStatus.isPrivate ? '#ffffff' : colors.textMuted}
-                      />
-                    </View>
-
-                    <View style={{ flex: 1, marginLeft: 12 }}>
-                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                        <Text style={[styles.privacyCompactTitle, { color: colors.text }]}>Privacy Mode</Text>
-                        <View
-                          style={[
-                            styles.privacyStatusTag,
-                            {
-                              backgroundColor: privacyStatus.isPrivate ? '#10b98124' : `${colors.textMuted}18`,
-                            },
-                          ]}
-                        >
-                          <Text
-                            style={[
-                              styles.privacyStatusTagText,
-                              { color: privacyStatus.isPrivate ? '#10b981' : colors.textMuted },
-                            ]}
-                          >
-                            {privacyStatus.isPrivate ? 'ACTIVE' : 'OFF'}
-                          </Text>
-                        </View>
-                      </View>
-
-                      <Text
-                        style={[
-                          styles.privacyTimerText,
-                          {
-                            color: privacyStatus.isPrivate ? (isDark ? '#34d399' : '#059669') : colors.textMuted,
-                            marginTop: 2,
-                          },
-                        ]}
-                      >
-                        {privacyStatus.isPrivate
-                          ? privacyStatus.expiresAt
-                            ? `${formatCountdown(privacyStatus.remainingSeconds)} remaining`
-                            : 'Active indefinitely'
-                          : `Hides your radar position for ${privacyDurationSliderHours}h`}
-                      </Text>
-                    </View>
-
-                    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                      {privacyStatus.isPrivate ? (
-                        <TouchableOpacity
-                          style={styles.privacySolidResumeBtn}
-                          onPress={() => handleTogglePrivacy(false)}
-                          activeOpacity={0.85}
-                        >
-                          <Ionicons name="play" size={12} color="#ffffff" style={{ marginRight: 4 }} />
-                          <Text style={styles.privacySolidResumeBtnText}>Resume</Text>
-                        </TouchableOpacity>
-                      ) : (
-                        <TouchableOpacity
-                          style={[styles.privacyEnableBtn, { backgroundColor: '#10b981' }]}
-                          onPress={() => handleTogglePrivacy(true, privacyDurationSliderHours)}
-                          activeOpacity={0.85}
-                        >
-                          <Ionicons name="shield-checkmark" size={13} color="#ffffff" style={{ marginRight: 4 }} />
-                          <Text style={styles.privacyEnableBtnText}>Turn On</Text>
-                        </TouchableOpacity>
-                      )}
-                    </View>
+                  <Ionicons
+                    name={privacyStatus.isPrivate ? 'eye-off-outline' : 'eye-outline'}
+                    size={20}
+                    color={privacyStatus.isPrivate ? '#10b981' : colors.primary}
+                  />
+                  <View style={{ flex: 1 }}>
+                    <Text style={[styles.privacyBannerTitle, { color: colors.text }]}>
+                      Privacy Mode{privacyStatus.isPrivate ? ' · Active' : ''}
+                    </Text>
+                    <Text style={[styles.privacyBannerCaption, { color: colors.textMuted }]}>
+                      {privacyStatus.isPrivate
+                        ? privacyStatus.expiresAt
+                          ? `${formatCountdown(privacyStatus.remainingSeconds)} left · Hiding location`
+                          : 'Hiding location until turned off'
+                        : 'Hide your live map radar position'}
+                    </Text>
                   </View>
-
-                  {/* Integral Duration Slider */}
-                  <View style={styles.privacySliderSection}>
-                    <View style={styles.privacySliderLabelRow}>
-                      <Text style={[styles.privacySliderLabel, { color: colors.textSecondary }]}>
-                        {privacyStatus.isPrivate ? 'Adjust Active Duration' : 'Set Hide Duration'}
-                      </Text>
-                      <Text style={[styles.privacySliderValueText, { color: colors.primary }]}>
-                        {privacyDurationSliderHours} {privacyDurationSliderHours === 1 ? 'Hour' : 'Hours'}
-                      </Text>
-                    </View>
-
-                    <View
-                      style={styles.privacySliderTouchTrack}
-                      onLayout={(e) => {
-                        privacySliderTrackWidthRef.current = e.nativeEvent.layout.width;
-                      }}
-                      onTouchStart={(e) => {
-                        privacySliderStartXRef.current = e.nativeEvent.pageX - e.nativeEvent.locationX;
-                      }}
-                      {...privacySliderPanResponder.panHandlers}
-                    >
-                      <View
-                        style={[
-                          styles.privacySliderBackgroundTrack,
-                          { backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)' },
-                        ]}
-                      >
-                        <View
-                          style={[
-                            styles.privacySliderFillTrack,
-                            {
-                              width: `${Math.max(4, Math.min(100, ((privacyDurationSliderHours - 1) / 23) * 100))}%`,
-                              backgroundColor: privacyStatus.isPrivate ? '#10b981' : colors.primary,
-                            },
-                          ]}
-                        />
-                      </View>
-                      <View
-                        style={[
-                          styles.privacySliderThumb,
-                          {
-                            left: `${Math.max(0, Math.min(94, ((privacyDurationSliderHours - 1) / 23) * 94))}%`,
-                            borderColor: privacyStatus.isPrivate ? '#10b981' : colors.primary,
-                            backgroundColor: colors.surfaceElevated,
-                          },
-                        ]}
-                      >
-                        <View
-                          style={[
-                            styles.privacySliderThumbCore,
-                            { backgroundColor: privacyStatus.isPrivate ? '#10b981' : colors.primary },
-                          ]}
-                        />
-                      </View>
-                    </View>
-
-                    {/* Quick Stepper Markers */}
-                    <View style={styles.privacySliderTicksRow}>
-                      {[1, 4, 12, 24].map((h) => {
-                        const isSelected = privacyDurationSliderHours === h;
-                        return (
-                          <TouchableOpacity
-                            key={`tick_${h}`}
-                            onPress={() => {
-                              Haptics.selectionAsync().catch(() => {});
-                              setPrivacyDurationSliderHours(h);
-                              if (privacyStatus.isPrivate) {
-                                handleSelectPrivacyDuration(h);
-                              }
-                            }}
-                            activeOpacity={0.7}
-                            style={[
-                              styles.privacyQuickPill,
-                              {
-                                backgroundColor: isSelected
-                                  ? (privacyStatus.isPrivate ? '#10b981' : colors.primary)
-                                  : (isDark ? '#27272a' : '#f4f4f5'),
-                                borderColor: isSelected ? 'transparent' : colors.border,
-                              },
-                            ]}
-                          >
-                            <Text
-                              style={[
-                                styles.privacyQuickPillText,
-                                { color: isSelected ? '#ffffff' : colors.textSecondary },
-                              ]}
-                            >
-                              {h}h
-                            </Text>
-                          </TouchableOpacity>
-                        );
-                      })}
-                      <TouchableOpacity
-                        onPress={() => {
-                          Haptics.selectionAsync().catch(() => {});
-                          if (privacyStatus.isPrivate) {
-                            handleSelectPrivacyDuration(null);
-                          } else {
-                            handleTogglePrivacy(true, null);
-                          }
-                        }}
-                        activeOpacity={0.7}
-                        style={[
-                          styles.privacyQuickPill,
-                          {
-                            backgroundColor: (privacyStatus.isPrivate && !privacyStatus.expiresAt)
-                              ? '#10b981'
-                              : (isDark ? '#27272a' : '#f4f4f5'),
-                            borderColor: (privacyStatus.isPrivate && !privacyStatus.expiresAt)
-                              ? 'transparent'
-                              : colors.border,
-                          },
-                        ]}
-                      >
-                        <Text
-                          style={[
-                            styles.privacyQuickPillText,
-                            {
-                              color: (privacyStatus.isPrivate && !privacyStatus.expiresAt)
-                                ? '#ffffff'
-                                : colors.textSecondary,
-                            },
-                          ]}
-                        >
-                          Indefinite
-                        </Text>
-                      </TouchableOpacity>
-                    </View>
-                  </View>
-                </View>
+                  <Ionicons name="chevron-forward" size={17} color={colors.textMuted} />
+                </TouchableOpacity>
 
                 {/* Calorie Challenges Prompt Banner below Privacy Mode */}
                 <View style={{ marginTop: 12, marginBottom: 8 }}>
@@ -1227,10 +1016,8 @@ export default function CommunityScreen() {
                       </View>
 
                       {filteredSquads.map((item) => {
-                        const memberCount = Math.max(1, item.memberUsernames.length);
-                        const totalSquadSteps = Math.round(memberCount * 42500);
-                        const gradeInfo = calculateSquadGrade(totalSquadSteps, memberCount);
-                        const isAdminOnly = item.squadType === 'admin_only';
+                        const metrics = computeSquadMetrics(item.memberUsernames, myUsername);
+                        const { memberCount, totalSteps, totalDistanceMiles, gradeInfo } = metrics;
                         const isSelfMember = item.memberUsernames.includes(myUsername);
 
                         return (
@@ -1287,7 +1074,7 @@ export default function CommunityScreen() {
                               </View>
                             </View>
 
-                            {/* Crisp Stat Tiles Bar */}
+                            {/* Crisp Stat Tiles Bar: Members | Total Steps | Total Miles Covered */}
                             <View
                               style={[
                                 styles.squadCardStatsBar,
@@ -1312,7 +1099,7 @@ export default function CommunityScreen() {
                                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
                                   <Ionicons name="footsteps-outline" size={13} color={colors.primary} />
                                   <Text style={[styles.squadCardStatVal, { color: colors.text }]}>
-                                    {totalSquadSteps >= 1000 ? `${(totalSquadSteps / 1000).toFixed(1)}k` : totalSquadSteps}
+                                    {totalSteps >= 1000 ? `${(totalSteps / 1000).toFixed(1)}k` : totalSteps}
                                   </Text>
                                 </View>
                                 <Text style={[styles.squadCardStatLabel, { color: colors.textMuted }]}>TOTAL STEPS</Text>
@@ -1322,73 +1109,41 @@ export default function CommunityScreen() {
 
                               <View style={styles.squadCardStatCol}>
                                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                                  <Ionicons name="trophy-outline" size={13} color={gradeInfo.color} />
-                                  <Text style={[styles.squadCardStatVal, { color: gradeInfo.color }]}>
-                                    {gradeInfo.grade} TIER
+                                  <Ionicons name="navigate-outline" size={13} color="#3b82f6" />
+                                  <Text style={[styles.squadCardStatVal, { color: colors.text }]}>
+                                    {totalDistanceMiles} mi
                                   </Text>
                                 </View>
-                                <Text style={[styles.squadCardStatLabel, { color: colors.textMuted }]}>RANK</Text>
+                                <Text style={[styles.squadCardStatLabel, { color: colors.textMuted }]}>TOTAL MILES</Text>
                               </View>
                             </View>
 
-                            {/* Card Footer: Members Avatars / Pill tags & View Chevron */}
+                            {/* Card Footer: Horizontally Scrollable Clean @handles (No Borders) */}
                             <View style={styles.squadCardFooter}>
-                              <View style={styles.squadCardMembersList}>
-                                {item.memberUsernames.slice(0, 4).map((u) => {
-                                  const isSelf = u === myUsername;
-                                  const isGroupAdmin = item.createdById === userId && isSelf;
+                              <ScrollView
+                                horizontal
+                                showsHorizontalScrollIndicator={false}
+                                contentContainerStyle={styles.squadCardMembersScroll}
+                              >
+                                {item.memberUsernames.map((u) => {
+                                  const isSelf = u.toLowerCase() === (myUsername || '').toLowerCase();
                                   return (
-                                    <View
-                                      key={u}
-                                      style={[
-                                        styles.memberBadgePill,
-                                        {
-                                          backgroundColor: isSelf
-                                            ? `${colors.primary}18`
-                                            : isDark
-                                            ? 'rgba(255,255,255,0.07)'
-                                            : 'rgba(0,0,0,0.05)',
-                                        },
-                                      ]}
-                                    >
-                                      {isGroupAdmin ? (
-                                        <Ionicons name="star" size={10} color="#f59e0b" style={{ marginRight: 3 }} />
-                                      ) : (
-                                        <View
-                                          style={[
-                                            styles.memberTinyDot,
-                                            { backgroundColor: isSelf ? colors.primary : colors.textMuted },
-                                          ]}
-                                        />
-                                      )}
+                                    <View key={u} style={styles.memberHandleItem}>
                                       <Text
                                         style={[
-                                          styles.memberBadgeText,
+                                          styles.memberHandleText,
                                           {
                                             color: isSelf ? colors.primary : colors.textSecondary,
-                                            fontWeight: isSelf ? '800' : '600',
+                                            fontWeight: isSelf ? '700' : '500',
                                           },
                                         ]}
                                       >
-                                        @{u}{isSelf ? ' (You)' : ''}
+                                        @{u}
                                       </Text>
                                     </View>
                                   );
                                 })}
-
-                                {item.memberUsernames.length > 4 && (
-                                  <View
-                                    style={[
-                                      styles.memberBadgePill,
-                                      { backgroundColor: isDark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.05)' },
-                                    ]}
-                                  >
-                                    <Text style={[styles.memberBadgeText, { color: colors.textMuted }]}>
-                                      +{item.memberUsernames.length - 4} more
-                                    </Text>
-                                  </View>
-                                )}
-                              </View>
+                              </ScrollView>
 
                               <View style={styles.squadCardActionChevron}>
                                 <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
@@ -1397,6 +1152,7 @@ export default function CommunityScreen() {
                           </TouchableOpacity>
                         );
                       })}
+
                     </View>
                   );
                 })()}
@@ -1522,6 +1278,9 @@ export default function CommunityScreen() {
                 })()}
               </View>
             )}
+
+              </View>
+            </View>
 
           </View>
         }
@@ -1963,6 +1722,78 @@ export default function CommunityScreen() {
         avatarColor="#10b981"
         isDark={isDark}
       />
+
+      {/* ── MODAL: PRIVACY DURATION SELECTION DROPUP ── */}
+      <InteractiveBottomModal
+        visible={showPrivacyDurationModal}
+        onDismiss={() => {
+          setShowPrivacyDurationModal(false);
+          // If dismissed without choosing an amount, automatically turn back off privacy mode
+          if (!privacySelectionMadeRef.current) {
+            setLocationPrivacy(userId, false).then((res) => {
+              setPrivacyStatus(res);
+              syncMyProfileToSupabase(userId, { location_private: false });
+            });
+          }
+        }}
+        handleColor={colors.border}
+        cardStyle={[styles.modalSheetCard, { backgroundColor: colors.surface, borderColor: colors.border }]}
+      >
+        <View style={{ marginBottom: 4 }}>
+          <Text style={[styles.modalSheetHeading, { color: colors.text }]}>Privacy Duration</Text>
+        </View>
+        <Text style={[styles.modalSheetSubtext, { color: colors.textMuted, marginBottom: 16 }]}>
+          Select how long your live walking position and activity will be hidden.
+        </Text>
+
+        {/* Duration Pills Grid (2h, 4h, 12h, 24h) */}
+        <View style={styles.privacyDurationGrid}>
+          {[
+            { label: '2 Hours', hours: 2 },
+            { label: '4 Hours', hours: 4 },
+            { label: '12 Hours', hours: 12 },
+            { label: '24 Hours', hours: 24 },
+          ].map((pill) => (
+            <TouchableOpacity
+              key={pill.label}
+              style={[
+                styles.privacyDurationPill,
+                { backgroundColor: colors.surfaceElevated, borderColor: colors.border },
+              ]}
+              onPress={() => handleSelectPrivacyDuration(pill.hours)}
+              activeOpacity={0.7}
+            >
+              <Ionicons name="time-outline" size={15} color={colors.primary} />
+              <Text style={[styles.privacyDurationPillText, { color: colors.text }]}>{pill.label}</Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+
+        {/* Until I turn it back on Option Across the Bottom */}
+        <TouchableOpacity
+          style={[styles.privacyIndefiniteBtn, { backgroundColor: `${colors.textMuted}14`, borderColor: colors.border }]}
+          onPress={() => handleSelectPrivacyDuration(null)}
+          activeOpacity={0.7}
+        >
+          <Ionicons name="infinite-outline" size={18} color={colors.text} />
+          <Text style={[styles.privacyIndefiniteBtnText, { color: colors.text }]}>Until I turn it back on</Text>
+        </TouchableOpacity>
+
+        {privacyStatus.isPrivate && (
+          <TouchableOpacity
+            style={[styles.privacyTurnOffBtn, { backgroundColor: '#ef44441a', borderColor: '#ef444440' }]}
+            onPress={() => {
+              handleTogglePrivacy(false);
+              setShowPrivacyDurationModal(false);
+            }}
+            activeOpacity={0.7}
+          >
+            <Ionicons name="eye-outline" size={17} color="#ef4444" />
+            <Text style={[styles.privacyTurnOffBtnText, { color: '#ef4444' }]}>Turn Off Privacy Mode</Text>
+          </TouchableOpacity>
+        )}
+      </InteractiveBottomModal>
+
 
 
 
@@ -3193,7 +3024,7 @@ const styles = StyleSheet.create({
   },
   retroNotificationDotBadge: {
     position: 'absolute',
-    top: -3,
+    bottom: -3,
     right: -3,
     minWidth: 18,
     height: 18,
@@ -3202,14 +3033,10 @@ const styles = StyleSheet.create({
     backgroundColor: '#ef4444',
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 2,
+    borderWidth: 1.5,
     borderColor: '#ffffff',
-    shadowColor: '#ef4444',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.35,
-    shadowRadius: 2,
-    elevation: 3,
   },
+
   retroNotificationDotText: {
     color: '#ffffff',
     fontSize: 10,
@@ -3439,179 +3266,42 @@ const styles = StyleSheet.create({
     letterSpacing: -0.1,
   },
 
-  /* ── Compact & Rich Privacy UI ── */
-  privacyRichCard: {
-    marginHorizontal: 0,
-    marginTop: 14,
-    marginBottom: 24,
-    borderRadius: 22,
-    borderWidth: 1.5,
-    padding: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.08,
-    shadowRadius: 8,
-    elevation: 3,
-  },
-  privacyCompactCard: {
-    marginHorizontal: 0,
-    marginTop: 14,
-    marginBottom: 24,
-    borderRadius: 20,
+  /* ── Privacy Mode Banner (matches CalorieChallenges banner style) ── */
+  privacyBanner: {
+    borderRadius: 18,
     borderWidth: 0,
-    paddingHorizontal: 16,
-    paddingVertical: 16,
-    minHeight: 68,
-  },
-  privacyCompactHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  privacyIconWrapSmall: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  privacyCompactTitle: {
-    fontSize: 16,
-    fontWeight: '800',
-    letterSpacing: -0.2,
-  },
-  privacyStatusTag: {
-    paddingHorizontal: 7,
-    paddingVertical: 2,
-    borderRadius: 6,
-  },
-  privacyStatusTagText: {
-    fontSize: 9.5,
-    fontWeight: '900',
-    letterSpacing: 0.6,
-  },
-  privacyTimerText: {
-    fontSize: 12.5,
-    fontWeight: '600',
-    letterSpacing: -0.1,
-  },
-  privacySubSmall: {
-    fontSize: 12,
-    marginTop: 2,
-    lineHeight: 16,
-  },
-  privacySolidResumeBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#10b981',
-    paddingHorizontal: 15,
-    paddingVertical: 9,
-    borderRadius: 18,
-    shadowColor: '#10b981',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  privacySolidResumeBtnText: {
-    color: '#ffffff',
-    fontSize: 13,
-    fontWeight: '700',
-    letterSpacing: -0.1,
-  },
-  privacyEnableBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
+    paddingVertical: 12,
     paddingHorizontal: 14,
-    paddingVertical: 9,
-    borderRadius: 18,
-    shadowColor: '#10b981',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 3,
-    elevation: 2,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginBottom: 0,
   },
-  privacyEnableBtnText: {
-    color: '#ffffff',
+  privacyBannerTitle: {
     fontSize: 13,
-    fontWeight: '800',
-    letterSpacing: -0.1,
+    fontWeight: '600',
   },
-  privacySliderSection: {
-    marginTop: 16,
-    paddingTop: 14,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: 'rgba(128,128,128,0.2)',
-  },
-  privacySliderLabelRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 10,
-  },
-  privacySliderLabel: {
+  privacyBannerCaption: {
     fontSize: 12,
-    fontWeight: '700',
-    letterSpacing: -0.1,
+    lineHeight: 18,
+    marginTop: 1,
   },
-  privacySliderValueText: {
-    fontSize: 13.5,
-    fontWeight: '800',
-  },
-  privacySliderTouchTrack: {
-    height: 38,
-    justifyContent: 'center',
-    position: 'relative',
-    marginVertical: 4,
-  },
-  privacySliderBackgroundTrack: {
-    height: 8,
-    borderRadius: 4,
-    overflow: 'hidden',
-    width: '100%',
-  },
-  privacySliderFillTrack: {
-    height: '100%',
-    borderRadius: 4,
-  },
-  privacySliderThumb: {
-    position: 'absolute',
-    top: 6,
-    width: 26,
-    height: 26,
-    borderRadius: 13,
-    borderWidth: 2.5,
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 3,
-    elevation: 3,
-  },
-  privacySliderThumbCore: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-  },
-  privacySliderTicksRow: {
+  privacyTurnOffBtn: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
     gap: 8,
-    marginTop: 10,
-  },
-  privacyQuickPill: {
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 10,
+    paddingVertical: 13,
+    borderRadius: 14,
     borderWidth: 1,
+    marginTop: 8,
   },
-  privacyQuickPillText: {
-    fontSize: 11,
+  privacyTurnOffBtnText: {
+    fontSize: 13.5,
     fontWeight: '700',
   },
+
+
 
   /* ── Privacy Duration Bottom Sheet Dropup ── */
   privacyDurationGrid: {
@@ -3852,16 +3542,26 @@ const styles = StyleSheet.create({
     fontWeight: '800',
   },
 
+  /* ── Lower Screen Container (Full width below community header, matching profile tab) ── */
+  lowerScreenSection: {
+    marginHorizontal: -16,
+    paddingTop: 0,
+    paddingBottom: 60,
+    minHeight: 600,
+    borderTopWidth: 1,
+  },
+  communityInnerContent: {
+    paddingHorizontal: 16,
+    paddingTop: 16,
+  },
   /* ── Community 3-Way SubTab Bar ── */
   communitySubTabBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    height: 46,
-    marginHorizontal: -16,
+    height: 48,
     position: 'relative',
-    borderTopWidth: 0,
-    borderBottomWidth: 0,
-    marginBottom: 16,
+    borderBottomWidth: 1,
+    marginBottom: 0,
   },
   communitySubTabBtn: {
     flex: 1,
@@ -4211,20 +3911,23 @@ const styles = StyleSheet.create({
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: 'rgba(255,255,255,0.06)',
   },
-  squadCardMembersList: {
+  squadCardMembersScroll: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 5,
-    flex: 1,
-    flexWrap: 'wrap',
+    gap: 12,
+    paddingRight: 8,
   },
-  memberTinyDot: {
-    width: 4,
-    height: 4,
-    borderRadius: 2,
-    marginRight: 2,
+  memberHandleItem: {
+    paddingVertical: 2,
+    paddingHorizontal: 0,
+  },
+  memberHandleText: {
+    fontFamily: BRAND_ROUNDED_FONT,
+    fontSize: 12,
+    letterSpacing: -0.1,
   },
   squadCardActionChevron: {
+
     width: 24,
     height: 24,
     borderRadius: 12,

@@ -70,6 +70,7 @@ export const ProfileActivitySection: React.FC<ProfileActivitySectionProps> = ({
     steps: false,
     distance: false,
     weight: true,
+    bmi: false,
     history: false,
   });
 
@@ -97,6 +98,36 @@ export const ProfileActivitySection: React.FC<ProfileActivitySectionProps> = ({
     changeVal: 0,
     isLoss: false,
   });
+
+  // Calculate live Body Mass Index (BMI)
+  const bmiData = useMemo(() => {
+    const weightKg = profile.weightKg || 70;
+    const heightCm = profile.heightCm || 175;
+    if (weightKg <= 0 || heightCm <= 0) {
+      return { val: 0, str: "--", category: "Unknown", color: "#9ca3af" };
+    }
+    const heightM = heightCm / 100;
+    const bmiVal = weightKg / (heightM * heightM);
+    const rounded = Math.round(bmiVal * 10) / 10;
+    
+    let category = "Normal";
+    let color = "#10b981";
+    if (rounded < 18.5) {
+      category = "Underweight";
+      color = "#38bdf8";
+    } else if (rounded < 25.0) {
+      category = "Normal";
+      color = "#10b981";
+    } else if (rounded < 30.0) {
+      category = "Overweight";
+      color = "#f59e0b";
+    } else {
+      category = "Obese";
+      color = "#ef4444";
+    }
+
+    return { val: rounded, str: rounded.toFixed(1), category, color };
+  }, [profile.weightKg, profile.heightCm]);
 
   const triggerTakePhotoRef = React.useRef<(() => void) | null>(null);
   const triggerCapturePhotoRef = React.useRef<(() => void) | null>(null);
@@ -583,6 +614,99 @@ export const ProfileActivitySection: React.FC<ProfileActivitySectionProps> = ({
                 unitSystem={unitSystem}
                 currentWeightKg={profile.weightKg}
               />
+            </View>
+          )}
+        </View>
+
+        {/* 2.6 BMI STRIP */}
+        <View
+          style={[
+            styles.stripRowWrapper,
+            {
+              borderBottomColor: isDark ? "#222228" : "#ededf2",
+              backgroundColor: isDark ? "#141417" : "#ffffff",
+            },
+          ]}
+        >
+          <TouchableOpacity
+            style={styles.stripHeaderTouchable}
+            activeOpacity={0.7}
+            onPress={() => toggleSection("bmi")}
+          >
+            <View style={styles.stripHeaderLeft}>
+              <Ionicons name="body-outline" size={20} color={colors.primary} />
+              <View>
+                <Text style={[styles.stripTitle, { color: colors.text }]}>bmi</Text>
+                <Text style={[styles.stripSubtitle, { color: bmiData.color }]}>
+                  {bmiData.category} range
+                </Text>
+              </View>
+            </View>
+
+            <View style={styles.stripHeaderRight}>
+              <View style={[styles.measurementBoxFilled, { backgroundColor: colors.primary }]}>
+                <Text style={[styles.measurementValueTextFilled, { color: isDark ? "#09090b" : "#ffffff" }]}>
+                  {bmiData.str}
+                  <Text style={[styles.measurementUnitTextFilled, { color: isDark ? "#09090b" : "#ffffff" }]}>
+                    {" "}bmi
+                  </Text>
+                </Text>
+              </View>
+            </View>
+          </TouchableOpacity>
+
+          {expandedSections.bmi && (
+            <View style={[styles.expandedContentWrap, { backgroundColor: isDark ? "#0d0d10" : "#f8f8fb" }]}>
+              <View style={styles.bmiGaugeContainer}>
+                <View style={styles.bmiGaugeHeader}>
+                  <Text style={[styles.bmiGaugeScoreText, { color: colors.text }]}>
+                    {bmiData.str} <Text style={{ fontSize: 13, color: colors.textMuted, fontWeight: "600" }}>BMI</Text>
+                  </Text>
+                  <View style={[styles.bmiCategoryBadge, { backgroundColor: bmiData.color + "22" }]}>
+                    <Text style={[styles.bmiCategoryBadgeText, { color: bmiData.color }]}>
+                      {bmiData.category.toUpperCase()}
+                    </Text>
+                  </View>
+                </View>
+
+                <View style={styles.bmiBarTrack}>
+                  <View style={[styles.bmiBarSegment, { flex: 18.5, backgroundColor: "#38bdf8" }]} />
+                  <View style={[styles.bmiBarSegment, { flex: 6.4, backgroundColor: "#10b981" }]} />
+                  <View style={[styles.bmiBarSegment, { flex: 5, backgroundColor: "#f59e0b" }]} />
+                  <View style={[styles.bmiBarSegment, { flex: 10.1, backgroundColor: "#ef4444" }]} />
+                </View>
+
+                <View style={styles.bmiRangeLabelsRow}>
+                  <Text style={[styles.bmiRangeLabelText, { color: colors.textMuted }]}>18.5</Text>
+                  <Text style={[styles.bmiRangeLabelText, { color: colors.textMuted }]}>25.0</Text>
+                  <Text style={[styles.bmiRangeLabelText, { color: colors.textMuted }]}>30.0</Text>
+                </View>
+
+                <View style={styles.bmiInfoRow}>
+                  <View style={[styles.bmiStatCard, { backgroundColor: isDark ? "rgba(255,255,255,0.04)" : "#ffffff" }]}>
+                    <Text style={[styles.bmiStatCardLabel, { color: colors.textMuted }]}>Height</Text>
+                    <Text style={[styles.bmiStatCardValue, { color: colors.text }]}>
+                      {unitSystem === "us_customary"
+                        ? `${Math.floor((profile.heightCm || 175) / 30.48)}'${Math.round(((profile.heightCm || 175) % 30.48) / 2.54)}"`
+                        : `${Math.round(profile.heightCm || 175)} cm`}
+                    </Text>
+                  </View>
+                  <View style={[styles.bmiStatCard, { backgroundColor: isDark ? "rgba(255,255,255,0.04)" : "#ffffff" }]}>
+                    <Text style={[styles.bmiStatCardLabel, { color: colors.textMuted }]}>Weight</Text>
+                    <Text style={[styles.bmiStatCardValue, { color: colors.text }]}>
+                      {unitSystem === "us_customary"
+                        ? `${Math.round((profile.weightKg || 70) * 2.20462)} lb`
+                        : `${Math.round(profile.weightKg || 70)} kg`}
+                    </Text>
+                  </View>
+                  <View style={[styles.bmiStatCard, { backgroundColor: isDark ? "rgba(255,255,255,0.04)" : "#ffffff" }]}>
+                    <Text style={[styles.bmiStatCardLabel, { color: colors.textMuted }]}>Healthy Target</Text>
+                    <Text style={[styles.bmiStatCardValue, { color: "#10b981" }]}>
+                      18.5 – 24.9
+                    </Text>
+                  </View>
+                </View>
+              </View>
             </View>
           )}
         </View>
@@ -1190,6 +1314,71 @@ const styles = StyleSheet.create({
   },
   modalExerciseCategory: {
     fontSize: 11,
+  },
+  bmiGaugeContainer: {
+    paddingVertical: 10,
+    gap: 12,
+  },
+  bmiGaugeHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  bmiGaugeScoreText: {
+    fontSize: 24,
+    fontWeight: "900",
+    letterSpacing: -0.5,
+  },
+  bmiCategoryBadge: {
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+    borderRadius: 10,
+  },
+  bmiCategoryBadgeText: {
+    fontSize: 12,
+    fontWeight: "800",
+    letterSpacing: 0.5,
+  },
+  bmiBarTrack: {
+    flexDirection: "row",
+    height: 10,
+    borderRadius: 5,
+    overflow: "hidden",
+    gap: 3,
+  },
+  bmiBarSegment: {
+    height: "100%",
+    borderRadius: 2,
+  },
+  bmiRangeLabelsRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    paddingHorizontal: 20,
+    marginTop: -4,
+  },
+  bmiRangeLabelText: {
+    fontSize: 11,
+    fontWeight: "600",
+  },
+  bmiInfoRow: {
+    flexDirection: "row",
+    gap: 10,
+    marginTop: 4,
+  },
+  bmiStatCard: {
+    flex: 1,
+    padding: 10,
+    borderRadius: 12,
+    alignItems: "center",
+  },
+  bmiStatCardLabel: {
+    fontSize: 11,
+    fontWeight: "600",
+    marginBottom: 3,
+  },
+  bmiStatCardValue: {
+    fontSize: 13,
+    fontWeight: "800",
   },
   checkboxWrap: {
     width: 22,

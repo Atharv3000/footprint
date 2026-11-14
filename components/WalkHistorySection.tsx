@@ -18,7 +18,7 @@ import {
   formatWalkDate,
 } from '@/constants/walkStorage';
 import { metersToKm, metersToMiles } from '@/constants/userProfile';
-import { useTheme, SERIF_FONT } from '@/constants/ThemeContext';
+import { useTheme, SERIF_FONT, BRAND_ROUNDED_FONT, BRAND_ROUNDED_FONT_EXTRA } from '@/constants/ThemeContext';
 import { InteractiveBottomModal } from '@/components/InteractiveBottomModal';
 
 type FilterType = 'all' | 'week' | 'month';
@@ -689,7 +689,7 @@ export function WalkHistorySection({ userId, unitSystem }: WalkHistorySectionPro
                 initialRegion={getRegionForCoordinates(selectedWalkForReview.routeCoordinates)}
                 onMapReady={() => {
                   if (reviewMapRef.current && selectedWalkForReview?.routeCoordinates?.length) {
-                    reviewMapRef.current.fitToCoordinates(selectedWalkForReview.routeCoordinates, {
+                    reviewMapRef.current?.fitToCoordinates?.(selectedWalkForReview.routeCoordinates, {
                       edgePadding: { top: 50, right: 50, bottom: 50, left: 50 },
                       animated: true,
                     });
@@ -1216,6 +1216,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '700',
     letterSpacing: -0.2,
+    fontFamily: BRAND_ROUNDED_FONT_EXTRA,
   },
   cardDate: {
     fontSize: 12,
@@ -1225,11 +1226,13 @@ const styles = StyleSheet.create({
     fontSize: 22,
     fontWeight: '800',
     letterSpacing: -0.5,
+    fontFamily: BRAND_ROUNDED_FONT_EXTRA,
   },
   distanceUnit: {
     fontSize: 12,
     fontWeight: '700',
     marginLeft: 1,
+    fontFamily: BRAND_ROUNDED_FONT,
   },
   statsMatrix: {
     flexDirection: 'row',

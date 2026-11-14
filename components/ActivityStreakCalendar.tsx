@@ -20,6 +20,7 @@ import {
   loadProgressPhotos,
   saveProgressPhoto,
   deleteProgressPhoto,
+  updateProgressPhoto,
   ProgressPhoto,
 } from '@/constants/workoutStorage';
 import { InteractiveBottomModal } from '@/components/InteractiveBottomModal';
@@ -1054,6 +1055,12 @@ export function ActivityStreakCalendar({
           photos={progressPhotos}
           initialPhotoId={gallerySelectedPhotoId}
           onDeletePhoto={handleDeletePhoto}
+          onUpdatePhoto={async (photoId, updates) => {
+            const targetUserId = userId || 'guest_user';
+            await updateProgressPhoto(targetUserId, photoId, updates);
+            const refreshed = await loadProgressPhotos(targetUserId);
+            setProgressPhotos(refreshed);
+          }}
           onUploadNewPhoto={handlePickLibraryPhoto}
           onCaptureNewPhoto={handleTakePhoto}
         />

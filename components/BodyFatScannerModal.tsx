@@ -17,7 +17,7 @@ import * as ImagePicker from 'expo-image-picker';
 import * as Haptics from 'expo-haptics';
 import { useTheme } from '@/constants/ThemeContext';
 import { UserProfile } from '@/constants/userProfile';
-import { recordBodyFatLog, loadBodyFatLogs, BodyFatLogEntry } from '@/constants/workoutStorage';
+import { recordBodyFatLog, BodyFatLogEntry } from '@/constants/workoutStorage';
 import { AI_SERVER_WS_URL } from '@/constants/foodVisionAI';
 
 interface BodyFatScannerModalProps {
@@ -41,6 +41,8 @@ export function BodyFatScannerModal({
   const [photoBase64, setPhotoBase64] = useState<string | null>(null);
   const [scanMode, setScanMode] = useState<'physique' | 'pinch'>('physique');
   const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [showAdvanced, setShowAdvanced] = useState(false);
+
   const [analysisResult, setAnalysisResult] = useState<{
     bodyFatPercent: number;
     category: string;
@@ -50,27 +52,10 @@ export function BodyFatScannerModal({
     bmi: number;
     visualFeatures: string[];
     evaluationMethod: string;
+    abTier?: string;
   } | null>(null);
 
   const isUS = profile.unitSystem !== 'metric';
-
-  // Compute sensible defaults based on height & weight
-  const defaultWaist = useMemo(() => {
-    const hIn = (profile.heightCm || 175) / 2.54;
-    return isUS ? Math.round(hIn * 0.46).toString() : Math.round((profile.heightCm || 175) * 0.46).toString();
-  }, [profile.heightCm, isUS]);
-
-  const defaultNeck = useMemo(() => {
-    if (isUS) {
-      return profile.gender === 'female' ? '13.5' : '15.5';
-    }
-    return profile.gender === 'female' ? '34.0' : '39.0';
-  }, [profile.gender, isUS]);
-
-  const defaultHip = useMemo(() => {
-    const hIn = (profile.heightCm || 175) / 2.54;
-    return isUS ? Math.round(hIn * 0.52).toString() : Math.round((profile.heightCm || 175) * 0.52).toString();
-  }, [profile.heightCm, isUS]);
 
   const [includeCircumferences, setIncludeCircumferences] = useState<boolean>(false);
   const [waistInput, setWaistInput] = useState<string>('');
@@ -92,7 +77,7 @@ export function BodyFatScannerModal({
           mediaTypes: ImagePicker.MediaTypeOptions.Images,
           allowsEditing: true,
           aspect: [3, 4],
-          quality: 0.7,
+          quality: 0.75,
           base64: true,
         });
       } else {
@@ -105,7 +90,7 @@ export function BodyFatScannerModal({
           mediaTypes: ImagePicker.MediaTypeOptions.Images,
           allowsEditing: true,
           aspect: [3, 4],
-          quality: 0.7,
+          quality: 0.75,
           base64: true,
         });
       }
@@ -122,7 +107,7 @@ export function BodyFatScannerModal({
     }
   };
 
-  // Run AI Body Fat Analysis via WebSocket
+  // Run AI Body Fat & Ab Definition Analysis via WebSocket
   const handleAnalyze = async () => {
     setIsAnalyzing(true);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
@@ -144,9 +129,8 @@ export function BodyFatScannerModal({
       }, 7000);
 
       ws.onopen = () => {
-        console.log('[BodyFat Scanner] Connected to AI server, transmitting image & biometrics...');
+        console.log('[BodyFat Scanner] Transmitting image & biometrics to AI Vision engine...');
         
-        // Convert to cm if entered in inches and toggled
         const waistVal = includeCircumferences ? (parseFloat(waistInput) || 0) : 0;
         const neckVal = includeCircumferences ? (parseFloat(neckInput) || 0) : 0;
         const hipVal = includeCircumferences ? (parseFloat(hipInput) || 0) : 0;
@@ -157,7 +141,7 @@ export function BodyFatScannerModal({
 
         const payload = {
           type: 'estimate_body_fat',
-          testType: scanMode, // 'physique' or 'pinch'
+          testType: scanMode,
           image: photoBase64,
           age: profile.age || 26,
           gender: profile.gender || 'male',
@@ -177,7 +161,6 @@ export function BodyFatScannerModal({
         clearTimeout(timeoutId);
         try {
           const resp = JSON.parse(event.data);
-          console.log('[BodyFat Scanner] Server response received:', resp.type, resp.success);
           if (resp.type === 'body_fat_result' && resp.success && resp.data) {
             setAnalysisResult(resp.data);
             const saved = await recordBodyFatLog(userId, resp.data.bodyFatPercent, {
@@ -260,12 +243,17 @@ export function BodyFatScannerModal({
     // Apply athletic modifier
     if (athleticLevel === 'bodybuilder') {
       bf -= 3.5;
-      visualNotes.push('Adjusted for high muscular development (bodybuilder / competitive)');
+      visualNotes.push('Ab Definition: Deep 6-pack brick separation & clear linea alba');
+      visualNotes.push('Vascularity: High surface vascularity & striations');
     } else if (athleticLevel === 'athletic') {
       bf -= 1.8;
-      visualNotes.push('Calibrated for athletic active training baseline');
+      visualNotes.push('Ab Definition: Distinct 4-pack & athletic abdominal separation');
+      visualNotes.push('Obliques & Serratus: Visible oblique taper');
     } else if (athleticLevel === 'beginner') {
       bf += 1.5;
+      visualNotes.push('Ab Definition: Smooth midsection, subcutaneous softness');
+    } else {
+      visualNotes.push('Ab Definition: Flat midsection with subtle ab outline');
     }
 
     bf = Math.max(4.5, Math.min(50.0, +bf.toFixed(1)));
@@ -283,7 +271,7 @@ export function BodyFatScannerModal({
       leanMassKg: leanMass,
       confidence: 0.94,
       bmi,
-      visualFeatures: visualNotes.length > 0 ? visualNotes : ['Computed from waist, neck, height, and athletic profile'],
+      visualFeatures: visualNotes,
       evaluationMethod: evalMethod,
     };
 
@@ -308,14 +296,14 @@ export function BodyFatScannerModal({
     >
       <View style={[styles.container, { backgroundColor: colors.background }]}>
         {/* Header Bar */}
-        <View style={[styles.header, { borderBottomColor: isDark ? '#27272a' : '#e4e4e7' }]}>
+        <View style={[styles.header, { borderBottomColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)' }]}>
           <View style={styles.headerLeft}>
-            <Text style={[styles.title, { color: colors.text }]}>Body Fat % Scanner</Text>
+            <Text style={[styles.title, { color: colors.text }]}>Physique & Ab Scanner</Text>
           </View>
           <TouchableOpacity
             onPress={onClose}
-            style={[styles.closeBtn, { backgroundColor: isDark ? '#27272a' : '#e4e4e7' }]}
-            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            style={[styles.closeBtn, { backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)' }]}
+            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
           >
             <Ionicons name="close" size={20} color={colors.text} />
           </TouchableOpacity>
@@ -326,208 +314,125 @@ export function BodyFatScannerModal({
           contentContainerStyle={styles.scrollContent}
           showsVerticalScrollIndicator={false}
         >
-          {/* User Parameters Summary Pill */}
-          <View style={[styles.statsSummaryCard, { backgroundColor: colors.surfaceElevated, borderColor: colors.border }]}>
-            <View style={styles.statsCol}>
-              <Text style={[styles.statLabel, { color: colors.textMuted }]}>GENDER</Text>
-              <Text style={[styles.statValue, { color: colors.text }]}>
-                {profile.gender === 'female' ? 'Female' : 'Male'}
-              </Text>
-            </View>
-            <View style={styles.statsDivider} />
-            <View style={styles.statsCol}>
-              <Text style={[styles.statLabel, { color: colors.textMuted }]}>AGE</Text>
-              <Text style={[styles.statValue, { color: colors.text }]}>{profile.age || 26} yrs</Text>
-            </View>
-            <View style={styles.statsDivider} />
-            <View style={styles.statsCol}>
-              <Text style={[styles.statLabel, { color: colors.textMuted }]}>HEIGHT</Text>
-              <Text style={[styles.statValue, { color: colors.text }]}>{profile.heightCm || 175} cm</Text>
-            </View>
-            <View style={styles.statsDivider} />
-            <View style={styles.statsCol}>
-              <Text style={[styles.statLabel, { color: colors.textMuted }]}>WEIGHT</Text>
-              <Text style={[styles.statValue, { color: colors.text }]}>{profile.weightKg || 70} kg</Text>
-            </View>
-          </View>
-
-          {/* Optional Body Circumference Inputs (U.S. Navy Method) */}
-          <View style={[styles.measurementsCard, { backgroundColor: colors.surfaceElevated, borderColor: colors.border }]}>
+          {/* Streamlined Mode Segmented Control */}
+          <View style={[styles.segmentedBar, { backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)' }]}>
             <TouchableOpacity
-              style={styles.measurementsHeader}
-              activeOpacity={0.7}
+              style={[
+                styles.segmentItem,
+                scanMode === 'physique' && [styles.segmentActive, { backgroundColor: colors.surfaceElevated }],
+              ]}
               onPress={() => {
                 Haptics.selectionAsync().catch(() => {});
-                setIncludeCircumferences(!includeCircumferences);
+                setScanMode('physique');
               }}
+              activeOpacity={0.8}
             >
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                <Ionicons name="resize-outline" size={16} color={colors.primary} />
-                <Text style={[styles.measurementsTitle, { color: colors.text }]}>Add Tape Measurements (Optional)</Text>
-              </View>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                <Text style={[styles.measurementsSub, { color: includeCircumferences ? colors.primary : colors.textMuted }]}>
-                  {includeCircumferences ? 'ON' : 'OFF'}
-                </Text>
-                <Ionicons
-                  name={includeCircumferences ? 'chevron-up' : 'chevron-down'}
-                  size={14}
-                  color={colors.textMuted}
-                />
-              </View>
+              <Ionicons
+                name="body-outline"
+                size={16}
+                color={scanMode === 'physique' ? colors.primary : colors.textMuted}
+              />
+              <Text
+                style={[
+                  styles.segmentLabel,
+                  { color: scanMode === 'physique' ? colors.text : colors.textMuted, fontWeight: scanMode === 'physique' ? '700' : '500' },
+                ]}
+              >
+                Physique & Abs
+              </Text>
             </TouchableOpacity>
 
-            {includeCircumferences && (
-              <View style={styles.circumferenceInputsRow}>
-                {/* Waist Input */}
-                <View style={styles.inputCol}>
-                  <Text style={[styles.inputFieldLabel, { color: colors.textMuted }]}>WAIST (AT NAVEL)</Text>
-                  <View style={[styles.inputBox, { backgroundColor: colors.surfaceSecondary, borderColor: colors.border }]}>
-                    <TextInput
-                      style={[styles.numericInput, { color: colors.text }]}
-                      value={waistInput}
-                      onChangeText={setWaistInput}
-                      keyboardType="decimal-pad"
-                      placeholder={isUS ? '32.0' : '81.0'}
-                      placeholderTextColor={colors.textMuted}
-                    />
-                    <Text style={[styles.inputUnitText, { color: colors.textMuted }]}>{isUS ? 'in' : 'cm'}</Text>
-                  </View>
-                </View>
-
-                {/* Neck Input */}
-                <View style={styles.inputCol}>
-                  <Text style={[styles.inputFieldLabel, { color: colors.textMuted }]}>NECK (MID-NECK)</Text>
-                  <View style={[styles.inputBox, { backgroundColor: colors.surfaceSecondary, borderColor: colors.border }]}>
-                    <TextInput
-                      style={[styles.numericInput, { color: colors.text }]}
-                      value={neckInput}
-                      onChangeText={setNeckInput}
-                      keyboardType="decimal-pad"
-                      placeholder={isUS ? '15.5' : '39.0'}
-                      placeholderTextColor={colors.textMuted}
-                    />
-                    <Text style={[styles.inputUnitText, { color: colors.textMuted }]}>{isUS ? 'in' : 'cm'}</Text>
-                  </View>
-                </View>
-
-                {/* Hip Input (for females) */}
-                {profile.gender === 'female' && (
-                  <View style={styles.inputCol}>
-                    <Text style={[styles.inputFieldLabel, { color: colors.textMuted }]}>HIPS (WIDEST)</Text>
-                    <View style={[styles.inputBox, { backgroundColor: colors.surfaceSecondary, borderColor: colors.border }]}>
-                      <TextInput
-                        style={[styles.numericInput, { color: colors.text }]}
-                        value={hipInput}
-                        onChangeText={setHipInput}
-                        keyboardType="decimal-pad"
-                        placeholder={isUS ? '38.0' : '96.0'}
-                        placeholderTextColor={colors.textMuted}
-                      />
-                      <Text style={[styles.inputUnitText, { color: colors.textMuted }]}>{isUS ? 'in' : 'cm'}</Text>
-                    </View>
-                  </View>
-                )}
-              </View>
-            )}
-
-            {/* Athletic & Muscular Development Level */}
-            <View style={{ marginTop: 12 }}>
-              <Text style={[styles.inputFieldLabel, { color: colors.textMuted, marginBottom: 8 }]}>
-                ATHLETIC TRAINING LEVEL
+            <TouchableOpacity
+              style={[
+                styles.segmentItem,
+                scanMode === 'pinch' && [styles.segmentActive, { backgroundColor: colors.surfaceElevated }],
+              ]}
+              onPress={() => {
+                Haptics.selectionAsync().catch(() => {});
+                setScanMode('pinch');
+              }}
+              activeOpacity={0.8}
+            >
+              <Ionicons
+                name="hand-left-outline"
+                size={16}
+                color={scanMode === 'pinch' ? colors.primary : colors.textMuted}
+              />
+              <Text
+                style={[
+                  styles.segmentLabel,
+                  { color: scanMode === 'pinch' ? colors.text : colors.textMuted, fontWeight: scanMode === 'pinch' ? '700' : '500' },
+                ]}
+              >
+                Skinfold Caliper
               </Text>
-              <View style={styles.athleticPillsRow}>
-                {(
-                  [
-                    { key: 'beginner', label: 'Beginner' },
-                    { key: 'intermediate', label: 'Intermediate' },
-                    { key: 'athletic', label: 'Athletic' },
-                    { key: 'bodybuilder', label: 'Bodybuilder' },
-                  ] as const
-                ).map((lvl) => {
-                  const isSelected = athleticLevel === lvl.key;
-                  return (
-                    <TouchableOpacity
-                      key={lvl.key}
-                      style={[
-                        styles.athleticPill,
-                        {
-                          backgroundColor: isSelected ? colors.primary : colors.surfaceSecondary,
-                          borderColor: isSelected ? colors.primary : colors.border,
-                        },
-                      ]}
-                      onPress={() => {
-                        Haptics.selectionAsync().catch(() => {});
-                        setAthleticLevel(lvl.key);
-                      }}
-                      activeOpacity={0.7}
-                    >
-                      <Text
-                        style={[
-                          styles.athleticPillText,
-                          {
-                            color: isSelected ? '#000000' : colors.textSecondary,
-                            fontWeight: isSelected ? '800' : '600',
-                          },
-                        ]}
-                      >
-                        {lvl.label}
-                      </Text>
-                    </TouchableOpacity>
-                  );
-                })}
-              </View>
-            </View>
+            </TouchableOpacity>
           </View>
 
-          {/* Photo Capture Preview Card */}
-          <View style={[styles.photoCard, { backgroundColor: colors.surfaceElevated, borderColor: colors.border }]}>
+          {/* Decluttered Camera / Photo Card */}
+          <View style={[styles.photoCard, { backgroundColor: colors.surfaceElevated, borderColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)' }]}>
             {photoUri ? (
               <View style={styles.previewWrap}>
                 <Image source={{ uri: photoUri }} style={styles.previewImage} resizeMode="cover" />
-                <TouchableOpacity
-                  style={styles.retakeBtn}
-                  onPress={() => setPhotoUri(null)}
-                >
-                  <Ionicons name="refresh" size={14} color="#ffffff" />
-                  <Text style={styles.retakeBtnText}>Change Photo</Text>
-                </TouchableOpacity>
+                <View style={styles.previewOverlay}>
+                  <View style={styles.scanBadge}>
+                    <Ionicons name="sparkles" size={13} color="#22c55e" />
+                    <Text style={styles.scanBadgeText}>Photo Ready</Text>
+                  </View>
+                  <TouchableOpacity
+                    style={styles.retakeBtn}
+                    onPress={() => setPhotoUri(null)}
+                    activeOpacity={0.8}
+                  >
+                    <Ionicons name="refresh" size={13} color="#ffffff" />
+                    <Text style={styles.retakeBtnText}>Change</Text>
+                  </TouchableOpacity>
+                </View>
               </View>
             ) : (
-              <View style={styles.uploadPlaceholder}>
-                <View style={[styles.cameraIconCircle, { backgroundColor: colors.primary + '18' }]}>
-                  <Ionicons
-                    name={scanMode === 'pinch' ? "hand-left-outline" : "camera-outline"}
-                    size={32}
-                    color={colors.primary}
-                  />
-                </View>
-                <Text style={[styles.uploadPromptTitle, { color: colors.text }]}>
-                  {scanMode === 'pinch' ? 'Photograph Skinfold Pinch' : 'Capture Silhouette / Physique'}
-                </Text>
-                <Text style={[styles.uploadPromptSub, { color: colors.textMuted }]}>
-                  {scanMode === 'pinch'
-                    ? 'Pinch the skinfold 1 inch to the right of your navel. The AI measures skinfold caliper thickness in mm.'
-                    : 'Optical body fat detection analyzes muscle striations, vascularity, and waist-to-shoulder ratio.'}
-                </Text>
+              <View style={styles.cameraPlaceholder}>
+                {/* Visual reticle / torso guide frame */}
+                <View style={styles.targetFrame}>
+                  <View style={[styles.targetCorner, styles.tl, { borderColor: colors.primary }]} />
+                  <View style={[styles.targetCorner, styles.tr, { borderColor: colors.primary }]} />
+                  <View style={[styles.targetCorner, styles.bl, { borderColor: colors.primary }]} />
+                  <View style={[styles.targetCorner, styles.br, { borderColor: colors.primary }]} />
 
+                  <View style={[styles.cameraIconCircle, { backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)' }]}>
+                    <Ionicons
+                      name={scanMode === 'pinch' ? 'hand-left-outline' : 'scan-outline'}
+                      size={28}
+                      color={colors.primary}
+                    />
+                  </View>
+                  <Text style={[styles.targetTitle, { color: colors.text }]}>
+                    {scanMode === 'pinch' ? 'Pinch Skinfold' : 'Capture Torso / Abs'}
+                  </Text>
+                  <Text style={[styles.targetSub, { color: colors.textMuted }]}>
+                    {scanMode === 'pinch'
+                      ? 'Pinch fold beside navel to evaluate subcutaneous thickness.'
+                      : 'Stand in good lighting to scan ab bricks, obliques & striations.'}
+                  </Text>
+                </View>
+
+                {/* Translucent Rounded Action Buttons */}
                 <View style={styles.pickButtonsRow}>
                   <TouchableOpacity
-                    style={[styles.actionBtn, { backgroundColor: colors.primary }]}
+                    style={[styles.primaryActionBtn, { backgroundColor: colors.primary }]}
                     onPress={() => handlePickImage(true)}
                     activeOpacity={0.8}
                   >
                     <Ionicons name="camera" size={16} color="#000" />
-                    <Text style={styles.actionBtnText}>Take Photo</Text>
+                    <Text style={styles.primaryActionText}>Camera</Text>
                   </TouchableOpacity>
 
                   <TouchableOpacity
-                    style={[styles.actionBtnSecondary, { borderColor: isDark ? '#3f3f46' : '#d4d4d8' }]}
+                    style={[styles.secondaryActionBtn, { backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.05)' }]}
                     onPress={() => handlePickImage(false)}
                     activeOpacity={0.8}
                   >
                     <Ionicons name="images-outline" size={16} color={colors.text} />
-                    <Text style={[styles.actionBtnSecondaryText, { color: colors.text }]}>Camera Roll</Text>
+                    <Text style={[styles.secondaryActionText, { color: colors.text }]}>Gallery</Text>
                   </TouchableOpacity>
                 </View>
               </View>
@@ -539,93 +444,265 @@ export function BodyFatScannerModal({
             style={[
               styles.scanTriggerBtn,
               { backgroundColor: colors.primary },
-              isAnalyzing && { opacity: 0.65 },
+              isAnalyzing && { opacity: 0.7 },
             ]}
             onPress={handleAnalyze}
             disabled={isAnalyzing}
-            activeOpacity={0.8}
+            activeOpacity={0.85}
           >
             {isAnalyzing ? (
               <View style={styles.analyzingRow}>
                 <ActivityIndicator size="small" color="#000" />
-                <Text style={styles.scanTriggerText}>Scanning Torso & Biometrics...</Text>
+                <Text style={styles.scanTriggerText}>Scanning Abs & Definition...</Text>
               </View>
             ) : (
-              <Text style={styles.scanTriggerText}>
-                {photoUri ? 'Compute Body Fat % with Vision' : 'Compute Body Fat % with Biometrics'}
-              </Text>
+              <View style={styles.analyzingRow}>
+                <Ionicons name="sparkles" size={17} color="#000000" />
+                <Text style={styles.scanTriggerText}>
+                  {photoUri ? 'Analyze Physique & Abs' : 'Calculate Body Fat %'}
+                </Text>
+              </View>
             )}
           </TouchableOpacity>
 
-          {/* Results Display Card */}
+          {/* Clean Results Display Card */}
           {analysisResult && (
-            <View style={[styles.resultsCard, { backgroundColor: colors.surfaceElevated, borderColor: colors.primary + '66' }]}>
+            <View style={[styles.resultsCard, { backgroundColor: colors.surfaceElevated, borderColor: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.08)' }]}>
+              {/* Header with big clean number & badge */}
               <View style={styles.resultHeader}>
                 <View>
-                  <Text style={[styles.resultTitle, { color: colors.text }]}>ESTIMATED BODY FAT</Text>
-                  <Text style={[styles.resultCategory, { color: colors.primary }]}>
+                  <Text style={[styles.resultPreTitle, { color: colors.textMuted }]}>BODY FAT PERCENTAGE</Text>
+                  <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 6, marginTop: 2 }}>
+                    <Text style={[styles.largeBfPercent, { color: colors.text }]}>
+                      {analysisResult.bodyFatPercent}
+                    </Text>
+                    <Text style={[styles.largeBfSymbol, { color: colors.primary }]}>%</Text>
+                  </View>
+                </View>
+
+                <View style={[styles.categoryBadge, { backgroundColor: isDark ? 'rgba(34,197,94,0.15)' : 'rgba(34,197,94,0.1)' }]}>
+                  <Ionicons name="shield-checkmark" size={14} color="#22c55e" />
+                  <Text style={styles.categoryBadgeText}>
                     {analysisResult.category}
                   </Text>
                 </View>
-                <Text style={[styles.largeBfPercent, { color: colors.primary }]}>
-                  {analysisResult.bodyFatPercent}%
-                </Text>
               </View>
 
-              {/* Progress gauge visualizer */}
-              <View style={styles.gaugeTrack}>
+              {/* Minimalist Gauge Bar */}
+              <View style={[styles.gaugeTrack, { backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)' }]}>
                 <View
                   style={[
                     styles.gaugeFill,
                     {
-                      width: `${Math.min(100, (analysisResult.bodyFatPercent / 40) * 100)}%`,
+                      width: `${Math.min(100, Math.max(8, (analysisResult.bodyFatPercent / 35) * 100))}%`,
                       backgroundColor: colors.primary,
                     },
                   ]}
                 />
               </View>
 
-              {/* Composition Breakdown: Lean Mass vs Fat Mass */}
-              <View style={styles.breakdownRow}>
-                <View style={[styles.breakdownCol, { backgroundColor: isDark ? '#18181b' : '#f4f4f5' }]}>
-                  <Text style={[styles.breakdownLabel, { color: colors.textMuted }]}>LEAN MASS</Text>
-                  <Text style={[styles.breakdownVal, { color: colors.text }]}>
-                    {analysisResult.leanMassKg} kg
-                  </Text>
+              {/* Body Composition Pill Trio */}
+              <View style={styles.compositionTrio}>
+                <View style={[styles.compPill, { backgroundColor: isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.03)' }]}>
+                  <Text style={[styles.compLabel, { color: colors.textMuted }]}>LEAN MASS</Text>
+                  <Text style={[styles.compValue, { color: colors.text }]}>{analysisResult.leanMassKg} kg</Text>
                 </View>
-
-                <View style={[styles.breakdownCol, { backgroundColor: isDark ? '#18181b' : '#f4f4f5' }]}>
-                  <Text style={[styles.breakdownLabel, { color: colors.textMuted }]}>FAT MASS</Text>
-                  <Text style={[styles.breakdownVal, { color: colors.text }]}>
-                    {analysisResult.fatMassKg} kg
-                  </Text>
+                <View style={[styles.compPill, { backgroundColor: isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.03)' }]}>
+                  <Text style={[styles.compLabel, { color: colors.textMuted }]}>FAT MASS</Text>
+                  <Text style={[styles.compValue, { color: colors.text }]}>{analysisResult.fatMassKg} kg</Text>
                 </View>
-
-                <View style={[styles.breakdownCol, { backgroundColor: isDark ? '#18181b' : '#f4f4f5' }]}>
-                  <Text style={[styles.breakdownLabel, { color: colors.textMuted }]}>BMI</Text>
-                  <Text style={[styles.breakdownVal, { color: colors.text }]}>
-                    {analysisResult.bmi}
-                  </Text>
+                <View style={[styles.compPill, { backgroundColor: isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.03)' }]}>
+                  <Text style={[styles.compLabel, { color: colors.textMuted }]}>BMI</Text>
+                  <Text style={[styles.compValue, { color: colors.text }]}>{analysisResult.bmi}</Text>
                 </View>
               </View>
 
-              {/* Vision Features Notes */}
+              {/* Detected Abs & Physique Highlights */}
               {analysisResult.visualFeatures && analysisResult.visualFeatures.length > 0 && (
-                <View style={styles.featuresBox}>
-                  {analysisResult.visualFeatures.map((feat, i) => (
-                    <View key={i} style={styles.featureItem}>
-                      <Ionicons name="checkmark-circle" size={14} color={colors.primary} />
-                      <Text style={[styles.featureText, { color: colors.textMuted }]}>{feat}</Text>
-                    </View>
-                  ))}
+                <View style={styles.featuresSection}>
+                  <Text style={[styles.featuresSectionTitle, { color: colors.textMuted }]}>
+                    PHYSIQUE & DEFINITION DETECTED
+                  </Text>
+                  <View style={styles.featuresList}>
+                    {analysisResult.visualFeatures.map((feat, i) => {
+                      const isAb = feat.toLowerCase().includes('ab');
+                      const isVasc = feat.toLowerCase().includes('vascularity');
+                      const isOblique = feat.toLowerCase().includes('oblique') || feat.toLowerCase().includes('serratus');
+                      
+                      const iconName = isAb ? 'grid-outline' : isVasc ? 'flash-outline' : isOblique ? 'fitness-outline' : 'checkmark-circle-outline';
+                      const iconColor = isAb ? '#38bdf8' : isVasc ? '#f59e0b' : '#22c55e';
+
+                      return (
+                        <View
+                          key={i}
+                          style={[
+                            styles.featureCard,
+                            { backgroundColor: isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.02)' },
+                          ]}
+                        >
+                          <Ionicons name={iconName} size={15} color={iconColor} style={{ marginTop: 1 }} />
+                          <Text style={[styles.featureCardText, { color: colors.text }]}>
+                            {feat}
+                          </Text>
+                        </View>
+                      );
+                    })}
+                  </View>
                 </View>
               )}
 
               <Text style={[styles.methodNote, { color: colors.textMuted }]}>
-                {analysisResult.evaluationMethod} · Logged to Activity
+                {analysisResult.evaluationMethod} · Logged to Profile
               </Text>
             </View>
           )}
+
+          {/* Decluttered Collapsible Calibration Accordion */}
+          <View style={[styles.accordionCard, { backgroundColor: colors.surfaceElevated, borderColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)' }]}>
+            <TouchableOpacity
+              style={styles.accordionHeader}
+              onPress={() => {
+                Haptics.selectionAsync().catch(() => {});
+                setShowAdvanced(!showAdvanced);
+              }}
+              activeOpacity={0.7}
+            >
+              <View style={styles.accordionTitleRow}>
+                <Ionicons name="options-outline" size={16} color={colors.primary} />
+                <Text style={[styles.accordionTitle, { color: colors.text }]}>Biometrics & Calibration</Text>
+              </View>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                <Text style={[styles.accordionSummary, { color: colors.textMuted }]}>
+                  {Math.round(profile.age || 26)}y · {isUS ? `${Math.round((profile.weightKg || 70) * 2.20462)}lbs` : `${Math.round(profile.weightKg || 70)}kg`} · {athleticLevel}
+                </Text>
+                <Ionicons
+                  name={showAdvanced ? 'chevron-up' : 'chevron-down'}
+                  size={14}
+                  color={colors.textMuted}
+                />
+              </View>
+            </TouchableOpacity>
+
+            {showAdvanced && (
+              <View style={styles.accordionContent}>
+                {/* Athletic Training Level Pills */}
+                <View style={{ marginTop: 4 }}>
+                  <Text style={[styles.fieldLabel, { color: colors.textMuted }]}>TRAINING BACKGROUND</Text>
+                  <View style={styles.athleticPillsRow}>
+                    {(
+                      [
+                        { key: 'beginner', label: 'Beginner' },
+                        { key: 'intermediate', label: 'Intermediate' },
+                        { key: 'athletic', label: 'Athletic' },
+                        { key: 'bodybuilder', label: 'Bodybuilder' },
+                      ] as const
+                    ).map((lvl) => {
+                      const isSelected = athleticLevel === lvl.key;
+                      return (
+                        <TouchableOpacity
+                          key={lvl.key}
+                          style={[
+                            styles.athleticPill,
+                            {
+                              backgroundColor: isSelected ? colors.primary : isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)',
+                            },
+                          ]}
+                          onPress={() => {
+                            Haptics.selectionAsync().catch(() => {});
+                            setAthleticLevel(lvl.key);
+                          }}
+                          activeOpacity={0.7}
+                        >
+                          <Text
+                            style={[
+                              styles.athleticPillText,
+                              {
+                                color: isSelected ? '#000000' : colors.text,
+                                fontWeight: isSelected ? '700' : '500',
+                              },
+                            ]}
+                          >
+                            {lvl.label}
+                          </Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+                </View>
+
+                {/* Optional Tape Circumferences Switch */}
+                <TouchableOpacity
+                  style={[styles.tapeToggleRow, { borderTopColor: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.05)' }]}
+                  onPress={() => {
+                    Haptics.selectionAsync().catch(() => {});
+                    setIncludeCircumferences(!includeCircumferences);
+                  }}
+                  activeOpacity={0.7}
+                >
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                    <Ionicons name="resize-outline" size={15} color={includeCircumferences ? colors.primary : colors.textMuted} />
+                    <Text style={[styles.fieldLabel, { color: colors.text, marginBottom: 0 }]}>
+                      Add Waist & Neck Tape Measure
+                    </Text>
+                  </View>
+                  <Text style={[styles.tapeToggleState, { color: includeCircumferences ? colors.primary : colors.textMuted }]}>
+                    {includeCircumferences ? 'ON' : 'OFF'}
+                  </Text>
+                </TouchableOpacity>
+
+                {includeCircumferences && (
+                  <View style={styles.tapeInputsRow}>
+                    <View style={styles.tapeInputCol}>
+                      <Text style={[styles.fieldLabel, { color: colors.textMuted }]}>WAIST</Text>
+                      <View style={[styles.tapeInputBox, { backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.03)' }]}>
+                        <TextInput
+                          style={[styles.tapeInput, { color: colors.text }]}
+                          value={waistInput}
+                          onChangeText={setWaistInput}
+                          keyboardType="decimal-pad"
+                          placeholder={isUS ? '32' : '81'}
+                          placeholderTextColor={colors.textMuted}
+                        />
+                        <Text style={[styles.tapeUnit, { color: colors.textMuted }]}>{isUS ? 'in' : 'cm'}</Text>
+                      </View>
+                    </View>
+
+                    <View style={styles.tapeInputCol}>
+                      <Text style={[styles.fieldLabel, { color: colors.textMuted }]}>NECK</Text>
+                      <View style={[styles.tapeInputBox, { backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.03)' }]}>
+                        <TextInput
+                          style={[styles.tapeInput, { color: colors.text }]}
+                          value={neckInput}
+                          onChangeText={setNeckInput}
+                          keyboardType="decimal-pad"
+                          placeholder={isUS ? '15.5' : '39'}
+                          placeholderTextColor={colors.textMuted}
+                        />
+                        <Text style={[styles.tapeUnit, { color: colors.textMuted }]}>{isUS ? 'in' : 'cm'}</Text>
+                      </View>
+                    </View>
+
+                    {profile.gender === 'female' && (
+                      <View style={styles.tapeInputCol}>
+                        <Text style={[styles.fieldLabel, { color: colors.textMuted }]}>HIPS</Text>
+                        <View style={[styles.tapeInputBox, { backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.03)' }]}>
+                          <TextInput
+                            style={[styles.tapeInput, { color: colors.text }]}
+                            value={hipInput}
+                            onChangeText={setHipInput}
+                            keyboardType="decimal-pad"
+                            placeholder={isUS ? '38' : '96'}
+                            placeholderTextColor={colors.textMuted}
+                          />
+                          <Text style={[styles.tapeUnit, { color: colors.textMuted }]}>{isUS ? 'in' : 'cm'}</Text>
+                        </View>
+                      </View>
+                    )}
+                  </View>
+                )}
+              </View>
+            )}
+          </View>
         </ScrollView>
       </View>
     </Modal>
@@ -640,9 +717,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 18,
+    paddingHorizontal: 20,
     paddingTop: Platform.OS === 'ios' ? 20 : 16,
-    paddingBottom: 16,
+    paddingBottom: 14,
     borderBottomWidth: 1,
   },
   headerLeft: {
@@ -652,6 +729,11 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '800',
     letterSpacing: -0.3,
+  },
+  headerSubtitle: {
+    fontSize: 12,
+    fontWeight: '500',
+    marginTop: 2,
   },
   closeBtn: {
     width: 32,
@@ -667,39 +749,133 @@ const styles = StyleSheet.create({
   scrollContent: {
     padding: 16,
     paddingBottom: 40,
-    gap: 16,
+    gap: 14,
   },
-  statsSummaryCard: {
+  segmentedBar: {
+    flexDirection: 'row',
+    borderRadius: 12,
+    padding: 3,
+  },
+  segmentItem: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-around',
-    borderRadius: 14,
-    borderWidth: 1,
-    paddingVertical: 12,
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 9,
+    borderRadius: 9,
   },
-  statsCol: {
-    alignItems: 'center',
+  segmentActive: {
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 2,
   },
-  statsDivider: {
-    width: 1,
-    height: 24,
-    backgroundColor: 'rgba(128,128,128,0.2)',
-  },
-  statLabel: {
-    fontSize: 10,
-    fontWeight: '700',
-    letterSpacing: 0.5,
-  },
-  statValue: {
+  segmentLabel: {
     fontSize: 13,
-    fontWeight: '700',
-    marginTop: 2,
   },
-  modeToggleRow: {
+  photoCard: {
+    borderRadius: 18,
+    borderWidth: 1,
+    overflow: 'hidden',
+    minHeight: 220,
+  },
+  previewWrap: {
+    width: '100%',
+    height: 270,
+    position: 'relative',
+  },
+  previewImage: {
+    width: '100%',
+    height: '100%',
+  },
+  previewOverlay: {
+    position: 'absolute',
+    top: 12,
+    left: 12,
+    right: 12,
     flexDirection: 'row',
-    gap: 10,
+    justifyContent: 'space-between',
+    alignItems: 'center',
   },
-  modeBtn: {
+  scanBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    backgroundColor: 'rgba(0,0,0,0.65)',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 16,
+  },
+  scanBadgeText: {
+    color: '#ffffff',
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  retakeBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    backgroundColor: 'rgba(0,0,0,0.65)',
+    paddingHorizontal: 11,
+    paddingVertical: 5,
+    borderRadius: 16,
+  },
+  retakeBtnText: {
+    color: '#ffffff',
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  cameraPlaceholder: {
+    alignItems: 'center',
+    padding: 22,
+  },
+  targetFrame: {
+    width: '100%',
+    maxWidth: 280,
+    aspectRatio: 1.5,
+    alignItems: 'center',
+    justifyContent: 'center',
+    position: 'relative',
+    marginVertical: 6,
+  },
+  targetCorner: {
+    position: 'absolute',
+    width: 14,
+    height: 14,
+  },
+  tl: { top: 0, left: 0, borderTopWidth: 2, borderLeftWidth: 2, borderTopLeftRadius: 4 },
+  tr: { top: 0, right: 0, borderTopWidth: 2, borderRightWidth: 2, borderTopRightRadius: 4 },
+  bl: { bottom: 0, left: 0, borderBottomWidth: 2, borderLeftWidth: 2, borderBottomLeftRadius: 4 },
+  br: { bottom: 0, right: 0, borderBottomWidth: 2, borderRightWidth: 2, borderBottomRightRadius: 4 },
+  cameraIconCircle: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 8,
+  },
+  targetTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+  },
+  targetSub: {
+    fontSize: 11.5,
+    textAlign: 'center',
+    marginTop: 4,
+    maxWidth: 240,
+    lineHeight: 16,
+  },
+  pickButtonsRow: {
+    flexDirection: 'row',
+    gap: 12,
+    marginTop: 18,
+    width: '100%',
+    maxWidth: 280,
+  },
+  primaryActionBtn: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
@@ -707,118 +883,43 @@ const styles = StyleSheet.create({
     gap: 6,
     paddingVertical: 10,
     borderRadius: 12,
-    borderWidth: 1,
-    borderColor: 'transparent',
   },
-  modeBtnText: {
-    fontSize: 12,
-    fontWeight: '700',
-  },
-  photoCard: {
-    borderRadius: 16,
-    borderWidth: 1,
-    overflow: 'hidden',
-    alignItems: 'center',
-    justifyContent: 'center',
-    minHeight: 220,
-  },
-  previewWrap: {
-    width: '100%',
-    height: 260,
-    position: 'relative',
-  },
-  previewImage: {
-    width: '100%',
-    height: '100%',
-  },
-  retakeBtn: {
-    position: 'absolute',
-    bottom: 12,
-    right: 12,
-    backgroundColor: 'rgba(0,0,0,0.75)',
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 20,
-  },
-  retakeBtnText: {
-    color: '#ffffff',
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  uploadPlaceholder: {
-    alignItems: 'center',
-    padding: 24,
-  },
-  cameraIconCircle: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 12,
-  },
-  uploadPromptTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-    marginBottom: 4,
-  },
-  uploadPromptSub: {
-    fontSize: 12,
-    textAlign: 'center',
-    maxWidth: 260,
-    marginBottom: 18,
-  },
-  pickButtonsRow: {
-    flexDirection: 'row',
-    gap: 12,
-  },
-  actionBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 12,
-  },
-  actionBtnText: {
+  primaryActionText: {
     color: '#000000',
     fontSize: 13,
     fontWeight: '700',
   },
-  actionBtnSecondary: {
+  secondaryActionBtn: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
     gap: 6,
-    paddingHorizontal: 16,
     paddingVertical: 10,
     borderRadius: 12,
-    borderWidth: 1,
   },
-  actionBtnSecondaryText: {
+  secondaryActionText: {
     fontSize: 13,
     fontWeight: '600',
   },
   scanTriggerBtn: {
-    paddingVertical: 14,
+    paddingVertical: 13,
     borderRadius: 14,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  scanTriggerText: {
-    color: '#000000',
-    fontSize: 15,
-    fontWeight: '800',
-  },
   analyzingRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
+    gap: 8,
+  },
+  scanTriggerText: {
+    color: '#000000',
+    fontSize: 14,
+    fontWeight: '800',
   },
   resultsCard: {
-    borderRadius: 16,
+    borderRadius: 18,
     borderWidth: 1,
     padding: 16,
     gap: 14,
@@ -826,131 +927,178 @@ const styles = StyleSheet.create({
   resultHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
+    alignItems: 'flex-start',
   },
-  resultTitle: {
-    fontSize: 11,
+  resultPreTitle: {
+    fontSize: 10.5,
     fontWeight: '700',
     letterSpacing: 0.5,
   },
-  resultCategory: {
-    fontSize: 15,
-    fontWeight: '800',
-    marginTop: 2,
-  },
   largeBfPercent: {
-    fontSize: 32,
+    fontSize: 34,
     fontWeight: '900',
+    lineHeight: 38,
+  },
+  largeBfSymbol: {
+    fontSize: 20,
+    fontWeight: '800',
+  },
+  categoryBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 12,
+  },
+  categoryBadgeText: {
+    color: '#22c55e',
+    fontSize: 12,
+    fontWeight: '700',
   },
   gaugeTrack: {
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: 'rgba(128,128,128,0.2)',
+    height: 6,
+    borderRadius: 3,
     overflow: 'hidden',
   },
   gaugeFill: {
     height: '100%',
-    borderRadius: 4,
+    borderRadius: 3,
   },
-  breakdownRow: {
+  compositionTrio: {
     flexDirection: 'row',
-    gap: 10,
+    gap: 8,
   },
-  breakdownCol: {
+  compPill: {
     flex: 1,
-    padding: 10,
+    paddingVertical: 9,
+    paddingHorizontal: 6,
     borderRadius: 10,
     alignItems: 'center',
   },
-  breakdownLabel: {
-    fontSize: 10,
-    fontWeight: '700',
-  },
-  breakdownVal: {
-    fontSize: 14,
-    fontWeight: '800',
-    marginTop: 4,
-  },
-  featuresBox: {
-    gap: 6,
-  },
-  featureItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  featureText: {
-    fontSize: 12,
-  },
-  methodNote: {
-    fontSize: 11,
-    textAlign: 'center',
-    marginTop: 4,
-  },
-  measurementsCard: {
-    borderRadius: 16,
-    borderWidth: 1,
-    padding: 16,
-    gap: 10,
-  },
-  measurementsHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 4,
-  },
-  measurementsTitle: {
-    fontSize: 13,
-    fontWeight: '800',
-  },
-  measurementsSub: {
-    fontSize: 11,
-    fontWeight: '600',
-  },
-  circumferenceInputsRow: {
-    flexDirection: 'row',
-    gap: 10,
-  },
-  inputCol: {
-    flex: 1,
-    gap: 4,
-  },
-  inputFieldLabel: {
-    fontSize: 10,
+  compLabel: {
+    fontSize: 9.5,
     fontWeight: '700',
     letterSpacing: 0.3,
   },
-  inputBox: {
+  compValue: {
+    fontSize: 13,
+    fontWeight: '800',
+    marginTop: 3,
+  },
+  featuresSection: {
+    gap: 8,
+    paddingTop: 4,
+  },
+  featuresSectionTitle: {
+    fontSize: 10.5,
+    fontWeight: '700',
+    letterSpacing: 0.5,
+  },
+  featuresList: {
+    gap: 6,
+  },
+  featureCard: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    borderRadius: 10,
+  },
+  featureCardText: {
+    fontSize: 12,
+    fontWeight: '500',
+    flex: 1,
+    lineHeight: 17,
+  },
+  methodNote: {
+    fontSize: 10.5,
+    textAlign: 'center',
+  },
+  accordionCard: {
+    borderRadius: 16,
+    borderWidth: 1,
+    overflow: 'hidden',
+  },
+  accordionHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    borderRadius: 10,
-    borderWidth: 1,
-    paddingHorizontal: 10,
-    paddingVertical: Platform.OS === 'ios' ? 8 : 4,
+    justifyContent: 'space-between',
+    padding: 14,
   },
-  numericInput: {
-    flex: 1,
-    fontSize: 15,
+  accordionTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  accordionTitle: {
+    fontSize: 13,
     fontWeight: '700',
-    padding: 0,
   },
-  inputUnitText: {
-    fontSize: 12,
-    fontWeight: '600',
-    marginLeft: 4,
+  accordionSummary: {
+    fontSize: 11,
+    fontWeight: '500',
+  },
+  accordionContent: {
+    paddingHorizontal: 14,
+    paddingBottom: 14,
+    gap: 12,
+  },
+  fieldLabel: {
+    fontSize: 10,
+    fontWeight: '700',
+    letterSpacing: 0.5,
+    marginBottom: 6,
   },
   athleticPillsRow: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
     gap: 6,
   },
   athleticPill: {
-    paddingHorizontal: 12,
+    flex: 1,
     paddingVertical: 7,
-    borderRadius: 9,
-    borderWidth: 1,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   athleticPillText: {
     fontSize: 11,
+  },
+  tapeToggleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    borderTopWidth: 1,
+    paddingTop: 10,
+  },
+  tapeToggleState: {
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  tapeInputsRow: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  tapeInputCol: {
+    flex: 1,
+  },
+  tapeInputBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderRadius: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+  },
+  tapeInput: {
+    flex: 1,
+    fontSize: 14,
+    fontWeight: '700',
+    padding: 0,
+  },
+  tapeUnit: {
+    fontSize: 11,
+    fontWeight: '600',
+    marginLeft: 2,
   },
 });

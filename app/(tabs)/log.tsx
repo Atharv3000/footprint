@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
   StyleSheet,
   View,
@@ -6,17 +6,22 @@ import {
   TextInput,
   TouchableOpacity,
   ScrollView,
+  FlatList,
   Platform,
   Alert,
   Modal,
   Dimensions,
   Image,
+  Animated,
+  LayoutAnimation,
+  UIManager,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
+import Svg, { Path as SvgPath, Text as SvgText } from 'react-native-svg';
 import { useFocusEffect } from 'expo-router';
 import { useAuth } from '@/constants/AuthContext';
-import { useTheme, SERIF_FONT } from '@/constants/ThemeContext';
+import { useTheme, BRAND_ROUNDED_FONT, BRAND_ROUNDED_FONT_EXTRA } from '@/constants/ThemeContext';
 import { StickmanWorkoutIcon } from '@/components/StickmanWorkoutIcon';
 import {
   DEFAULT_EXERCISES,
@@ -37,6 +42,7 @@ import {
 import { CameraFormTrackerModal } from '@/components/CameraFormTrackerModal';
 import { MuscleSorenessModal } from '@/components/MuscleSorenessModal';
 import { BodyFatScannerModal } from '@/components/BodyFatScannerModal';
+import { WorkoutSessionModal } from '@/components/WorkoutSessionModal';
 import {
   computeMuscleRecoveryMap,
   MuscleGroupKey,
@@ -44,19 +50,124 @@ import {
 } from '@/constants/muscleRecoveryEngine';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
-const ROUTINE_CARD_GAP = 10;
-const ROUTINE_CARD_WIDTH = Math.floor((SCREEN_WIDTH - 32 - ROUTINE_CARD_GAP) / 2);
-const ROUTINE_SNAP_INTERVAL = ROUTINE_CARD_WIDTH + ROUTINE_CARD_GAP;
+const ROUTINE_CARD_GAP = 9;
+const ROUTINE_PAGE_WIDTH = SCREEN_WIDTH - 32;
+const ROUTINE_CARD_WIDTH = Math.floor((ROUTINE_PAGE_WIDTH - ROUTINE_CARD_GAP * 2) / 3);
+const ROUTINE_PAGE_SNAP_INTERVAL = ROUTINE_PAGE_WIDTH + ROUTINE_CARD_GAP;
+
+interface LogScreenSetRow {
+  id: string;
+  reps: string;
+  weight: string;
+  multiplier: number; // 1, 2, 3, 4
+}
+
+interface ExerciseRowItemProps {
+  item: ExerciseDefinition;
+  isSelected: boolean;
+  isLast: boolean;
+  isDark: boolean;
+  primaryColor: string;
+  textColor: string;
+  textMutedColor: string;
+  onSelect: (item: ExerciseDefinition) => void;
+  onExpandHero: (item: ExerciseDefinition) => void;
+}
+
+const ExerciseRowItem = React.memo(function ExerciseRowItem({
+  item,
+  isSelected,
+  isLast,
+  isDark,
+  primaryColor,
+  textColor,
+  textMutedColor,
+  onSelect,
+  onExpandHero,
+}: ExerciseRowItemProps) {
+  return (
+    <TouchableOpacity
+      style={[
+        styles.exerciseListItem,
+        {
+          backgroundColor: isSelected
+            ? isDark
+              ? 'rgba(16,185,129,0.14)'
+              : 'rgba(16,185,129,0.08)'
+            : 'transparent',
+          borderBottomColor: isLast
+            ? 'transparent'
+            : isDark
+            ? 'rgba(255,255,255,0.06)'
+            : 'rgba(0,0,0,0.04)',
+          borderBottomWidth: isLast ? 0 : StyleSheet.hairlineWidth,
+        },
+      ]}
+      onPress={() => onSelect(item)}
+      activeOpacity={0.75}
+    >
+      <View style={styles.exerciseListItemLeft}>
+        <View style={{ flex: 1 }}>
+          <Text
+            style={[
+              styles.exerciseListItemName,
+              {
+                color: isSelected ? primaryColor : textColor,
+                fontWeight: isSelected ? '800' : '700',
+              },
+            ]}
+            numberOfLines={1}
+          >
+            {item.name}
+          </Text>
+          <Text style={[styles.exerciseListItemMeta, { color: textMutedColor }]}>
+            {item.category.toUpperCase()}
+            {item.primaryMuscles ? ` · ${item.primaryMuscles.join(', ')}` : ''}
+          </Text>
+        </View>
+      </View>
+
+      <TouchableOpacity
+        onPress={(e) => {
+          e.stopPropagation();
+          onExpandHero(item);
+        }}
+        style={styles.arrowTapArea}
+        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+      >
+        <Ionicons
+          name="chevron-forward"
+          size={17}
+          color={isSelected ? primaryColor : textMutedColor}
+        />
+      </TouchableOpacity>
+    </TouchableOpacity>
+  );
+});
 
 export default function LogScreen() {
   const { user, profile } = useAuth();
-  const { colors, isDark } = useTheme();
+  const themeContext = useTheme();
+  const colors = themeContext?.colors;
+  const isDark = themeContext?.isDark ?? colors?.isDark ?? true;
 
   const userId = user?.id || 'guest_user';
   const effectiveWeightUnit: 'kg' | 'lb' =
     profile.unitSystem === 'metric' ? 'kg' : 'lb';
 
   const [selectedExercise, setSelectedExercise] = useState<ExerciseDefinition>(DEFAULT_EXERCISES[0]);
+  const [exerciseSets, setExerciseSets] = useState<LogScreenSetRow[]>([
+    {
+      id: 'set_init',
+      reps: String(DEFAULT_EXERCISES[0].defaultReps),
+      weight: String(
+        effectiveWeightUnit === 'kg'
+          ? Math.round(DEFAULT_EXERCISES[0].defaultWeight * 0.453592)
+          : DEFAULT_EXERCISES[0].defaultWeight
+      ),
+      multiplier: 1,
+    },
+  ]);
   const [repsInput, setRepsInput] = useState<string>(String(DEFAULT_EXERCISES[0].defaultReps));
   const [weightInput, setWeightInput] = useState<string>(
     String(
@@ -67,9 +178,29 @@ export default function LogScreen() {
   );
   const [notesInput, setNotesInput] = useState<string>('');
   const [loggedSuccess, setLoggedSuccess] = useState<boolean>(false);
+  const logButtonScale = useRef(new Animated.Value(1)).current;
+  const logSuccessFill = useRef(new Animated.Value(0)).current;
+  const logCheckScale = useRef(new Animated.Value(1)).current;
   const [allLogs, setAllLogs] = useState<WorkoutLogEntry[]>([]);
-  const [selectedCategory, setSelectedCategory] = useState<string>('all');
+  const [selectedMuscleFilter, setSelectedMuscleFilter] = useState<string>('all');
+  const [selectedDifficultyFilter, setSelectedDifficultyFilter] = useState<string>('all');
+  const [selectedTypeFilter, setSelectedTypeFilter] = useState<string>('all');
+  const [activeDropdown, setActiveDropdown] = useState<'muscle' | 'difficulty' | 'type' | null>(null);
+
   const [exerciseSearchQuery, setExerciseSearchQuery] = useState<string>('');
+  const [isHeroExpanded, setIsHeroExpanded] = useState<boolean>(false);
+  const heroExpandAnim = useRef(new Animated.Value(0)).current;
+
+  const toggleHeroExpanded = (forceOpen?: boolean) => {
+    const nextState = forceOpen !== undefined ? forceOpen : !isHeroExpanded;
+    if (nextState === isHeroExpanded && forceOpen === undefined) return;
+    setIsHeroExpanded(nextState);
+    Animated.timing(heroExpandAnim, {
+      toValue: nextState ? 1 : 0,
+      duration: 180,
+      useNativeDriver: true,
+    }).start();
+  };
 
   // Custom Routine / Workout Day Presets state
   const [routines, setRoutines] = useState<CustomRoutine[]>([]);
@@ -90,12 +221,28 @@ export default function LogScreen() {
   const [selectedRoutineForOptions, setSelectedRoutineForOptions] = useState<CustomRoutine | null>(null);
   const [subsetSelectedExIds, setSubsetSelectedExIds] = useState<string[]>([]);
   const [activeRoutinePage, setActiveRoutinePage] = useState<number>(0);
-  const routinePageCount = Math.max(1, Math.ceil(routines.length / 2));
+  // Chunk routines and append a "New Day" card as the last option (exactly like the add friend circle in community)
+  type RoutineSliderItem =
+    | { type: 'routine'; data: CustomRoutine }
+    | { type: 'new_day' };
+
+  const routinePages = useMemo(() => {
+    const items: RoutineSliderItem[] = routines.map((r) => ({ type: 'routine', data: r }));
+    items.push({ type: 'new_day' });
+
+    const pages: RoutineSliderItem[][] = [];
+    for (let i = 0; i < items.length; i += 3) {
+      pages.push(items.slice(i, i + 3));
+    }
+    return pages;
+  }, [routines]);
+  const routinePageCount = Math.max(1, routinePages.length);
 
   // Muscle Soreness & Recovery Map state
   const [selectedMuscle, setSelectedMuscle] = useState<MuscleGroupKey | null>('chest');
   const [showMuscleRecoveryModal, setShowMuscleRecoveryModal] = useState<boolean>(false);
   const [showBodyFatModal, setShowBodyFatModal] = useState<boolean>(false);
+  const [activeSessionRoutine, setActiveSessionRoutine] = useState<CustomRoutine | null>(null);
   const [manualMuscleOverrides, setManualMuscleOverrides] = useState<Record<string, number>>({});
 
   const recoveryMap = useMemo(() => {
@@ -147,7 +294,8 @@ export default function LogScreen() {
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
     
     const loggedIds: string[] = [];
-    for (const item of routine.exercises) {
+    const exList = routine.exercises || [];
+    for (const item of exList) {
       const exDef = DEFAULT_EXERCISES.find((e) => e.id === item.exerciseId);
       const convertedW = effectiveWeightUnit === 'kg'
         ? Math.round(item.weight * 0.453592)
@@ -167,16 +315,16 @@ export default function LogScreen() {
     const refreshed = await loadWorkoutLogs(userId);
     setAllLogs(refreshed);
 
-    if (routine.exercises.length > 0) {
-      const firstEx = DEFAULT_EXERCISES.find((e) => e.id === routine.exercises[0].exerciseId);
+    if (exList.length > 0) {
+      const firstEx = DEFAULT_EXERCISES.find((e) => e.id === exList[0].exerciseId);
       if (firstEx) {
-        setSelectedCategory(routine.category);
+        setSelectedMuscleFilter(routine.category);
         setSelectedExercise(firstEx);
       }
     }
 
     setLastLoggedIds(loggedIds);
-    setBatchSuccessMsg(`Logged ${routine.exercises.length} sets from ${routine.title}!`);
+    setBatchSuccessMsg(`Logged ${exList.length} sets from ${routine.title}!`);
     if (undoTimer) clearTimeout(undoTimer);
     const timer = setTimeout(() => {
       setBatchSuccessMsg(null);
@@ -195,7 +343,8 @@ export default function LogScreen() {
 
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
     const loggedIds: string[] = [];
-    const chosenItems = selectedRoutineForOptions.exercises.filter((ex) =>
+    const exList = selectedRoutineForOptions.exercises || [];
+    const chosenItems = exList.filter((ex) =>
       subsetSelectedExIds.includes(ex.exerciseId)
     );
 
@@ -246,7 +395,7 @@ export default function LogScreen() {
     setNewRoutineTitle(routine.title);
     setNewRoutineCategory(routine.category);
     setNewRoutineColor(routine.color);
-    setSelectedExIdsForRoutine(routine.exercises.map((e) => e.exerciseId));
+    setSelectedExIdsForRoutine((routine.exercises || []).map((e) => e.exerciseId));
     setSelectedRoutineForOptions(null);
     setRoutineModalVisible(true);
   };
@@ -254,7 +403,7 @@ export default function LogScreen() {
   const openRoutineOptionsMenu = (routine: CustomRoutine) => {
     Haptics.selectionAsync().catch(() => {});
     setSelectedRoutineForOptions(routine);
-    setSubsetSelectedExIds(routine.exercises.map((e) => e.exerciseId));
+    setSubsetSelectedExIds((routine.exercises || []).map((e) => e.exerciseId));
   };
 
   const handleSaveCustomRoutine = async () => {
@@ -325,77 +474,257 @@ export default function LogScreen() {
   const repsDiff = currentRepsNum - prevReps;
   const weightDiff = currentWeightNum - prevWeight;
 
-  const handleSelectExercise = (exercise: ExerciseDefinition) => {
-    Haptics.selectionAsync().catch(() => {});
+  const handleSelectExercise = useCallback((exercise: ExerciseDefinition) => {
     setSelectedExercise(exercise);
     
     // Check if we have prior log
     const prev = allLogs.find((l) => l.exerciseId === exercise.id);
+    let targetR = String(exercise.defaultReps);
+    let targetW = String(
+      effectiveWeightUnit === 'kg'
+        ? Math.round(exercise.defaultWeight * 0.453592)
+        : exercise.defaultWeight
+    );
+
     if (prev) {
-      setRepsInput(String(prev.reps));
+      targetR = String(prev.reps);
       const convertedW =
         prev.weightUnit === effectiveWeightUnit
           ? prev.weight
           : effectiveWeightUnit === 'kg'
             ? Math.round(prev.weight * 0.453592)
             : Math.round(prev.weight * 2.20462);
-      setWeightInput(String(convertedW));
-    } else {
-      setRepsInput(String(exercise.defaultReps));
-      const initW =
-        effectiveWeightUnit === 'kg'
-          ? Math.round(exercise.defaultWeight * 0.453592)
-          : exercise.defaultWeight;
-      setWeightInput(String(initW));
+      targetW = String(convertedW);
     }
+
+    setRepsInput(targetR);
+    setWeightInput(targetW);
+    setExerciseSets([
+      {
+        id: `set_${Date.now()}`,
+        reps: targetR,
+        weight: targetW,
+        multiplier: 1,
+      },
+    ]);
+  }, [allLogs, effectiveWeightUnit]);
+
+  // Set management for main fitness log screen
+  const addExerciseSetRow = () => {
+    setExerciseSets((prev) => {
+      const last = prev[prev.length - 1];
+      return [
+        ...prev,
+        {
+          id: `set_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+          reps: last ? last.reps : repsInput,
+          weight: last ? last.weight : weightInput,
+          multiplier: 1,
+        },
+      ];
+    });
   };
 
-  const handleLogWorkout = async () => {
-    const repsNum = parseInt(repsInput.trim(), 10);
-    const weightNum = parseFloat(weightInput.trim());
-
-    if (isNaN(repsNum) || repsNum <= 0) {
-      Alert.alert('Reps Required', 'Please enter a valid number of repetitions.');
-      return;
-    }
-
-    if (isNaN(weightNum) || weightNum < 0) {
-      Alert.alert('Weight Required', 'Please enter a valid weight.');
-      return;
-    }
-
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
-
-    const created = await saveWorkoutLog(userId, {
-      exerciseId: selectedExercise.id,
-      exerciseName: selectedExercise.name,
-      reps: repsNum,
-      weight: weightNum,
-      weightUnit: effectiveWeightUnit,
-      notes: notesInput.trim() || undefined,
+  const removeExerciseSetRow = (setIndex: number) => {
+    setExerciseSets((prev) => {
+      if (prev.length <= 1) return prev;
+      return prev.filter((_, idx) => idx !== setIndex);
     });
+  };
+
+  const cycleSetMultiplier = (setIndex: number) => {
+    setExerciseSets((prev) => {
+      const copy = [...prev];
+      const cur = copy[setIndex].multiplier || 1;
+      const next = cur >= 4 ? 1 : cur + 1;
+      copy[setIndex] = { ...copy[setIndex], multiplier: next };
+      return copy;
+    });
+  };
+
+  const updateSetReps = (setIndex: number, delta: number) => {
+    setExerciseSets((prev) => {
+      const copy = [...prev];
+      const curVal = parseInt(copy[setIndex].reps, 10) || 0;
+      copy[setIndex] = {
+        ...copy[setIndex],
+        reps: String(Math.max(1, curVal + delta)),
+      };
+      return copy;
+    });
+  };
+
+  const updateSetWeight = (setIndex: number, delta: number) => {
+    setExerciseSets((prev) => {
+      const copy = [...prev];
+      const curVal = parseFloat(copy[setIndex].weight) || 0;
+      copy[setIndex] = {
+        ...copy[setIndex],
+        weight: String(Math.max(0, curVal + delta)),
+      };
+      return copy;
+    });
+  };
+
+  const setDirectSetReps = (setIndex: number, text: string) => {
+    setExerciseSets((prev) => {
+      const copy = [...prev];
+      copy[setIndex] = { ...copy[setIndex], reps: text };
+      return copy;
+    });
+  };
+
+  const setDirectSetWeight = (setIndex: number, text: string) => {
+    setExerciseSets((prev) => {
+      const copy = [...prev];
+      copy[setIndex] = { ...copy[setIndex], weight: text };
+      return copy;
+    });
+  };
+
+  const handleExpandHeroForExercise = useCallback((exercise: ExerciseDefinition) => {
+    Haptics.selectionAsync().catch(() => {});
+    handleSelectExercise(exercise);
+    toggleHeroExpanded(true);
+  }, [handleSelectExercise, toggleHeroExpanded]);
+
+  const handleLogWorkout = async () => {
+    // Validate all rows
+    const validRows: { reps: number; weight: number; multiplier: number }[] = [];
+    for (const setRow of exerciseSets) {
+      const r = parseInt(setRow.reps.trim(), 10);
+      const w = parseFloat(setRow.weight.trim());
+      if (isNaN(r) || r <= 0) {
+        Alert.alert('Reps Required', 'Please enter a valid number of repetitions for each set.');
+        return;
+      }
+      if (isNaN(w) || w < 0) {
+        Alert.alert('Weight Required', 'Please enter a valid weight for each set.');
+        return;
+      }
+      validRows.push({ reps: r, weight: w, multiplier: setRow.multiplier || 1 });
+    }
+
+    if (validRows.length === 0) return;
+
+    // Satisfying multi-stage haptic ripple
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
+    setTimeout(() => {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+    }, 140);
+
+    // Trigger punchy press-in & fill animation
+    Animated.sequence([
+      Animated.timing(logButtonScale, { toValue: 0.94, duration: 90, useNativeDriver: true }),
+      Animated.spring(logButtonScale, { toValue: 1.02, friction: 4, tension: 180, useNativeDriver: true }),
+      Animated.spring(logButtonScale, { toValue: 1, friction: 6, tension: 140, useNativeDriver: true }),
+    ]).start();
+
+    // Fill in emerald green and pop checkmark icon
+    Animated.timing(logSuccessFill, { toValue: 1, duration: 180, useNativeDriver: false }).start();
+    Animated.sequence([
+      Animated.timing(logCheckScale, { toValue: 1.45, duration: 160, useNativeDriver: true }),
+      Animated.spring(logCheckScale, { toValue: 1, friction: 4, tension: 190, useNativeDriver: true }),
+    ]).start();
+
+    const newCreatedIds: string[] = [];
+    for (let i = 0; i < validRows.length; i++) {
+      const row = validRows[i];
+      for (let m = 0; m < row.multiplier; m++) {
+        const created = await saveWorkoutLog(userId, {
+          exerciseId: selectedExercise.id,
+          exerciseName: selectedExercise.name,
+          reps: row.reps,
+          weight: row.weight,
+          weightUnit: effectiveWeightUnit,
+          notes:
+            notesInput.trim() ||
+            (validRows.length > 1
+              ? `Set ${i + 1}${row.multiplier > 1 ? ` (${m + 1}/${row.multiplier})` : ''}`
+              : undefined),
+        });
+        if (created?.id) {
+          newCreatedIds.push(created.id);
+        }
+      }
+    }
 
     const refreshed = await loadWorkoutLogs(userId);
     setAllLogs(refreshed);
 
-    if (created?.id) {
-      setLastLoggedIds([created.id]);
+    if (newCreatedIds.length > 0) {
+      setLastLoggedIds(newCreatedIds);
     }
     setLoggedSuccess(true);
     if (undoTimer) clearTimeout(undoTimer);
     const timer = setTimeout(() => {
       setLoggedSuccess(false);
       setLastLoggedIds([]);
+      Animated.timing(logSuccessFill, { toValue: 0, duration: 250, useNativeDriver: false }).start();
     }, 4500);
     setUndoTimer(timer);
   };
 
-  const filteredExercises = DEFAULT_EXERCISES.filter((e) => {
+  const filteredExercises = useMemo(() => {
     const q = exerciseSearchQuery.trim().toLowerCase();
-    const matchesSearch = !q || e.name.toLowerCase().includes(q) || e.category.toLowerCase().includes(q);
-    const matchesCategory = selectedCategory === 'all' || e.category === selectedCategory;
-    return matchesSearch && matchesCategory;
-  });
+
+    return DEFAULT_EXERCISES.filter((e) => {
+      // 1. Text Query Filter
+      if (q) {
+        const matchesName = e.name.toLowerCase().includes(q);
+        const matchesCat = e.category.toLowerCase().includes(q);
+        const matchesEquip = (e.equipment || '').toLowerCase().includes(q);
+        const matchesMuscles = (e.primaryMuscles || []).some((m) => m.toLowerCase().includes(q));
+        if (!matchesName && !matchesCat && !matchesEquip && !matchesMuscles) {
+          return false;
+        }
+      }
+
+      // 2. Muscle Group Filter
+      if (selectedMuscleFilter !== 'all' && e.category !== selectedMuscleFilter) {
+        return false;
+      }
+
+      // 3. Difficulty Filter (beginner, intermediate, advanced)
+      if (selectedDifficultyFilter !== 'all') {
+        const exName = e.name.toLowerCase();
+        let diff = 'intermediate';
+        if (
+          exName.includes('deadlift') ||
+          exName.includes('squat') ||
+          exName.includes('clean') ||
+          exName.includes('snatch') ||
+          exName.includes('overhead press')
+        ) {
+          diff = 'advanced';
+        } else if (
+          exName.includes('curl') ||
+          exName.includes('pushdown') ||
+          exName.includes('crunch') ||
+          exName.includes('calf') ||
+          exName.includes('lateral raise') ||
+          exName.includes('extension')
+        ) {
+          diff = 'beginner';
+        }
+        if (diff !== selectedDifficultyFilter) {
+          return false;
+        }
+      }
+
+      // 4. Equipment Type Filter
+      if (selectedTypeFilter !== 'all') {
+        const equip = (e.equipment || '').toLowerCase();
+        if (selectedTypeFilter === 'barbell' && !equip.includes('barbell')) return false;
+        if (selectedTypeFilter === 'dumbbell' && !equip.includes('dumbbell')) return false;
+        if (selectedTypeFilter === 'cable' && !equip.includes('cable')) return false;
+        if (selectedTypeFilter === 'machine' && !equip.includes('machine')) return false;
+        if (selectedTypeFilter === 'bodyweight' && !equip.includes('body only')) return false;
+      }
+
+      return true;
+    });
+  }, [exerciseSearchQuery, selectedMuscleFilter, selectedDifficultyFilter, selectedTypeFilter]);
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
@@ -404,134 +733,194 @@ export default function LogScreen() {
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
       >
-        {/* Retro Header styled identically to other tabs */}
+        {/* Header matching modern aesthetic */}
         <View style={[styles.header, { paddingTop: Platform.OS === 'ios' ? 76 : 48 }]}>
           <Text style={[styles.screenTitle, { color: colors.text }]}>Fitness Log</Text>
         </View>
 
-        {/* ── SEPARATE INDIVIDUAL QUICK ACTION BUTTONS (Form Tracker | Muscle Recovery | Body Fat) ── */}
+        {/* ── 3 PROMINENT QUICK ACTION TILES ── */}
         <View style={styles.quickActionButtonsRow}>
-          {/* 1. Video Form Tracker */}
+          {/* 1. Soreness / Body Recovery */}
           <TouchableOpacity
-            style={[styles.quickActionIndividualBtn, { backgroundColor: colors.surfaceElevated, borderColor: colors.border }]}
-            onPress={() => {
-              Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
-              setShowCameraTracker(true);
-            }}
-            activeOpacity={0.7}
-          >
-            <View style={[styles.quickActionIconCircle, { backgroundColor: colors.primary + '18' }]}>
-              <Ionicons name="videocam" size={16} color={colors.primary} />
-            </View>
-            <Text style={[styles.quickActionLabel, { color: colors.text }]}>AI Form</Text>
-          </TouchableOpacity>
-
-          {/* 2. Muscle Soreness & Recovery Visualizer */}
-          <TouchableOpacity
-            style={[styles.quickActionIndividualBtn, { backgroundColor: colors.surfaceElevated, borderColor: colors.border }]}
+            style={[
+              styles.quickActionTile,
+              {
+                backgroundColor: colors.surfaceElevated,
+              },
+            ]}
             onPress={() => {
               Haptics.selectionAsync().catch(() => {});
               setShowMuscleRecoveryModal(true);
             }}
-            activeOpacity={0.7}
+            activeOpacity={0.8}
           >
-            <View
-              style={[
-                styles.quickActionIconCircle,
-                { backgroundColor: soreMusclesCount > 0 ? '#ef444420' : '#10b98120' },
-              ]}
-            >
-              <Ionicons
-                name="body"
-                size={16}
-                color={soreMusclesCount > 0 ? '#ef4444' : '#10b981'}
-              />
-            </View>
-            <Text style={[styles.quickActionLabel, { color: colors.text }]}>
+            <Ionicons name="fitness" size={20} color="#f97316" />
+            <Text style={[styles.quickActionTitle, { color: colors.text }]} numberOfLines={1}>
               Soreness
             </Text>
           </TouchableOpacity>
 
-          {/* 3. Body Fat Scanner */}
+          {/* 2. Body Fat / Vision Scan */}
           <TouchableOpacity
-            style={[styles.quickActionIndividualBtn, { backgroundColor: colors.surfaceElevated, borderColor: colors.border }]}
+            style={[
+              styles.quickActionTile,
+              {
+                backgroundColor: colors.surfaceElevated,
+              },
+            ]}
             onPress={() => {
               Haptics.selectionAsync().catch(() => {});
               setShowBodyFatModal(true);
             }}
-            activeOpacity={0.7}
+            activeOpacity={0.8}
           >
-            <View style={[styles.quickActionIconCircle, { backgroundColor: '#8b5cf620' }]}>
-              <Ionicons name="scan" size={15} color="#8b5cf6" />
-            </View>
-            <Text style={[styles.quickActionLabel, { color: colors.text }]}>Body Fat</Text>
+            <Ionicons name="scan-circle-outline" size={21} color="#a855f7" />
+            <Text style={[styles.quickActionTitle, { color: colors.text }]} numberOfLines={1}>
+              Body Fat
+            </Text>
           </TouchableOpacity>
-        </View>
 
-        {/* ── SECTION 0: CUSTOM WORKOUT DAY PRESETS / ROUTINES (SLIDER: 2 VISIBLE AT ONCE, SNAPPY) ── */}
-        <View style={styles.sectionHeaderRow}>
-          <Text style={[styles.sectionHeading, { color: colors.textMuted }]}>
-            WORKOUT DAYS & ROUTINES
-          </Text>
+          {/* 3. AI Form Tracker */}
           <TouchableOpacity
+            style={[
+              styles.quickActionTile,
+              {
+                backgroundColor: colors.surfaceElevated,
+              },
+            ]}
             onPress={() => {
-              Haptics.selectionAsync().catch(() => {});
-              openCreateRoutineModal();
+              Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+              setShowCameraTracker(true);
             }}
-            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            activeOpacity={0.8}
           >
-            <Text style={[styles.editPresetsLink, { color: colors.primary }]}>+ New Day</Text>
+            <Ionicons name="play-forward" size={19} color="#10b981" />
+            <Text style={[styles.quickActionTitle, { color: colors.text }]} numberOfLines={1}>
+              AI Form
+            </Text>
           </TouchableOpacity>
         </View>
 
-        {/* Carousel / Slider displaying 2 routine cards visible at once without side cropping */}
+        {/* ── SECTION 0: CUSTOM WORKOUT DAY PRESETS / ROUTINES (SLIDER: 3 VISIBLE AT ONCE, SNAPPY) ── */}
         <ScrollView
           horizontal
-          snapToInterval={ROUTINE_SNAP_INTERVAL}
+          pagingEnabled={false}
+          snapToInterval={ROUTINE_PAGE_SNAP_INTERVAL}
           snapToAlignment="start"
           decelerationRate="fast"
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={styles.routinesSliderTrack}
           onScroll={(e) => {
             const offsetX = e.nativeEvent.contentOffset.x;
-            const pageIndex = Math.round(offsetX / (ROUTINE_SNAP_INTERVAL * 2));
+            const pageIndex = Math.min(
+              routinePageCount - 1,
+              Math.max(0, Math.round(offsetX / ROUTINE_PAGE_SNAP_INTERVAL))
+            );
             setActiveRoutinePage(pageIndex);
           }}
           scrollEventThrottle={16}
         >
-          {routines.map((routine) => {
-            return (
-              <View
-                key={routine.id}
-                style={[
-                  styles.coloredRoutineCardSlider,
-                  {
-                    backgroundColor: routine.color,
-                  },
-                ]}
-              >
-                <TouchableOpacity
-                  style={styles.routineCardMainTap}
-                  onPress={() => handleLogWholeRoutine(routine)}
-                  activeOpacity={0.8}
-                >
-                  <View style={styles.routinePillInner}>
-                    <Text style={styles.routinePillTitle} numberOfLines={1}>{routine.title}</Text>
-                  </View>
-                </TouchableOpacity>
+          {routinePages.map((pageGroup, pIdx) => (
+            <View key={`routine_page_${pIdx}`} style={styles.routinePageGroup}>
+              {pageGroup.map((item, itemIdx) => {
+                if (item.type === 'new_day') {
+                  return (
+                    <TouchableOpacity
+                      key="routine_new_day_item"
+                      style={[
+                        styles.coloredRoutineCardSlider,
+                        styles.newDayCardSlider,
+                        {
+                          backgroundColor: colors.surfaceElevated,
+                          borderColor: colors.border,
+                        },
+                      ]}
+                      onPress={() => {
+                        Haptics.selectionAsync().catch(() => {});
+                        openCreateRoutineModal();
+                      }}
+                      activeOpacity={0.8}
+                    >
+                      <View style={styles.newDayInnerRow}>
+                        <View style={[styles.newDayIconCircle, { backgroundColor: colors.surfaceSecondary }]}>
+                          <Ionicons name="add" size={17} color={colors.primary} />
+                        </View>
+                        <View style={{ flex: 1 }}>
+                          <Text
+                            style={[
+                              styles.routinePillTitle,
+                              { color: colors.primary },
+                            ]}
+                            numberOfLines={1}
+                          >
+                            New Day
+                          </Text>
+                        </View>
+                      </View>
+                    </TouchableOpacity>
+                  );
+                }
 
-                {/* 3-dots Menu Button to edit day or select subset */}
-                <TouchableOpacity
-                  style={styles.routineThreeDotsBtn}
-                  onPress={() => openRoutineOptionsMenu(routine)}
-                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                  activeOpacity={0.7}
-                >
-                  <Ionicons name="ellipsis-vertical" size={16} color="rgba(255,255,255,0.9)" />
-                </TouchableOpacity>
-              </View>
-            );
-          })}
+                const routine = item.data;
+                const exCount = routine.exercises?.length ?? 0;
+                return (
+                  <View
+                    key={routine.id}
+                    style={[
+                      styles.coloredRoutineCardSlider,
+                      {
+                        backgroundColor: colors.surfaceElevated,
+                      },
+                    ]}
+                  >
+                    <TouchableOpacity
+                      style={styles.routineCardMainTap}
+                      onPress={() => {
+                        Haptics.selectionAsync().catch(() => {});
+                        setActiveSessionRoutine(routine);
+                      }}
+                      activeOpacity={0.8}
+                    >
+                      <View style={styles.routinePillInner}>
+                        <Text
+                          style={[
+                            styles.routinePillTitle,
+                            { color: colors.text },
+                          ]}
+                          numberOfLines={1}
+                        >
+                          {routine.title}
+                        </Text>
+                      </View>
+                      <Text
+                        style={[
+                          styles.routinePillSub,
+                          { color: colors.textSecondary },
+                        ]}
+                        numberOfLines={1}
+                      >
+                        {exCount} {exCount === 1 ? 'exercise' : 'exercises'}
+                      </Text>
+                    </TouchableOpacity>
+
+                    {/* 3-dots Menu Button to edit day or select subset */}
+                    <TouchableOpacity
+                      style={styles.routineThreeDotsBtn}
+                      onPress={() => openRoutineOptionsMenu(routine)}
+                      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                      activeOpacity={0.7}
+                    >
+                      <Ionicons
+                        name="ellipsis-vertical"
+                        size={14}
+                        color={colors.textMuted}
+                      />
+                    </TouchableOpacity>
+                  </View>
+                );
+              })}
+            </View>
+          ))}
         </ScrollView>
 
         {/* Black Dots Indicator below the workout days/routines */}
@@ -596,51 +985,363 @@ export default function LogScreen() {
         )}
 
 
-        <View style={[styles.stickmanHeroCard, { backgroundColor: colors.surfaceElevated, borderColor: colors.border }]}>
-          <View style={styles.stickmanHeroContent}>
-            {selectedExercise.imageUrl ? (
-              <View style={styles.stickmanVisualWrap}>
-                <Image
-                  source={{ uri: selectedExercise.imageUrl }}
-                  style={styles.heroExerciseImage}
-                  resizeMode="contain"
-                />
-              </View>
-            ) : null}
-            <View style={styles.stickmanInfoCol}>
-              <View style={[styles.categoryTagPill, { backgroundColor: colors.primary + '22' }]}>
-                <Text style={[styles.categoryTagText, { color: colors.primary }]}>
-                  {selectedExercise.category.toUpperCase()}
-                  {selectedExercise.equipment ? ` · ${selectedExercise.equipment}` : ''}
+        <View style={[styles.stickmanHeroCard, { backgroundColor: colors.surfaceElevated }]}>
+          <TouchableOpacity
+            style={styles.stickmanHeroHeaderTap}
+            onPress={() => toggleHeroExpanded()}
+            activeOpacity={0.85}
+          >
+            <View style={styles.stickmanHeroContent}>
+              {selectedExercise.imageUrl ? (
+                <View style={[styles.stickmanVisualWrap, { backgroundColor: isDark ? '#141417' : '#f1f5f9' }]}>
+                  <Image
+                    source={{ uri: selectedExercise.imageUrl }}
+                    style={styles.heroExerciseImage}
+                    resizeMode="cover"
+                  />
+                </View>
+              ) : null}
+              <View style={styles.stickmanInfoCol}>
+                <Text style={[styles.stickmanExerciseTitle, { color: colors.text }]}>
+                  {selectedExercise.name}
+                </Text>
+                <View style={styles.exerciseBadgeRow}>
+                  <View
+                    style={[
+                      styles.categoryTagPill,
+                      {
+                        backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : '#f1f5f9',
+                      },
+                    ]}
+                  >
+                    <Text style={[styles.categoryTagText, { color: colors.textSecondary }]}>
+                      {selectedExercise.category.charAt(0).toUpperCase() + selectedExercise.category.slice(1).toLowerCase()}
+                    </Text>
+                  </View>
+                  {selectedExercise.equipment ? (
+                    <View
+                      style={[
+                        styles.equipmentTagPill,
+                        {
+                          backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : '#f1f5f9',
+                        },
+                      ]}
+                    >
+                      <Ionicons name="barbell-outline" size={13} color={colors.textSecondary} style={{ marginRight: 5 }} />
+                      <Text style={[styles.equipmentTagText, { color: colors.textSecondary }]}>
+                        {selectedExercise.equipment}
+                      </Text>
+                    </View>
+                  ) : null}
+                </View>
+                <Text style={[styles.selectedMuscleSub, { color: colors.textMuted }]}>
+                  Focus: {selectedExercise.primaryMuscles?.join(', ') || selectedExercise.category}
                 </Text>
               </View>
-              <Text style={[styles.stickmanExerciseTitle, { color: colors.text }]}>
-                {selectedExercise.name}
-              </Text>
-              <Text style={[styles.selectedMuscleSub, { color: colors.textMuted }]}>
-                Target: {selectedExercise.primaryMuscles?.join(', ') || selectedExercise.category}
-              </Text>
+              {/* Dropdown Chevron toggle */}
+              <View style={[styles.heroChevronBtn, { backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)' }]}>
+                <Ionicons
+                  name={isHeroExpanded ? 'chevron-up' : 'chevron-down'}
+                  size={18}
+                  color={colors.textSecondary}
+                />
+              </View>
             </View>
-          </View>
+          </TouchableOpacity>
+
+          {/* Animated Expandable Details in Hero Card */}
+          {isHeroExpanded && (() => {
+            const exName = (selectedExercise.name || '').toLowerCase();
+            const exCat = (selectedExercise.category || '').toLowerCase();
+            const exEquip = (selectedExercise.equipment || '').toLowerCase();
+
+            // Calibrated gym popularity percentage
+            let popPercent = 42;
+            let popNotches = 2;
+            if (exName.includes('barbell flat bench') || exName.includes('barbell squat') || exName.includes('conventional deadlift') || exName.includes('lat pulldown') || exName.includes('bicep curl')) {
+              popPercent = 78;
+              popNotches = 3;
+            } else if (exName.includes('incline dumbbell') || exName.includes('romanian deadlift') || exName.includes('leg press') || exName.includes('pull-up') || exName.includes('lateral raise') || exName.includes('tricep rope') || exName.includes('cable fly')) {
+              popPercent = 64;
+              popNotches = 3;
+            } else if (exName.includes('overhead press') || exName.includes('hammer curl') || exName.includes('leg extension') || exName.includes('leg curl') || exName.includes('cable row') || exName.includes('skull crusher')) {
+              popPercent = 52;
+              popNotches = 2;
+            } else if (exName.includes('bulgarian') || exName.includes('incline curl') || exName.includes('chest supported') || exName.includes('calf') || exName.includes('dip') || exName.includes('face pull')) {
+              popPercent = 36;
+              popNotches = 2;
+            } else if (exName.includes('sissy') || exName.includes('good morning') || exName.includes('front squat') || exName.includes('clean') || exName.includes('snatch') || exName.includes('hack squat') || exName.includes('shrug')) {
+              popPercent = 22;
+              popNotches = 1;
+            } else if (exCat === 'chest' || exCat === 'arms') {
+              popPercent = 48;
+              popNotches = 2;
+            } else if (exCat === 'back' || exCat === 'legs' || exCat === 'shoulders') {
+              popPercent = 42;
+              popNotches = 2;
+            } else if (exCat === 'core') {
+              popPercent = 34;
+              popNotches = 1;
+            } else {
+              popPercent = 24;
+              popNotches = 1;
+            }
+
+            // Difficulty: 1 to 3
+            let diffLevel = 2;
+            if (exName.includes('deadlift') || exName.includes('squat') || exName.includes('clean') || exName.includes('snatch') || exName.includes('overhead press')) {
+              diffLevel = 3;
+            } else if (exName.includes('curl') || exName.includes('pushdown') || exName.includes('crunch') || exName.includes('calf') || exName.includes('lateral raise') || exName.includes('extension')) {
+              diffLevel = 1;
+            }
+
+            // Progression: 1 to 3
+            let progLevel = 2;
+            if (exName.includes('bench') || exName.includes('squat') || exName.includes('deadlift') || exName.includes('leg press') || exName.includes('barbell row')) {
+              progLevel = 3;
+            } else if (exName.includes('lateral raise') || exName.includes('face pull') || exName.includes('wrist') || exName.includes('rotator')) {
+              progLevel = 1;
+            }
+
+            const filledColor = isDark ? '#ffffff' : '#000000';
+            const emptyColor = isDark ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.08)';
+            const flameColor = isDark ? '#ffffff' : '#000000';
+
+            // Realistic gym average weight calculation for 10 reps across populations
+            let baseAvgLbs = 0;
+            const isBodyweight = exEquip.includes('body only') || exName.includes('bodyweight') || exName.includes('pushup') || exName.includes('pullup') || exName.includes('chin-up') || exName.includes('dip') || exName.includes('crunch') || exName.includes('plank');
+
+            if (isBodyweight) {
+              baseAvgLbs = 0;
+            } else if (exEquip.includes('dumbbell')) {
+              if (exName.includes('bench') || exName.includes('chest press') || exName.includes('incline press')) {
+                baseAvgLbs = 50; // 50 lb dumbbells per hand or combined
+              } else if (exName.includes('shoulder press') || exName.includes('overhead')) {
+                baseAvgLbs = 40;
+              } else if (exName.includes('lateral raise') || exName.includes('front raise') || exName.includes('fly')) {
+                baseAvgLbs = 20;
+              } else if (exName.includes('curl') || exName.includes('tricep') || exName.includes('extension')) {
+                baseAvgLbs = 25;
+              } else if (exName.includes('lunge') || exName.includes('squat') || exName.includes('deadlift')) {
+                baseAvgLbs = 45;
+              } else {
+                baseAvgLbs = 30;
+              }
+            } else if (exEquip.includes('barbell')) {
+              if (exName.includes('deadlift')) {
+                baseAvgLbs = 205;
+              } else if (exName.includes('squat')) {
+                baseAvgLbs = 185;
+              } else if (exName.includes('bench press')) {
+                baseAvgLbs = 145;
+              } else if (exName.includes('row')) {
+                baseAvgLbs = 135;
+              } else if (exName.includes('overhead press') || exName.includes('military')) {
+                baseAvgLbs = 95;
+              } else if (exName.includes('curl')) {
+                baseAvgLbs = 65;
+              } else {
+                baseAvgLbs = 115;
+              }
+            } else if (exEquip.includes('cable')) {
+              if (exName.includes('pulldown') || exName.includes('row')) {
+                baseAvgLbs = 120;
+              } else if (exName.includes('tricep') || exName.includes('pushdown')) {
+                baseAvgLbs = 50;
+              } else if (exName.includes('curl') || exName.includes('fly') || exName.includes('crossover') || exName.includes('lateral')) {
+                baseAvgLbs = 25;
+              } else {
+                baseAvgLbs = 45;
+              }
+            } else if (exEquip.includes('machine')) {
+              if (exName.includes('leg press')) {
+                baseAvgLbs = 270;
+              } else if (exName.includes('leg curl') || exName.includes('leg extension')) {
+                baseAvgLbs = 85;
+              } else if (exName.includes('chest press') || exName.includes('row')) {
+                baseAvgLbs = 110;
+              } else if (exName.includes('shoulder') || exName.includes('overhead')) {
+                baseAvgLbs = 70;
+              } else {
+                baseAvgLbs = 80;
+              }
+            } else {
+              // General default based on category if equipment is unspecified
+              if (exCat === 'legs') baseAvgLbs = 155;
+              else if (exCat === 'chest') baseAvgLbs = 115;
+              else if (exCat === 'back') baseAvgLbs = 115;
+              else if (exCat === 'shoulders') baseAvgLbs = 55;
+              else if (exCat === 'arms') baseAvgLbs = 35;
+              else if (exCat === 'core') baseAvgLbs = 0;
+              else baseAvgLbs = 45;
+            }
+
+            const maleAvgLbs = baseAvgLbs;
+            const femaleAvgLbs = Math.round(baseAvgLbs * 0.65);
+
+            const maleAvgWeight10Reps = isBodyweight || baseAvgLbs === 0
+              ? 'BW'
+              : effectiveWeightUnit === 'kg'
+                ? `${Math.round(maleAvgLbs * 0.453592)}kg`
+                : `${Math.round(maleAvgLbs)}lb`;
+
+            const femaleAvgWeight10Reps = isBodyweight || baseAvgLbs === 0
+              ? 'BW'
+              : effectiveWeightUnit === 'kg'
+                ? `${Math.round(femaleAvgLbs * 0.453592)}kg`
+                : `${Math.round(femaleAvgLbs)}lb`;
+
+            // Dynamic informative description
+            let dynamicDesc = '';
+            if (exCat === 'chest') {
+              dynamicDesc = 'Engages the pectoralis major and anterior deltoids. Maintain retracted scapulae and a steady eccentric cadence to maximize tension.';
+            } else if (exCat === 'back') {
+              dynamicDesc = 'Recruits the latissimus dorsi, rhomboids, and mid-trapezius. Drive through your elbows while maintaining neutral spinal alignment.';
+            } else if (exCat === 'legs') {
+              dynamicDesc = 'Activates the quadriceps, hamstrings, and gluteal complex. Anchor through your midfoot and brace your core throughout the movement.';
+            } else if (exCat === 'shoulders') {
+              dynamicDesc = 'Isolates and loads the deltoid heads. Avoid shrugging the traps to isolate tension strictly onto the shoulder joint.';
+            } else if (exCat === 'arms') {
+              dynamicDesc = 'Focuses directly on the biceps and triceps. Keep elbow position fixed and enforce complete contraction at peak flexion.';
+            } else if (exCat === 'core') {
+              dynamicDesc = 'Challenges the abdominal wall and stabilizers. Emphasize deep diaphragmatic bracing without allowing spinal hyperextension.';
+            } else {
+              dynamicDesc = 'Cardiovascular and muscular endurance stimulus. Keep your breathing rhythmical and pace sustained.';
+            }
+
+            const opacityAnim = heroExpandAnim.interpolate({
+              inputRange: [0, 1],
+              outputRange: [0, 1],
+            });
+
+            return (
+              <Animated.View style={[styles.heroExpandedContainer, { opacity: opacityAnim }]}>
+                <View style={[styles.heroExpandedDivider, { backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)' }]} />
+
+                {/* Actual Informative Description */}
+                <Text style={[styles.heroExerciseDescription, { color: colors.textSecondary }]}>
+                  {dynamicDesc}
+                </Text>
+
+                {/* Notches Grid */}
+                <View style={styles.heroNotchesGrid}>
+                  {/* Top Row: Difficulty & Progression with icons placed on the RIGHT */}
+                  <View style={styles.rankingSideBySideRow}>
+                    {/* 1. Difficulty */}
+                    <View style={styles.rankingCol}>
+                      <View style={styles.rankingLabelRow}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+                          <Text style={[styles.rankingTitle, { color: colors.text }]}>Difficulty</Text>
+                          <Ionicons name="barbell-outline" size={13} color={colors.textSecondary} />
+                        </View>
+                      </View>
+                      <View style={styles.notchesBar}>
+                        {[1, 2, 3].map((lvl) => (
+                          <View
+                            key={`diff_${lvl}`}
+                            style={[
+                              styles.notchSegment,
+                              { backgroundColor: lvl <= diffLevel ? filledColor : emptyColor },
+                            ]}
+                          />
+                        ))}
+                      </View>
+                    </View>
+
+                    {/* 2. Progression Ease */}
+                    <View style={styles.rankingCol}>
+                      <View style={styles.rankingLabelRow}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+                          <Text style={[styles.rankingTitle, { color: colors.text }]}>Progression</Text>
+                          <Ionicons name="trending-up" size={13} color={colors.textSecondary} />
+                        </View>
+                      </View>
+                      <View style={styles.notchesBar}>
+                        {[1, 2, 3].map((lvl) => (
+                          <View
+                            key={`prog_${lvl}`}
+                            style={[
+                              styles.notchSegment,
+                              { backgroundColor: lvl <= progLevel ? filledColor : emptyColor },
+                            ]}
+                          />
+                        ))}
+                      </View>
+                    </View>
+                  </View>
+
+                  {/* Row 2: Popularity & Avg 10-Rep Side-by-Side in the Same Format */}
+                  <View style={styles.rankingSideBySideRow}>
+                    {/* 1. Popularity: title & flame, with notches and percentage right next to them */}
+                    <View style={styles.rankingCol}>
+                      <View style={styles.rankingLabelRow}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+                          <Text style={[styles.rankingTitle, { color: colors.text }]}>Popularity</Text>
+                          <Ionicons name="flame" size={13} color={flameColor} />
+                        </View>
+                      </View>
+                      <View style={styles.popularityNotchesWithNumRow}>
+                        <View style={styles.notchesBarCompact}>
+                          {[1, 2, 3].map((lvl) => (
+                            <View
+                              key={`pop_${lvl}`}
+                              style={[
+                                styles.notchSegmentCompact,
+                                { backgroundColor: lvl <= popNotches ? filledColor : emptyColor },
+                              ]}
+                            />
+                          ))}
+                        </View>
+                        <Text style={[styles.rankingValueInline, { color: colors.text }]}>
+                          {popPercent}%
+                        </Text>
+                      </View>
+                    </View>
+
+                    {/* 2. Avg 10-Rep Weight with male and female symbols and amounts in the same row */}
+                    <View style={styles.rankingCol}>
+                      <View style={styles.rankingLabelRow}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+                          <Text style={[styles.rankingTitle, { color: colors.text }]}>Avg 10-Rep</Text>
+                          <Ionicons name="scale-outline" size={13} color={colors.textSecondary} />
+                        </View>
+                      </View>
+                      <View style={styles.genderWeightsRow}>
+                        <View style={styles.genderItem}>
+                          <Ionicons name="male" size={13} color={colors.text} />
+                          <Text style={[styles.genderWeightText, { color: colors.text }]}>
+                            {maleAvgWeight10Reps}
+                          </Text>
+                        </View>
+                        <View style={styles.genderItem}>
+                          <Ionicons name="female" size={13} color={colors.text} />
+                          <Text style={[styles.genderWeightText, { color: colors.text }]}>
+                            {femaleAvgWeight10Reps}
+                          </Text>
+                        </View>
+                      </View>
+                    </View>
+                  </View>
+                </View>
+              </Animated.View>
+            );
+          })()}
         </View>
 
 
-        {/* ── EXERCISE SEARCH & SELECTION ── */}
-        <View style={styles.sectionHeaderRow}>
-          <Text style={[styles.sectionHeading, { color: colors.textMuted }]}>
-            SELECT EXERCISE
-          </Text>
-          <Text style={[styles.unitBadge, { color: colors.textSecondary }]}>
+        {/* Results Counter Above Search Bar */}
+        <View style={styles.resultsCountOnlyRow}>
+          <Text style={[styles.unitBadge, { color: colors.textMuted }]}>
             {filteredExercises.length} found
           </Text>
         </View>
 
         {/* Exercise Search Input Box */}
-        <View style={[styles.exerciseSearchBar, { backgroundColor: colors.surfaceElevated, borderColor: colors.border }]}>
+        <View style={[styles.exerciseSearchBar, { backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : '#e9e9eb' }]}>
           <Ionicons name="search" size={17} color={colors.textMuted} style={{ marginRight: 8 }} />
           <TextInput
             style={[styles.exerciseSearchInput, { color: colors.text }]}
-            placeholder="Type exercise name (e.g. bench, squat, pull up, curl)..."
+            placeholder="Search exercises"
             placeholderTextColor={colors.textMuted}
             value={exerciseSearchQuery}
             onChangeText={(text) => setExerciseSearchQuery(text)}
@@ -659,265 +1360,639 @@ export default function LogScreen() {
           )}
         </View>
 
-        {/* Quick Filter Category Pills */}
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.categoryPillsRow}
-        >
-          {[
-            { id: 'all', label: 'All (100+)' },
-            { id: 'chest', label: 'Chest' },
-            { id: 'back', label: 'Back' },
-            { id: 'legs', label: 'Legs' },
-            { id: 'shoulders', label: 'Shoulders' },
-            { id: 'arms', label: 'Arms' },
-            { id: 'core', label: 'Core' },
-            { id: 'cardio', label: 'Cardio' },
-          ].map((cat) => {
-            const isSelected = selectedCategory === cat.id;
-            return (
-              <TouchableOpacity
-                key={cat.id}
+        {/* 3 Dropdown Filter Bubbles: Muscle Group, Difficulty, and Type */}
+        <View style={styles.dropdownBubblesContainer}>
+          <View style={styles.dropdownBubblesRow}>
+            {/* 1. Muscle Group Bubble */}
+            <TouchableOpacity
+              style={[
+                styles.filterDropdownPill,
+                {
+                  backgroundColor:
+                    selectedMuscleFilter !== 'all'
+                      ? colors.primary
+                      : colors.surfaceElevated,
+                  borderColor:
+                    selectedMuscleFilter !== 'all' || activeDropdown === 'muscle'
+                      ? colors.primary
+                      : colors.surfaceSecondary,
+                },
+              ]}
+              onPress={() => {
+                Haptics.selectionAsync().catch(() => {});
+                setActiveDropdown((cur) => (cur === 'muscle' ? null : 'muscle'));
+              }}
+              activeOpacity={0.75}
+            >
+              <Ionicons
+                name="body-outline"
+                size={14}
+                color={selectedMuscleFilter !== 'all' ? '#ffffff' : colors.textMuted}
+              />
+              <Text
                 style={[
-                  styles.muscleGroupPill,
+                  styles.filterDropdownPillText,
                   {
-                    backgroundColor: isSelected ? colors.primary : colors.surfaceElevated,
-                    borderColor: isSelected ? colors.primary : colors.border,
+                    color: selectedMuscleFilter !== 'all' ? '#ffffff' : colors.text,
                   },
                 ]}
-                onPress={() => {
-                  Haptics.selectionAsync().catch(() => {});
-                  setSelectedCategory(cat.id);
-                }}
-                activeOpacity={0.7}
+                numberOfLines={1}
               >
-                <Text
-                  style={[
-                    styles.muscleGroupPillText,
-                    {
-                      color: isSelected ? (isDark ? '#09090b' : '#ffffff') : colors.text,
-                      fontWeight: isSelected ? '800' : '600',
-                    },
-                  ]}
-                >
-                  {cat.label}
-                </Text>
-              </TouchableOpacity>
-            );
-          })}
-        </ScrollView>
+                {selectedMuscleFilter === 'all'
+                  ? 'Muscle'
+                  : selectedMuscleFilter.charAt(0).toUpperCase() + selectedMuscleFilter.slice(1)}
+              </Text>
+              <Ionicons
+                name={activeDropdown === 'muscle' ? 'chevron-up' : 'chevron-down'}
+                size={13}
+                color={selectedMuscleFilter !== 'all' ? '#ffffff' : colors.textMuted}
+              />
+            </TouchableOpacity>
 
-        {/* Dropdown / Results List Below the Search */}
-        <View style={[styles.exerciseResultsCard, { backgroundColor: colors.surfaceElevated, borderColor: colors.border }]}>
-          <ScrollView
-            style={styles.exerciseResultsScroll}
-            nestedScrollEnabled
-            showsVerticalScrollIndicator={true}
-            keyboardShouldPersistTaps="handled"
-          >
-            {filteredExercises.length === 0 ? (
-              <View style={styles.noExercisesFoundBox}>
-                <Ionicons name="search-outline" size={24} color={colors.textMuted} style={{ marginBottom: 6 }} />
-                <Text style={[styles.noExercisesFoundText, { color: colors.textMuted }]}>
-                  No exercises matching "{exerciseSearchQuery}"
-                </Text>
-              </View>
-            ) : (
-              filteredExercises.map((item, idx) => {
-                const isSelected = selectedExercise.id === item.id;
-                const isLast = idx === filteredExercises.length - 1;
-                return (
-                  <TouchableOpacity
-                    key={item.id}
-                    style={[
-                      styles.exerciseListItem,
-                      {
-                        backgroundColor: isSelected ? (isDark ? 'rgba(16,185,129,0.14)' : 'rgba(16,185,129,0.08)') : 'transparent',
-                        borderBottomColor: isLast ? 'transparent' : colors.border,
-                        borderBottomWidth: isLast ? 0 : StyleSheet.hairlineWidth,
-                      },
-                    ]}
-                    onPress={() => handleSelectExercise(item)}
-                    activeOpacity={0.75}
-                  >
-                    <View style={styles.exerciseListItemLeft}>
-                      <View style={{ flex: 1 }}>
+            {/* 2. Difficulty Bubble */}
+            <TouchableOpacity
+              style={[
+                styles.filterDropdownPill,
+                {
+                  backgroundColor:
+                    selectedDifficultyFilter !== 'all'
+                      ? colors.primary
+                      : colors.surfaceElevated,
+                  borderColor:
+                    selectedDifficultyFilter !== 'all' || activeDropdown === 'difficulty'
+                      ? colors.primary
+                      : colors.surfaceSecondary,
+                },
+              ]}
+              onPress={() => {
+                Haptics.selectionAsync().catch(() => {});
+                setActiveDropdown((cur) => (cur === 'difficulty' ? null : 'difficulty'));
+              }}
+              activeOpacity={0.75}
+            >
+              <Ionicons
+                name="barbell-outline"
+                size={14}
+                color={selectedDifficultyFilter !== 'all' ? '#ffffff' : colors.textMuted}
+              />
+              <Text
+                style={[
+                  styles.filterDropdownPillText,
+                  {
+                    color: selectedDifficultyFilter !== 'all' ? '#ffffff' : colors.text,
+                  },
+                ]}
+                numberOfLines={1}
+              >
+                {selectedDifficultyFilter === 'all'
+                  ? 'Difficulty'
+                  : selectedDifficultyFilter.charAt(0).toUpperCase() + selectedDifficultyFilter.slice(1)}
+              </Text>
+              <Ionicons
+                name={activeDropdown === 'difficulty' ? 'chevron-up' : 'chevron-down'}
+                size={13}
+                color={selectedDifficultyFilter !== 'all' ? '#ffffff' : colors.textMuted}
+              />
+            </TouchableOpacity>
+
+            {/* 3. Type / Equipment Bubble */}
+            <TouchableOpacity
+              style={[
+                styles.filterDropdownPill,
+                {
+                  backgroundColor:
+                    selectedTypeFilter !== 'all'
+                      ? colors.primary
+                      : colors.surfaceElevated,
+                  borderColor:
+                    selectedTypeFilter !== 'all' || activeDropdown === 'type'
+                      ? colors.primary
+                      : colors.surfaceSecondary,
+                },
+              ]}
+              onPress={() => {
+                Haptics.selectionAsync().catch(() => {});
+                setActiveDropdown((cur) => (cur === 'type' ? null : 'type'));
+              }}
+              activeOpacity={0.75}
+            >
+              <Ionicons
+                name="hardware-chip-outline"
+                size={14}
+                color={selectedTypeFilter !== 'all' ? '#ffffff' : colors.textMuted}
+              />
+              <Text
+                style={[
+                  styles.filterDropdownPillText,
+                  {
+                    color: selectedTypeFilter !== 'all' ? '#ffffff' : colors.text,
+                  },
+                ]}
+                numberOfLines={1}
+              >
+                {selectedTypeFilter === 'all'
+                  ? 'Type'
+                  : selectedTypeFilter === 'bodyweight'
+                  ? 'Body'
+                  : selectedTypeFilter.charAt(0).toUpperCase() + selectedTypeFilter.slice(1)}
+              </Text>
+              <Ionicons
+                name={activeDropdown === 'type' ? 'chevron-up' : 'chevron-down'}
+                size={13}
+                color={selectedTypeFilter !== 'all' ? '#ffffff' : colors.textMuted}
+              />
+            </TouchableOpacity>
+          </View>
+
+          {/* Active Dropdown Options Drawer */}
+          {activeDropdown && (
+            <View style={[styles.filterDropdownDrawer, { backgroundColor: colors.surfaceElevated, borderColor: colors.surfaceSecondary }]}>
+              {activeDropdown === 'muscle' && (
+                <View style={styles.dropdownOptionsGrid}>
+                  {[
+                    { id: 'all', label: 'All Muscles' },
+                    { id: 'chest', label: 'Chest' },
+                    { id: 'back', label: 'Back' },
+                    { id: 'legs', label: 'Legs' },
+                    { id: 'shoulders', label: 'Shoulders' },
+                    { id: 'arms', label: 'Arms' },
+                    { id: 'core', label: 'Core' },
+                    { id: 'cardio', label: 'Cardio' },
+                  ].map((opt) => {
+                    const isChosen = selectedMuscleFilter === opt.id;
+                    return (
+                      <TouchableOpacity
+                        key={opt.id}
+                        style={[
+                          styles.dropdownOptionChip,
+                          {
+                            backgroundColor: isChosen ? colors.primary : colors.surfaceSecondary,
+                          },
+                        ]}
+                        onPress={() => {
+                          Haptics.selectionAsync().catch(() => {});
+                          setSelectedMuscleFilter(opt.id);
+                          setActiveDropdown(null);
+                        }}
+                        activeOpacity={0.75}
+                      >
                         <Text
                           style={[
-                            styles.exerciseListItemName,
-                            {
-                              color: isSelected ? colors.primary : colors.text,
-                              fontWeight: isSelected ? '800' : '600',
-                            },
+                            styles.dropdownOptionChipText,
+                            { color: isChosen ? '#09090b' : colors.text },
                           ]}
-                          numberOfLines={1}
                         >
-                          {item.name}
+                          {opt.label}
                         </Text>
-                        <Text style={[styles.exerciseListItemMeta, { color: colors.textMuted }]}>
-                          {item.category.toUpperCase()} · default {item.defaultReps} reps {item.defaultWeight > 0 ? `@ ${item.defaultWeight} lbs` : '(bodyweight)'}
-                        </Text>
-                      </View>
-                    </View>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              )}
 
-                    {isSelected ? (
-                      <Ionicons name="checkmark-circle" size={19} color={colors.primary} />
-                    ) : (
-                      <Ionicons name="chevron-forward" size={16} color={colors.textMuted} opacity={0.6} />
-                    )}
-                  </TouchableOpacity>
-                );
-              })
-            )}
-          </ScrollView>
+              {activeDropdown === 'difficulty' && (
+                <View style={styles.dropdownOptionsGrid}>
+                  {[
+                    { id: 'all', label: 'All Levels' },
+                    { id: 'beginner', label: 'Beginner' },
+                    { id: 'intermediate', label: 'Intermediate' },
+                    { id: 'advanced', label: 'Advanced' },
+                  ].map((opt) => {
+                    const isChosen = selectedDifficultyFilter === opt.id;
+                    return (
+                      <TouchableOpacity
+                        key={opt.id}
+                        style={[
+                          styles.dropdownOptionChip,
+                          {
+                            backgroundColor: isChosen ? colors.primary : colors.surfaceSecondary,
+                          },
+                        ]}
+                        onPress={() => {
+                          Haptics.selectionAsync().catch(() => {});
+                          setSelectedDifficultyFilter(opt.id);
+                          setActiveDropdown(null);
+                        }}
+                        activeOpacity={0.75}
+                      >
+                        <Text
+                          style={[
+                            styles.dropdownOptionChipText,
+                            { color: isChosen ? '#09090b' : colors.text },
+                          ]}
+                        >
+                          {opt.label}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              )}
+
+              {activeDropdown === 'type' && (
+                <View style={styles.dropdownOptionsGrid}>
+                  {[
+                    { id: 'all', label: 'All Types' },
+                    { id: 'barbell', label: 'Barbell' },
+                    { id: 'dumbbell', label: 'Dumbbell' },
+                    { id: 'cable', label: 'Cable' },
+                    { id: 'machine', label: 'Machine' },
+                    { id: 'bodyweight', label: 'Bodyweight' },
+                  ].map((opt) => {
+                    const isChosen = selectedTypeFilter === opt.id;
+                    return (
+                      <TouchableOpacity
+                        key={opt.id}
+                        style={[
+                          styles.dropdownOptionChip,
+                          {
+                            backgroundColor: isChosen ? colors.primary : colors.surfaceSecondary,
+                          },
+                        ]}
+                        onPress={() => {
+                          Haptics.selectionAsync().catch(() => {});
+                          setSelectedTypeFilter(opt.id);
+                          setActiveDropdown(null);
+                        }}
+                        activeOpacity={0.75}
+                      >
+                        <Text
+                          style={[
+                            styles.dropdownOptionChipText,
+                            { color: isChosen ? '#09090b' : colors.text },
+                          ]}
+                        >
+                          {opt.label}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              )}
+            </View>
+          )}
         </View>
 
-        {/* ── SECTION 2: INPUT REPS & WEIGHT ── */}
-        <View style={[styles.logInputCard, { backgroundColor: colors.surfaceElevated, borderColor: colors.border }]}>
+        {/* Dropdown / Results List Below the Search */}
+        <View style={[styles.exerciseResultsCard, { backgroundColor: colors.surfaceElevated }]}>
+          {filteredExercises.length === 0 ? (
+            <View style={styles.noExercisesFoundBox}>
+              <Ionicons name="search-outline" size={24} color={colors.textMuted} style={{ marginBottom: 6 }} />
+              <Text style={[styles.noExercisesFoundText, { color: colors.textMuted }]}>
+                No exercises matching "{exerciseSearchQuery}"
+              </Text>
+            </View>
+          ) : (
+            <ScrollView
+              style={styles.exerciseResultsScroll}
+              nestedScrollEnabled
+              showsVerticalScrollIndicator={true}
+              keyboardShouldPersistTaps="handled"
+            >
+              {filteredExercises.slice(0, 50).map((item, index) => (
+                <ExerciseRowItem
+                  key={item.id}
+                  item={item}
+                  isSelected={selectedExercise.id === item.id}
+                  isLast={index === filteredExercises.length - 1}
+                  isDark={isDark}
+                  primaryColor={colors.primary}
+                  textColor={colors.text}
+                  textMutedColor={colors.textMuted}
+                  onSelect={handleSelectExercise}
+                  onExpandHero={handleExpandHeroForExercise}
+                />
+              ))}
+            </ScrollView>
+          )}
+        </View>
+
+        {/* ── SECTION 2: INPUT REPS & WEIGHT (MULTIPLE SETS SUPPORTED) ── */}
+        <View style={[styles.logInputCard, { backgroundColor: colors.surfaceElevated }]}>
           <View style={styles.logCardHeader}>
-            <View>
+            <View style={{ flex: 1 }}>
               <Text style={[styles.selectedTitle, { color: colors.text }]}>
                 {selectedExercise.name}
               </Text>
             </View>
+
+            {/* Add Set Button */}
+            <TouchableOpacity
+              onPress={addExerciseSetRow}
+              style={[
+                styles.addSetHeaderBtn,
+                { backgroundColor: colors.surfaceSecondary || colors.card },
+              ]}
+              activeOpacity={0.7}
+            >
+              <Ionicons name="add" size={16} color={colors.primary} />
+              <Text style={[styles.addSetHeaderBtnText, { color: colors.primary }]}>Add Set</Text>
+            </TouchableOpacity>
           </View>
 
-          {/* Stepper / Input Row: Reps & Weight */}
-          <View style={styles.inputsRow}>
-            {/* Reps Input */}
-            <View style={styles.inputCol}>
-              <View style={styles.inputLabelHeaderRow}>
-                <Text style={[styles.inputLabel, { color: colors.textMuted }]}>REPS</Text>
-                {repsDiff > 0 && (
-                  <View style={[styles.increaseFilledBadge, { backgroundColor: colors.primary }]}>
-                    <Text style={[styles.increaseTriangleGlyph, { color: isDark ? '#09090b' : '#ffffff' }]}>▲</Text>
-                    <Text style={[styles.increaseAmountText, { color: isDark ? '#09090b' : '#ffffff' }]}>
-                      +{repsDiff}
-                    </Text>
-                  </View>
-                )}
-                {repsDiff < 0 && (
-                  <View style={[styles.decreaseFilledBadge, { backgroundColor: '#ef4444' }]}>
-                    <Text style={styles.decreaseTriangleGlyph}>▼</Text>
-                    <Text style={styles.decreaseAmountText}>
-                      {repsDiff}
-                    </Text>
-                  </View>
-                )}
-              </View>
-              <View style={[styles.numberBox, { backgroundColor: colors.card, borderColor: colors.border }]}>
-                <TouchableOpacity
-                  style={styles.stepBtn}
-                  onPress={() => {
-                    Haptics.selectionAsync().catch(() => {});
-                    const cur = parseInt(repsInput, 10) || 0;
-                    setRepsInput(String(Math.max(1, cur - 1)));
-                  }}
-                  activeOpacity={0.7}
-                >
-                  <Ionicons name="remove" size={18} color={colors.text} />
-                </TouchableOpacity>
-                <TextInput
-                  style={[styles.numericInput, { color: colors.text }]}
-                  keyboardType="numeric"
-                  value={repsInput}
-                  onChangeText={setRepsInput}
-                  selectTextOnFocus
-                />
-                <TouchableOpacity
-                  style={styles.stepBtn}
-                  onPress={() => {
-                    Haptics.selectionAsync().catch(() => {});
-                    const cur = parseInt(repsInput, 10) || 0;
-                    setRepsInput(String(cur + 1));
-                  }}
-                  activeOpacity={0.7}
-                >
-                  <Ionicons name="add" size={18} color={colors.text} />
-                </TouchableOpacity>
-              </View>
-            </View>
+          {/* List of Sets */}
+          <View style={{ gap: 12, marginBottom: 14 }}>
+            {(() => {
+              let runningNum = 1;
+              return exerciseSets.map((sItem, sIndex) => {
+                const mult = sItem.multiplier || 1;
+                const startNum = runningNum;
+                const endNum = runningNum + mult - 1;
+                runningNum += mult;
+                const setLabel = mult > 1 ? `SETS ${startNum}-${endNum}` : `SET ${startNum}`;
 
-            {/* Weight Input */}
-            <View style={styles.inputCol}>
-              <View style={styles.inputLabelHeaderRow}>
-                <Text style={[styles.inputLabel, { color: colors.textMuted }]}>
-                  WEIGHT ({effectiveWeightUnit})
-                </Text>
-                {weightDiff > 0 && (
-                  <View style={[styles.increaseFilledBadge, { backgroundColor: colors.primary }]}>
-                    <Text style={[styles.increaseTriangleGlyph, { color: isDark ? '#09090b' : '#ffffff' }]}>▲</Text>
-                    <Text style={[styles.increaseAmountText, { color: isDark ? '#09090b' : '#ffffff' }]}>
-                      +{weightDiff}
-                    </Text>
-                  </View>
-                )}
-                {weightDiff < 0 && (
-                  <View style={[styles.decreaseFilledBadge, { backgroundColor: '#ef4444' }]}>
-                    <Text style={styles.decreaseTriangleGlyph}>▼</Text>
-                    <Text style={styles.decreaseAmountText}>
-                      {weightDiff}
-                    </Text>
-                  </View>
-                )}
-              </View>
-              <View style={[styles.numberBox, { backgroundColor: colors.card, borderColor: colors.border }]}>
-                <TouchableOpacity
-                  style={styles.stepBtn}
-                  onPress={() => {
-                    Haptics.selectionAsync().catch(() => {});
-                    const cur = parseFloat(weightInput) || 0;
-                    setWeightInput(String(Math.max(0, cur - 5)));
-                  }}
-                  activeOpacity={0.7}
-                >
-                  <Ionicons name="remove" size={18} color={colors.text} />
-                </TouchableOpacity>
-                <TextInput
-                  style={[styles.numericInput, { color: colors.text }]}
-                  keyboardType="numeric"
-                  value={weightInput}
-                  onChangeText={setWeightInput}
-                  selectTextOnFocus
-                />
-                <TouchableOpacity
-                  style={styles.stepBtn}
-                  onPress={() => {
-                    Haptics.selectionAsync().catch(() => {});
-                    const cur = parseFloat(weightInput) || 0;
-                    setWeightInput(String(cur + 5));
-                  }}
-                  activeOpacity={0.7}
-                >
-                  <Ionicons name="add" size={18} color={colors.text} />
-                </TouchableOpacity>
-              </View>
-            </View>
-          </View>
+                const rNum = parseInt(sItem.reps, 10) || 0;
+                const wNum = parseFloat(sItem.weight) || 0;
+                const sRepsDiff = rNum - prevReps;
+                const sWeightDiff = wNum - prevWeight;
 
-          {/* Quick Weight Adjust Pills */}
-          <View style={styles.quickWeightRow}>
-            {[-10, -5, +5, +10, +25].map((delta) => (
-              <TouchableOpacity
-                key={delta}
-                style={[styles.quickWeightPill, { backgroundColor: colors.card, borderColor: colors.border }]}
-                onPress={() => {
-                  Haptics.selectionAsync().catch(() => {});
-                  const cur = parseFloat(weightInput) || 0;
-                  setWeightInput(String(Math.max(0, cur + delta)));
-                }}
-                activeOpacity={0.7}
-              >
-                <Text style={[styles.quickWeightText, { color: colors.textSecondary }]}>
-                  {delta > 0 ? `+${delta}` : delta}
-                </Text>
-              </TouchableOpacity>
-            ))}
+                return (
+                  <View
+                    key={sItem.id}
+                    style={[
+                      styles.logScreenSetCard,
+                      {
+                        backgroundColor: colors.card,
+                      },
+                    ]}
+                  >
+                    {/* Set Top Meta Bar: Set number, Multiplier Pill, Delete button */}
+                    <View style={styles.logScreenSetTopRow}>
+                      <Text style={[styles.logScreenSetIndexLabel, { color: colors.textSecondary }]}>
+                        {setLabel}
+                      </Text>
+
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                      {/* Circular repetition indicator: clean repeat loop with centered number */}
+                      <TouchableOpacity
+                        style={[
+                          styles.multiplierCircle,
+                          {
+                            backgroundColor:
+                              sItem.multiplier > 1
+                                ? colors.primary
+                                : isDark
+                                ? 'rgba(255,255,255,0.06)'
+                                : '#f1f5f9',
+                            borderColor:
+                              sItem.multiplier > 1
+                                ? colors.primary
+                                : isDark
+                                ? 'rgba(255,255,255,0.12)'
+                                : '#cbd5e1',
+                          },
+                        ]}
+                        onPress={() => cycleSetMultiplier(sIndex)}
+                        activeOpacity={0.75}
+                        accessibilityLabel={`Multiplier ${sItem.multiplier}x`}
+                      >
+                        {(() => {
+                          const iconColor = sItem.multiplier > 1
+                            ? (isDark ? '#000000' : '#ffffff')
+                            : (isDark ? '#cbd5e1' : '#64748b');
+                          return (
+                            <View style={styles.multiplierIconStack}>
+                              <Svg width={28} height={28} viewBox="0 0 28 28">
+                                {/* Top clockwise arc with arrowhead */}
+                                <SvgPath
+                                  d="M14 3.5 A 10.5 10.5 0 0 1 24.5 14"
+                                  fill="none"
+                                  stroke={iconColor}
+                                  strokeWidth="1.8"
+                                  strokeLinecap="round"
+                                />
+                                <SvgPath
+                                  d="M21.5 14 L24.5 14 L24.5 11"
+                                  fill="none"
+                                  stroke={iconColor}
+                                  strokeWidth="1.8"
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                />
+                                {/* Bottom clockwise arc with arrowhead */}
+                                <SvgPath
+                                  d="M14 24.5 A 10.5 10.5 0 0 1 3.5 14"
+                                  fill="none"
+                                  stroke={iconColor}
+                                  strokeWidth="1.8"
+                                  strokeLinecap="round"
+                                />
+                                <SvgPath
+                                  d="M6.5 14 L3.5 14 L3.5 17"
+                                  fill="none"
+                                  stroke={iconColor}
+                                  strokeWidth="1.8"
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                />
+                                {/* Centered number rendered directly inside the SVG coordinate center */}
+                                <SvgText
+                                  x="14"
+                                  y="17.5"
+                                  fontSize="9.5"
+                                  fontWeight="800"
+                                  fill={iconColor}
+                                  textAnchor="middle"
+                                >
+                                  {sItem.multiplier}
+                                </SvgText>
+                              </Svg>
+                            </View>
+                          );
+                        })()}
+                      </TouchableOpacity>
+
+                      {/* Delete button (when > 1 set) */}
+                      {exerciseSets.length > 1 && (
+                        <TouchableOpacity
+                          onPress={() => removeExerciseSetRow(sIndex)}
+                          style={styles.deleteSetBtn}
+                          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                        >
+                          <Ionicons name="trash-outline" size={15} color={colors.textMuted} />
+                        </TouchableOpacity>
+                      )}
+                    </View>
+                  </View>
+
+                  {/* Stepper / Input Row: Reps & Weight for this Set */}
+                  <View style={styles.inputsRow}>
+                    {/* Reps Input */}
+                    <View style={styles.inputCol}>
+                      <View style={styles.inputLabelHeaderRow}>
+                        <Text style={[styles.inputLabel, { color: colors.textMuted }]}>REPS</Text>
+                        {sRepsDiff > 0 && (
+                          <View
+                            style={[
+                              styles.increaseFilledBadge,
+                              { backgroundColor: colors.primary },
+                            ]}
+                          >
+                            <Text
+                              style={[
+                                styles.increaseTriangleGlyph,
+                                { color: isDark ? '#09090b' : '#ffffff' },
+                              ]}
+                            >
+                              ▲
+                            </Text>
+                            <Text
+                              style={[
+                                styles.increaseAmountText,
+                                { color: isDark ? '#09090b' : '#ffffff' },
+                              ]}
+                            >
+                              +{sRepsDiff}
+                            </Text>
+                          </View>
+                        )}
+                        {sRepsDiff < 0 && (
+                          <View
+                            style={[
+                              styles.decreaseFilledBadge,
+                              { backgroundColor: '#ef4444' },
+                            ]}
+                          >
+                            <Text style={styles.decreaseTriangleGlyph}>▼</Text>
+                            <Text style={styles.decreaseAmountText}>{sRepsDiff}</Text>
+                          </View>
+                        )}
+                      </View>
+                      <View
+                        style={[
+                          styles.numberBox,
+                          { backgroundColor: colors.surfaceElevated },
+                        ]}
+                      >
+                        <TouchableOpacity
+                          style={styles.stepBtn}
+                          onPress={() => updateSetReps(sIndex, -1)}
+                          activeOpacity={0.7}
+                        >
+                          <Ionicons name="remove" size={18} color={colors.text} />
+                        </TouchableOpacity>
+                        <TextInput
+                          style={[styles.numericInput, { color: colors.text }]}
+                          keyboardType="numeric"
+                          value={sItem.reps}
+                          onChangeText={(txt) => setDirectSetReps(sIndex, txt)}
+                          selectTextOnFocus
+                        />
+                        <TouchableOpacity
+                          style={styles.stepBtn}
+                          onPress={() => updateSetReps(sIndex, 1)}
+                          activeOpacity={0.7}
+                        >
+                          <Ionicons name="add" size={18} color={colors.text} />
+                        </TouchableOpacity>
+                      </View>
+                    </View>
+
+                    {/* Weight Input */}
+                    <View style={styles.inputCol}>
+                      <View style={styles.inputLabelHeaderRow}>
+                        <Text style={[styles.inputLabel, { color: colors.textMuted }]}>
+                          WEIGHT ({effectiveWeightUnit})
+                        </Text>
+                        {sWeightDiff > 0 && (
+                          <View
+                            style={[
+                              styles.increaseFilledBadge,
+                              { backgroundColor: colors.primary },
+                            ]}
+                          >
+                            <Text
+                              style={[
+                                styles.increaseTriangleGlyph,
+                                { color: isDark ? '#09090b' : '#ffffff' },
+                              ]}
+                            >
+                              ▲
+                            </Text>
+                            <Text
+                              style={[
+                                styles.increaseAmountText,
+                                { color: isDark ? '#09090b' : '#ffffff' },
+                              ]}
+                            >
+                              +{sWeightDiff}
+                            </Text>
+                          </View>
+                        )}
+                        {sWeightDiff < 0 && (
+                          <View
+                            style={[
+                              styles.decreaseFilledBadge,
+                              { backgroundColor: '#ef4444' },
+                            ]}
+                          >
+                            <Text style={styles.decreaseTriangleGlyph}>▼</Text>
+                            <Text style={styles.decreaseAmountText}>{sWeightDiff}</Text>
+                          </View>
+                        )}
+                      </View>
+                      <View
+                        style={[
+                          styles.numberBox,
+                          { backgroundColor: colors.surfaceElevated },
+                        ]}
+                      >
+                        <TouchableOpacity
+                          style={styles.stepBtn}
+                          onPress={() => updateSetWeight(sIndex, -5)}
+                          activeOpacity={0.7}
+                        >
+                          <Ionicons name="remove" size={18} color={colors.text} />
+                        </TouchableOpacity>
+                        <TextInput
+                          style={[styles.numericInput, { color: colors.text }]}
+                          keyboardType="numeric"
+                          value={sItem.weight}
+                          onChangeText={(txt) => setDirectSetWeight(sIndex, txt)}
+                          selectTextOnFocus
+                        />
+                        <TouchableOpacity
+                          style={styles.stepBtn}
+                          onPress={() => updateSetWeight(sIndex, 5)}
+                          activeOpacity={0.7}
+                        >
+                          <Ionicons name="add" size={18} color={colors.text} />
+                        </TouchableOpacity>
+                      </View>
+                    </View>
+                  </View>
+
+                  {/* Quick Weight Adjust Pills for this set */}
+                  <View style={styles.quickWeightRow}>
+                    {[-10, -5, +5, +10, +25].map((delta) => (
+                      <TouchableOpacity
+                        key={delta}
+                        style={[
+                          styles.quickWeightPill,
+                          { backgroundColor: colors.surfaceElevated },
+                        ]}
+                        onPress={() => updateSetWeight(sIndex, delta)}
+                        activeOpacity={0.7}
+                      >
+                        <Text
+                          style={[
+                            styles.quickWeightText,
+                            { color: colors.textSecondary },
+                          ]}
+                        >
+                          {delta > 0 ? `+${delta}` : delta}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                </View>
+              );
+            });
+          })()}
           </View>
 
           {/* Optional Notes Input */}
-          <View style={[styles.notesWrapper, { backgroundColor: colors.card, borderColor: colors.border }]}>
+          <View style={[styles.notesWrapper, { backgroundColor: colors.card }]}>
             <TextInput
               style={[styles.notesInput, { color: colors.text }]}
               placeholder="Notes / form observations (optional)"
@@ -927,17 +2002,46 @@ export default function LogScreen() {
             />
           </View>
 
-          {/* LOG SET BUTTON */}
-          <TouchableOpacity
-            style={[styles.logSubmitBtn, { backgroundColor: colors.primary }]}
-            onPress={handleLogWorkout}
-            activeOpacity={0.85}
-          >
-            <Ionicons name="checkmark-done" size={20} color={isDark ? '#09090b' : '#ffffff'} />
-            <Text style={[styles.logSubmitBtnText, { color: isDark ? '#09090b' : '#ffffff' }]}>
-              Log {weightInput} {effectiveWeightUnit} × {repsInput} Reps
-            </Text>
-          </TouchableOpacity>
+          {/* LOG SET(S) BUTTON WITH SATISFYING FILL & CHECK ANIMATION */}
+          {(() => {
+            const totalSetsToLog = exerciseSets.reduce(
+              (acc, s) => acc + (s.multiplier || 1),
+              0
+            );
+            const btnBg = logSuccessFill.interpolate({
+              inputRange: [0, 1],
+              outputRange: [colors.primary, '#10b981'],
+            });
+
+            return (
+              <Animated.View style={{ transform: [{ scale: logButtonScale }] }}>
+                <TouchableOpacity
+                  onPress={handleLogWorkout}
+                  activeOpacity={0.85}
+                >
+                  <Animated.View style={[styles.logSubmitBtn, { backgroundColor: btnBg }]}>
+                    <Animated.View style={{ transform: [{ scale: logCheckScale }] }}>
+                      <Ionicons
+                        name={loggedSuccess ? 'checkmark-circle' : 'checkmark-done'}
+                        size={loggedSuccess ? 22 : 20}
+                        color={isDark ? '#09090b' : '#ffffff'}
+                      />
+                    </Animated.View>
+                    <Text
+                      style={[
+                        styles.logSubmitBtnText,
+                        { color: isDark ? '#09090b' : '#ffffff' },
+                      ]}
+                    >
+                      {loggedSuccess
+                        ? `Logged ${totalSetsToLog} Set${totalSetsToLog > 1 ? 's' : ''}!`
+                        : `Log ${totalSetsToLog} Set${totalSetsToLog > 1 ? 's' : ''} for ${selectedExercise.name}`}
+                    </Text>
+                  </Animated.View>
+                </TouchableOpacity>
+              </Animated.View>
+            );
+          })()}
         </View>
       </ScrollView>
 
@@ -1002,7 +2106,7 @@ export default function LogScreen() {
 
             {/* Exercises Selector for this routine */}
             <Text style={[styles.modalSectionLabel, { color: colors.textMuted }]}>
-              EXERCISES IN THIS DAY ({selectedExIdsForRoutine.length} SELECTED):
+              CHOOSE EXERCISES FOR THIS DAY ({selectedExIdsForRoutine.length} SELECTED):
             </Text>
 
             <ScrollView style={styles.modalExerciseList} showsVerticalScrollIndicator={false}>
@@ -1030,16 +2134,16 @@ export default function LogScreen() {
                   >
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 }}>
                       {ex.imageUrl ? (
-                        <Image source={{ uri: ex.imageUrl }} style={{ width: 22, height: 22, borderRadius: 5 }} />
+                        <Image source={{ uri: ex.imageUrl }} style={{ width: 26, height: 26, borderRadius: 6 }} resizeMode="contain" />
                       ) : (
-                        <Ionicons name="barbell-outline" size={16} color={isSelected ? newRoutineColor : colors.textMuted} />
+                        <Ionicons name="barbell-outline" size={18} color={isSelected ? newRoutineColor : colors.textMuted} />
                       )}
                       <View style={{ flex: 1 }}>
                         <Text style={[styles.modalExName, { color: isSelected ? colors.text : colors.textMuted }]}>
                           {ex.name}
                         </Text>
                         <Text style={[styles.modalExMeta, { color: colors.textMuted }]}>
-                          {ex.category.toUpperCase()} · {ex.defaultReps} reps @ {ex.defaultWeight} lbs
+                          {ex.category.toUpperCase()}{ex.primaryMuscles ? ` · ${ex.primaryMuscles.join(', ')}` : ''}
                         </Text>
                       </View>
                     </View>
@@ -1271,12 +2375,59 @@ export default function LogScreen() {
           loadData();
         }}
       />
+
+      {/* Interactive Workout Session Modal (Live Dynamic Island Timer, Rest, Past Workout Log) */}
+      <WorkoutSessionModal
+        visible={!!activeSessionRoutine}
+        routine={activeSessionRoutine}
+        allLogs={allLogs}
+        userId={userId}
+        weightUnit={effectiveWeightUnit}
+        onClose={() => setActiveSessionRoutine(null)}
+        onFinishSession={(count) => {
+          setActiveSessionRoutine(null);
+          loadData();
+          setBatchSuccessMsg(`Logged ${count} exercises from workout session!`);
+          setLoggedSuccess(true);
+          setTimeout(() => {
+            setBatchSuccessMsg(null);
+            setLoggedSuccess(false);
+          }, 4500);
+        }}
+      />
     </View>
   );
 }
 
 
 const styles = StyleSheet.create({
+  multiplierCircle: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  multiplierIconStack: {
+    width: 28,
+    height: 28,
+    alignItems: 'center',
+    justifyContent: 'center',
+    position: 'relative',
+  },
+  multiplierNumberCenterWrap: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  multiplierCircleText: {
+    fontFamily: BRAND_ROUNDED_FONT_EXTRA,
+    fontSize: 10,
+    fontWeight: '800',
+    includeFontPadding: false,
+    textAlign: 'center',
+  },
   container: {
     flex: 1,
   },
@@ -1291,9 +2442,9 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   screenTitle: {
-    fontFamily: SERIF_FONT,
-    fontSize: 34,
-    fontWeight: '700',
+    fontFamily: BRAND_ROUNDED_FONT_EXTRA,
+    fontSize: 28,
+    fontWeight: '800',
     letterSpacing: -0.6,
   },
   headerIconBtn: {
@@ -1305,8 +2456,24 @@ const styles = StyleSheet.create({
   },
   quickActionButtonsRow: {
     flexDirection: 'row',
-    gap: 10,
-    marginBottom: 20,
+    gap: 9,
+    marginBottom: 10,
+  },
+  quickActionTile: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 8,
+    borderRadius: 16,
+    gap: 7,
+    height: 52,
+  },
+  quickActionTitle: {
+    fontFamily: BRAND_ROUNDED_FONT_EXTRA,
+    fontSize: 12.5,
+    fontWeight: '800',
+    letterSpacing: -0.2,
   },
   quickActionIndividualBtn: {
     flex: 1,
@@ -1317,12 +2484,6 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     paddingHorizontal: 8,
     borderRadius: 14,
-    borderWidth: 1,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1.5 },
-    shadowOpacity: 0.05,
-    shadowRadius: 3,
-    elevation: 2,
   },
   quickActionIconCircle: {
     width: 28,
@@ -1358,54 +2519,110 @@ const styles = StyleSheet.create({
   },
   stickmanHeroCard: {
     borderRadius: 22,
-    borderWidth: 1,
     padding: 16,
     marginBottom: 18,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 8,
-    elevation: 3,
+  },
+  stickmanHeroHeaderTap: {
+    width: '100%',
   },
   stickmanHeroContent: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 16,
+    gap: 14,
+  },
+  heroChevronBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginLeft: 4,
+  },
+  heroExpandedContainer: {
+    marginTop: 14,
+    gap: 12,
+  },
+  heroExpandedDivider: {
+    height: 1,
+    width: '100%',
+  },
+  heroExerciseDescription: {
+    fontSize: 12.5,
+    lineHeight: 18,
+  },
+  heroNotchesGrid: {
+    gap: 10,
+  },
+  userPercentileBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 8,
+  },
+  userPercentileText: {
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  medianWeightValueWrap: {
+    height: 14,
+    justifyContent: 'center',
+  },
+  medianWeightBigText: {
+    fontSize: 12.5,
+    fontWeight: '800',
+    letterSpacing: -0.2,
   },
   stickmanVisualWrap: {
     alignItems: 'center',
     justifyContent: 'center',
-    width: 125,
-    height: 125,
+    width: 104,
+    height: 104,
     borderRadius: 16,
     overflow: 'hidden',
-    backgroundColor: 'rgba(0,0,0,0.2)',
+    padding: 0,
   },
   heroExerciseImage: {
     width: '100%',
     height: '100%',
     borderRadius: 16,
+    transform: [{ scale: 1.15 }],
   },
   stickmanInfoCol: {
     flex: 1,
     justifyContent: 'center',
   },
-  categoryTagPill: {
-    alignSelf: 'flex-start',
-    paddingHorizontal: 9,
-    paddingVertical: 3.5,
-    borderRadius: 8,
+  exerciseBadgeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
     marginBottom: 6,
   },
+  categoryTagPill: {
+    alignSelf: 'flex-start',
+    paddingHorizontal: 11,
+    paddingVertical: 5,
+    borderRadius: 20,
+  },
   categoryTagText: {
-    fontSize: 10,
-    fontWeight: '800',
-    letterSpacing: 0.6,
+    fontSize: 11,
+    fontWeight: '700',
+    textTransform: 'capitalize',
+  },
+  equipmentTagPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 11,
+    paddingVertical: 5,
+    borderRadius: 20,
+  },
+  equipmentTagText: {
+    fontSize: 11,
+    fontWeight: '700',
+    textTransform: 'capitalize',
   },
   stickmanExerciseTitle: {
-    fontFamily: SERIF_FONT,
-    fontSize: 20,
-    fontWeight: '700',
+    fontFamily: BRAND_ROUNDED_FONT_EXTRA,
+    fontSize: 21,
+    fontWeight: '800',
     letterSpacing: -0.4,
     marginBottom: 4,
   },
@@ -1462,19 +2679,63 @@ const styles = StyleSheet.create({
     paddingRight: 16,
     paddingBottom: 4,
   },
+  routinePageGroup: {
+    width: ROUTINE_PAGE_WIDTH,
+    flexDirection: 'row',
+    gap: ROUTINE_CARD_GAP,
+  },
   coloredRoutineCardSlider: {
     width: ROUTINE_CARD_WIDTH,
-    borderRadius: 14,
+    borderRadius: 16,
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
     paddingLeft: 12,
     paddingRight: 6,
-    paddingVertical: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.12,
-    shadowRadius: 4,
-    elevation: 2,
+    height: 52,
+  },
+  newDayCardSlider: {
+    borderWidth: 1.5,
+    borderStyle: 'dashed',
+    justifyContent: 'center',
+    paddingHorizontal: 8,
+  },
+  newDayInnerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    flex: 1,
+  },
+  newDayIconCircle: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  routineIconBadgeCircle: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 12,
+  },
+  routinePillInner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginBottom: 2,
+  },
+  routinePillTitle: {
+    fontFamily: BRAND_ROUNDED_FONT,
+    fontSize: 12.5,
+    fontWeight: '700',
+    letterSpacing: -0.2,
+  },
+  routinePillSub: {
+    fontSize: 10.5,
+    fontWeight: '500',
   },
   successTextRowBelowDays: {
     flexDirection: 'row',
@@ -1522,11 +2783,6 @@ const styles = StyleSheet.create({
     paddingLeft: 12,
     paddingRight: 6,
     paddingVertical: 9,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.12,
-    shadowRadius: 4,
-    elevation: 2,
   },
   routineCardMainTap: {
     flex: 1,
@@ -1535,22 +2791,6 @@ const styles = StyleSheet.create({
     padding: 6,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  routinePillInner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-    marginBottom: 2,
-  },
-  routinePillTitle: {
-    color: '#ffffff',
-    fontSize: 13,
-    fontWeight: '800',
-  },
-  routinePillSub: {
-    color: 'rgba(255,255,255,0.85)',
-    fontSize: 10,
-    fontWeight: '600',
   },
   optionActionBtn: {
     flexDirection: 'row',
@@ -1569,14 +2809,15 @@ const styles = StyleSheet.create({
   muscleGroupPill: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 5,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 10,
-    borderWidth: 1,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 20,
   },
   muscleGroupPillText: {
-    fontSize: 11.5,
+    fontFamily: BRAND_ROUNDED_FONT_EXTRA,
+    fontSize: 13.5,
+    fontWeight: '800',
+    letterSpacing: -0.2,
   },
   sectionHeaderRow: {
     flexDirection: 'row',
@@ -1584,10 +2825,17 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     marginBottom: 8,
   },
+  resultsCountOnlyRow: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    marginBottom: 6,
+    paddingHorizontal: 4,
+  },
   sectionHeading: {
-    fontSize: 11,
+    fontFamily: BRAND_ROUNDED_FONT_EXTRA,
+    fontSize: 13,
     fontWeight: '800',
-    letterSpacing: 0.8,
+    letterSpacing: 0.6,
   },
   unitBadge: {
     fontSize: 11.5,
@@ -1678,71 +2926,257 @@ const styles = StyleSheet.create({
   recoveryTimeLeftText: {
     fontSize: 11,
   },
+  /* 3 Dropdown Filter Bubbles & Drawer */
+  dropdownBubblesContainer: {
+    marginBottom: 16,
+    zIndex: 20,
+  },
+  dropdownBubblesRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  filterDropdownPill: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 10,
+    paddingHorizontal: 8,
+    borderRadius: 18,
+    borderWidth: 1.5,
+    gap: 5,
+  },
+  filterDropdownPillText: {
+    fontFamily: BRAND_ROUNDED_FONT_EXTRA,
+    fontSize: 12.5,
+    fontWeight: '800',
+    letterSpacing: -0.2,
+  },
+  filterDropdownDrawer: {
+    marginTop: 10,
+    padding: 12,
+    borderRadius: 18,
+    borderWidth: 1,
+  },
+  dropdownOptionsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  dropdownOptionChip: {
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 14,
+  },
+  dropdownOptionChipText: {
+    fontFamily: BRAND_ROUNDED_FONT_EXTRA,
+    fontSize: 12,
+    fontWeight: '800',
+  },
   categoryPillsRow: {
     flexDirection: 'row',
-    gap: 8,
-    marginBottom: 14,
-    paddingRight: 8,
+    gap: 10,
+    marginBottom: 16,
+    paddingHorizontal: 2,
+    paddingRight: 16,
   },
   categoryPill: {
-    paddingHorizontal: 14,
-    paddingVertical: 7,
-    borderRadius: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 9,
+    borderRadius: 16,
   },
   categoryPillText: {
-    fontSize: 12.5,
+    fontSize: 13,
     textTransform: 'capitalize',
   },
   exerciseSearchBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    borderWidth: 1,
-    borderRadius: 12,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    marginBottom: 10,
+    borderRadius: 24,
+    paddingHorizontal: 18,
+    paddingVertical: 14,
+    marginBottom: 14,
   },
   exerciseSearchInput: {
+    fontFamily: BRAND_ROUNDED_FONT,
     flex: 1,
-    fontSize: 13.5,
+    fontSize: 15,
+    fontWeight: '700',
     padding: 0,
   },
   exerciseResultsCard: {
-    borderWidth: 1,
-    borderRadius: 14,
-    marginBottom: 18,
+    borderRadius: 20,
+    marginBottom: 20,
     overflow: 'hidden',
-    maxHeight: 280,
+    height: 275,
   },
   exerciseResultsScroll: {
-    maxHeight: 280,
+    height: 275,
+  },
+  exerciseDetailSlideWrap: {
+    height: 275,
+    padding: 16,
+    justifyContent: 'space-between',
+  },
+  exerciseDetailSlideHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 2,
+  },
+  backToExercisesBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 14,
+  },
+  backToExercisesText: {
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  selectThisExBtn: {
+    paddingHorizontal: 16,
+    paddingVertical: 6,
+    borderRadius: 14,
+  },
+  selectThisExText: {
+    fontSize: 12.5,
+    fontWeight: '800',
+  },
+  inspectTitle: {
+    fontSize: 17,
+    fontWeight: '700',
+    letterSpacing: -0.3,
+  },
+  inspectDescription: {
+    fontSize: 12,
+    lineHeight: 17,
+  },
+  inspectMetricsContainer: {
+    gap: 9,
+    marginTop: 2,
+  },
+  rankingSideBySideRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
+  },
+  rankingCol: {
+    flex: 1,
+    gap: 4,
+  },
+  rankingFullRow: {
+    gap: 4,
+  },
+  rankingLabelRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  rankingTitle: {
+    fontSize: 11.5,
+    fontWeight: '600',
+  },
+  rankingValue: {
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  notchesBar: {
+    flexDirection: 'row',
+    gap: 5,
+    height: 5,
+    width: 78,
+  },
+  notchSegment: {
+    width: 22,
+    height: '100%',
+    borderRadius: 2.5,
+  },
+  popularityNotchesWithNumRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    height: 16,
+  },
+  notchesBarCompact: {
+    flexDirection: 'row',
+    gap: 4,
+    height: 5,
+  },
+  notchSegmentCompact: {
+    width: 16,
+    height: '100%',
+    borderRadius: 2.5,
+  },
+  rankingValueInline: {
+    fontSize: 11,
+    fontWeight: '800',
+  },
+  genderWeightsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    height: 16,
+  },
+  genderItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3.5,
+  },
+  genderWeightText: {
+    fontSize: 12,
+    fontWeight: '800',
+    fontVariant: ['tabular-nums'],
+  },
+  popularityRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 7,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    borderRadius: 10,
+  },
+  popularityText: {
+    fontSize: 11.5,
+    fontWeight: '500',
+  },
+  arrowTapArea: {
+    padding: 6,
   },
   exerciseListItem: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 12,
+    paddingHorizontal: 16,
     paddingVertical: 10,
   },
   exerciseListItemLeft: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
+    gap: 12,
     flex: 1,
-    marginRight: 8,
+    marginRight: 10,
   },
   exerciseListIconBox: {
     width: 36,
     height: 36,
-    borderRadius: 9,
+    borderRadius: 10,
     alignItems: 'center',
     justifyContent: 'center',
   },
   exerciseListItemName: {
-    fontSize: 13,
+    fontFamily: BRAND_ROUNDED_FONT_EXTRA,
+    fontSize: 14.5,
+    fontWeight: '800',
+    letterSpacing: -0.3,
+    lineHeight: 19,
   },
   exerciseListItemMeta: {
-    fontSize: 10.5,
+    fontSize: 11,
+    fontWeight: '500',
     marginTop: 2,
     letterSpacing: 0.1,
   },
@@ -1752,7 +3186,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   noExercisesFoundText: {
-    fontSize: 12.5,
+    fontFamily: BRAND_ROUNDED_FONT,
+    fontSize: 13,
+    fontWeight: '600',
     textAlign: 'center',
   },
   exerciseCardsGrid: {
@@ -1781,25 +3217,61 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   logInputCard: {
-    borderRadius: 20,
-    borderWidth: 1,
+    borderRadius: 22,
     padding: 18,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 6,
-    elevation: 2,
   },
   logCardHeader: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
+    alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 18,
+    marginBottom: 16,
+  },
+  addSetHeaderBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 14,
+  },
+  addSetHeaderBtnText: {
+    fontSize: 12,
+    fontWeight: '800',
+  },
+  logScreenSetCard: {
+    borderRadius: 18,
+    padding: 12,
+    gap: 10,
+  },
+  logScreenSetTopRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  logScreenSetIndexLabel: {
+    fontSize: 11.5,
+    fontWeight: '800',
+    letterSpacing: 0.5,
+  },
+  multiplierPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 4.5,
+    borderRadius: 12,
+  },
+  multiplierPillText: {
+    fontSize: 12,
+    fontWeight: '800',
+  },
+  deleteSetBtn: {
+    padding: 6,
   },
   selectedTitle: {
-    fontFamily: SERIF_FONT,
-    fontSize: 22,
-    fontWeight: '700',
+    fontFamily: BRAND_ROUNDED_FONT_EXTRA,
+    fontSize: 21,
+    fontWeight: '800',
     letterSpacing: -0.4,
   },
   selectedSub: {
@@ -1874,7 +3346,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     borderRadius: 14,
-    borderWidth: 1,
     height: 48,
     overflow: 'hidden',
   },
@@ -1903,7 +3374,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     borderRadius: 10,
-    borderWidth: 1,
   },
   quickWeightText: {
     fontSize: 12,
@@ -1911,7 +3381,6 @@ const styles = StyleSheet.create({
   },
   notesWrapper: {
     borderRadius: 14,
-    borderWidth: 1,
     paddingHorizontal: 12,
     height: 44,
     justifyContent: 'center',
@@ -1952,9 +3421,9 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   modalTitle: {
-    fontFamily: SERIF_FONT,
-    fontSize: 22,
-    fontWeight: '700',
+    fontFamily: BRAND_ROUNDED_FONT_EXTRA,
+    fontSize: 21,
+    fontWeight: '800',
     letterSpacing: -0.4,
   },
   modalSub: {

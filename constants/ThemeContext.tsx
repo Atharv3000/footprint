@@ -11,6 +11,21 @@ export const SERIF_FONT = Platform.select({
   default: 'Georgia, "Times New Roman", serif',
 });
 
+// Bold, punchy, modern geometric-grotesque display font (Plus Jakarta Sans)
+export const BRAND_ROUNDED_FONT = Platform.select({
+  ios: 'PlusJakartaSans_700Bold',
+  android: 'PlusJakartaSans_700Bold',
+  web: 'PlusJakartaSans_700Bold, "Plus Jakarta Sans", -apple-system, BlinkMacSystemFont, sans-serif',
+  default: 'PlusJakartaSans_700Bold',
+});
+
+export const BRAND_ROUNDED_FONT_EXTRA = Platform.select({
+  ios: 'PlusJakartaSans_800ExtraBold',
+  android: 'PlusJakartaSans_800ExtraBold',
+  web: 'PlusJakartaSans_800ExtraBold, "Plus Jakarta Sans", -apple-system, BlinkMacSystemFont, sans-serif',
+  default: 'PlusJakartaSans_800ExtraBold',
+});
+
 export interface ThemeColors {
   isDark: boolean;
   background: string;
@@ -55,10 +70,10 @@ const lightColors: ThemeColors = {
   isDark: false,
   background: '#f8f8fa',
   surface: '#ffffff',
-  surfaceElevated: '#f1f1f4',
-  surfaceSecondary: '#f4f4f7',
-  border: '#e8e8ed',
-  borderLight: '#f1f1f5',
+  surfaceElevated: '#e9e9eb',
+  surfaceSecondary: '#e9e9eb',
+  border: '#dcdce0',
+  borderLight: '#e4e4e8',
   text: '#111111',
   textMuted: '#71717a',
   textSecondary: '#4b5563',

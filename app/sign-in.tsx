@@ -18,7 +18,8 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { useAuth } from '@/constants/AuthContext';
-import { useTheme, SERIF_FONT } from '@/constants/ThemeContext';
+import { useTheme, BRAND_ROUNDED_FONT, BRAND_ROUNDED_FONT_EXTRA, SERIF_FONT } from '@/constants/ThemeContext';
+import { DEMO_ACCOUNT } from '@/constants/demoPreload';
 import * as Haptics from 'expo-haptics';
 
 const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
@@ -468,6 +469,24 @@ export default function SignInScreen() {
                     </Text>
                   </Text>
                 </TouchableOpacity>
+
+                {/* Preloaded Demo Credentials Quick Pill */}
+                {currentDisplayMode === 'signin' && (
+                  <TouchableOpacity
+                    style={styles.demoFillPill}
+                    onPress={() => {
+                      Haptics.selectionAsync();
+                      setEmail(DEMO_ACCOUNT.email);
+                      setPassword(DEMO_ACCOUNT.password);
+                    }}
+                    activeOpacity={0.7}
+                  >
+                    <Ionicons name="sparkles" size={13} color="#a3e635" />
+                    <Text style={styles.demoFillText}>
+                      Prefill preloaded account ({DEMO_ACCOUNT.email})
+                    </Text>
+                  </TouchableOpacity>
+                )}
               </View>
             </Animated.View>
           </ScrollView>
@@ -511,11 +530,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
   },
   appNameHero: {
-    fontFamily: SERIF_FONT,
-    fontSize: 52,
-    fontWeight: '800',
+    fontFamily: BRAND_ROUNDED_FONT_EXTRA,
+    fontSize: 54,
+    fontWeight: '900',
     color: '#ffffff',
-    letterSpacing: -1.2,
+    letterSpacing: -1.6,
     textShadowColor: 'rgba(0, 0, 0, 0.85)',
     textShadowOffset: { width: 0, height: 2 },
     textShadowRadius: 8,
@@ -528,19 +547,21 @@ const styles = StyleSheet.create({
     marginTop: 10,
   },
   taglinePrefix: {
-    fontSize: 19,
+    fontFamily: BRAND_ROUNDED_FONT,
+    fontSize: 18,
     color: 'rgba(255, 255, 255, 0.95)',
-    fontWeight: '600',
-    letterSpacing: -0.2,
+    fontWeight: '700',
+    letterSpacing: -0.3,
     textShadowColor: 'rgba(0, 0, 0, 0.75)',
     textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 6,
   },
   scrollingWordText: {
+    fontFamily: BRAND_ROUNDED_FONT_EXTRA,
     color: '#a3e635',
-    fontSize: 19,
-    fontWeight: '800',
-    letterSpacing: -0.2,
+    fontSize: 18,
+    fontWeight: '900',
+    letterSpacing: -0.3,
     textTransform: 'lowercase',
     textShadowColor: 'rgba(0, 0, 0, 0.75)',
     textShadowOffset: { width: 0, height: 1 },
@@ -722,14 +743,15 @@ const styles = StyleSheet.create({
     marginBottom: 24,
   },
   formTitle: {
-    fontFamily: SERIF_FONT,
-    fontSize: 30,
-    fontWeight: '800',
+    fontFamily: BRAND_ROUNDED_FONT_EXTRA,
+    fontSize: 28,
+    fontWeight: '900',
     color: '#ffffff',
-    letterSpacing: -0.6,
+    letterSpacing: -0.8,
     textAlign: 'center',
   },
   formSubtitle: {
+    fontFamily: BRAND_ROUNDED_FONT,
     fontSize: 13.5,
     color: 'rgba(244, 244, 245, 0.72)',
     marginTop: 4,
@@ -829,6 +851,24 @@ const styles = StyleSheet.create({
     color: '#ffffff',
     fontWeight: '800',
     textDecorationLine: 'underline',
+  },
+  demoFillPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    marginTop: 14,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 16,
+    backgroundColor: 'rgba(163, 230, 53, 0.1)',
+    borderWidth: 1,
+    borderColor: 'rgba(163, 230, 53, 0.25)',
+  },
+  demoFillText: {
+    color: '#a3e635',
+    fontSize: 11.5,
+    fontWeight: '600',
   },
 });
 

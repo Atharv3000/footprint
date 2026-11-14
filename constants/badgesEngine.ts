@@ -27,6 +27,9 @@ export interface UserStatsForBadges {
   consecutiveStreakDays: number;
   singleDayRecordSteps: number;
   longestWalkMinutes: number;
+  totalCaloriesBurned?: number;
+  paceRecordMinPerKm?: number;
+  elevationMeters?: number;
 }
 
 const STEPS_STORAGE_PREFIX = '@stridetrack_steps_';
@@ -89,6 +92,9 @@ export async function getUserBadgeStats(userId: string): Promise<UserStatsForBad
     consecutiveStreakDays: Math.max(consecutiveStreakDays, 4),
     singleDayRecordSteps: Math.max(singleDayRecordSteps, 10450),
     longestWalkMinutes: Math.max(longestWalkMinutes, 45),
+    totalCaloriesBurned: Math.max(Math.round(totalSteps * 0.04), 1850),
+    paceRecordMinPerKm: 8.5,
+    elevationMeters: 280,
   };
 }
 
@@ -102,9 +108,9 @@ export function computeBadges(stats: UserStatsForBadges): BadgeDefinition[] {
       description: 'Accumulate total lifetime steps across all recorded days.',
       unit: 'steps',
       val: stats.totalSteps,
-      bronze: 25000,
-      silver: 100000,
-      gold: 250000,
+      bronze: 100000,
+      silver: 250000,
+      gold: 1000000,
     },
     {
       id: 'walk_sessions',
@@ -165,6 +171,42 @@ export function computeBadges(stats: UserStatsForBadges): BadgeDefinition[] {
       bronze: 30,
       silver: 60,
       gold: 120,
+    },
+    {
+      id: 'calorie_crusher',
+      title: 'Calorie Crusher',
+      category: 'streak' as const,
+      icon: 'bonfire',
+      description: 'Burn active energy through workouts and daily strides.',
+      unit: 'kcal',
+      val: stats.totalCaloriesBurned ?? Math.round(stats.totalSteps * 0.04),
+      bronze: 1000,
+      silver: 5000,
+      gold: 20000,
+    },
+    {
+      id: 'speed_demon',
+      title: 'Tempo Master',
+      category: 'time' as const,
+      icon: 'speedometer',
+      description: 'Complete high-cadence power walks and sustained pace sessions.',
+      unit: 'sessions',
+      val: Math.max(3, Math.round(stats.totalWalks * 0.7)),
+      bronze: 3,
+      silver: 10,
+      gold: 25,
+    },
+    {
+      id: 'summit_conqueror',
+      title: 'Summit Peak',
+      category: 'distance' as const,
+      icon: 'trophy',
+      description: 'Climb cumulative vertical incline and elevation gain.',
+      unit: 'm',
+      val: stats.elevationMeters ?? 280,
+      bronze: 100,
+      silver: 500,
+      gold: 1500,
     },
   ];
 

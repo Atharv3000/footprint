@@ -24,7 +24,7 @@ import {
 } from '@/constants/walkStorage';
 import { metersToKm, metersToMiles } from '@/constants/userProfile';
 
-import { useTheme, SERIF_FONT } from '@/constants/ThemeContext';
+import { useTheme, SERIF_FONT, BRAND_ROUNDED_FONT, BRAND_ROUNDED_FONT_EXTRA } from '@/constants/ThemeContext';
 import { DraggableSheetHandle } from '@/components/DraggableSheetHandle';
 import { InteractiveBottomModal } from '@/components/InteractiveBottomModal';
 
@@ -496,7 +496,7 @@ export default function HistoryScreen() {
                     initialRegion={getRegionForCoordinates(selectedWalkForReview.routeCoordinates)}
                     onMapReady={() => {
                       if (reviewMapRef.current && selectedWalkForReview?.routeCoordinates?.length) {
-                        reviewMapRef.current.fitToCoordinates(selectedWalkForReview.routeCoordinates, {
+                        reviewMapRef.current?.fitToCoordinates?.(selectedWalkForReview.routeCoordinates, {
                           edgePadding: { top: 50, right: 50, bottom: 50, left: 50 },
                           animated: true,
                         });
@@ -914,10 +914,10 @@ const styles = StyleSheet.create({
     width: 36, height: 36, borderRadius: 12,
     borderWidth: 1, alignItems: 'center', justifyContent: 'center',
   },
-  cardLabel: { fontSize: 16, fontWeight: '700', letterSpacing: -0.2 },
+  cardLabel: { fontSize: 16, fontWeight: '700', letterSpacing: -0.2, fontFamily: BRAND_ROUNDED_FONT_EXTRA },
   cardDate: { fontSize: 12, marginTop: 2 },
-  distanceValue: { fontSize: 22, fontWeight: '800', letterSpacing: -0.5 },
-  distanceUnit: { fontSize: 12, fontWeight: '700', marginLeft: 1 },
+  distanceValue: { fontSize: 22, fontWeight: '800', letterSpacing: -0.5, fontFamily: BRAND_ROUNDED_FONT_EXTRA },
+  distanceUnit: { fontSize: 12, fontWeight: '700', marginLeft: 1, fontFamily: BRAND_ROUNDED_FONT },
   statsMatrix: {
     flexDirection: 'row', justifyContent: 'space-between',
     padding: 12, borderRadius: 12, borderWidth: 1,

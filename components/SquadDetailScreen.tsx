@@ -121,6 +121,31 @@ export function calculateSquadGrade(totalSteps: number, memberCount: number = 1)
   };
 }
 
+export function computeSquadMetrics(memberUsernames: string[], myUsername: string) {
+  const memberCount = Math.max(1, memberUsernames.length);
+  let totalSteps = 0;
+  let totalDistanceMiles = 0;
+
+  memberUsernames.forEach((uname, idx) => {
+    const isSelf = uname.toLowerCase() === (myUsername || '').toLowerCase();
+    const seed = uname.charCodeAt(0) + uname.charCodeAt(uname.length - 1) + idx * 43;
+    const weeklySteps = isSelf ? 54230 : (9400 + (seed % 15) * 3100);
+    totalSteps += weeklySteps;
+    // approx 2,100 steps per mile
+    totalDistanceMiles += Math.round((weeklySteps / 2100) * 10) / 10;
+  });
+
+  const gradeInfo = calculateSquadGrade(totalSteps, memberCount);
+
+  return {
+    memberCount,
+    totalSteps,
+    totalDistanceMiles: Math.round(totalDistanceMiles * 10) / 10,
+    gradeInfo,
+  };
+}
+
+
 const SQUAD_CHART_H = 148;
 const SQUAD_Y_AXIS_W = 42;
 const SQUAD_GRID_COLOR = 'rgba(128,128,128,0.14)';

@@ -1,15 +1,17 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Alert, AppState, DeviceEventEmitter, Modal, ScrollView, Share, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { ActivityIndicator, Alert, AppState, DeviceEventEmitter, Modal, Platform, ScrollView, Share, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from 'expo-router';
 import { useAuth } from '@/constants/AuthContext';
-import { useTheme, SERIF_FONT } from '@/constants/ThemeContext';
+import { useTheme } from '@/constants/ThemeContext';
 import { loadFriends, FriendUser } from '@/constants/socialEngine';
 import { MEAL_LOGS_CHANGED, loadNutritionTargets } from '@/constants/nutritionStorage';
 import { CalorieChallenge, previewCalorieChallenge, cachedChallenges, createCalorieChallenge, joinCalorieChallenge, syncCalorieChallenges, CALORIE_CHALLENGES_CHANGED } from '@/constants/calorieChallenges';
 
 export function CalorieChallenges({ compact = false }: { compact?: boolean }) {
+  const insets = useSafeAreaInsets();
+  const topInset = Math.max(insets.top, Platform.OS === 'ios' ? 44 : 24);
   const { colors } = useTheme(); const { user } = useAuth(); const id = user?.id || 'guest_user';
   const [items, setItems] = useState<CalorieChallenge[]>([]); const [open, setOpen] = useState(false);
   const [mode, setMode] = useState<'cut' | 'bulk'>('cut'); const [target, setTarget] = useState('2000');
@@ -53,8 +55,8 @@ export function CalorieChallenges({ compact = false }: { compact?: boolean }) {
   const text = { color: colors.text }; const muted = { color: colors.textMuted };
   const button = (label: string, onPress: () => void, selected = false) => <TouchableOpacity key={label} accessibilityRole="button" disabled={busy} onPress={onPress}
     style={[s.pill, { borderColor: selected ? colors.primary : colors.border, backgroundColor: selected ? colors.primary + '20' : colors.surfaceElevated }]}><Text style={[s.small, selected ? { color: colors.primary } : text]}>{label}</Text></TouchableOpacity>;
-  const card = (c: CalorieChallenge) => <View key={c.code} style={[s.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
-    <View style={s.row}><Ionicons name="flame-outline" size={19} color={colors.primary} /><Text style={[s.cardTitle, text]}>{c.mode === 'cut' ? 'Cut' : 'Bulk'} · {c.target.toLocaleString()} kcal / day</Text><Text style={[s.small, muted]}>{c.days}d</Text></View>
+  const card = (c: CalorieChallenge) => <View key={c.code} style={[s.card, { backgroundColor: colors.card }]}>
+    <View style={s.row}><Ionicons name="trophy-outline" size={19} color={colors.primary} /><Text style={[s.cardTitle, text]}>{c.mode === 'cut' ? 'Cut' : 'Bulk'} · {c.target.toLocaleString()} kcal / day</Text><Text style={[s.small, muted]}>{c.days}d</Text></View>
     <Text style={[s.caption, muted]}>{c.status === 'waiting' ? 'Waiting for your friend · invite expires in 7 days' : `${c.start} – ${c.end} · ${c.timezone}`}</Text>
     {c.players.map((p, i) => <View key={i} style={{ marginTop: 10 }}>
       <View style={s.row}><Text style={[s.small, text, { flex: 1 }]}>{i === c.you ? 'You' : p.name}</Text><Text style={[s.small, muted]}>{p.calories.toLocaleString()} kcal · {p.score} / {c.days} days{p.complete ? ' ✓' : ''}</Text></View>
@@ -72,20 +74,26 @@ export function CalorieChallenges({ compact = false }: { compact?: boolean }) {
     </View>
   </View>;
   return <>
-    <TouchableOpacity onPress={show} accessibilityRole="button" accessibilityLabel="Open calorie challenges" style={[s.banner, { backgroundColor: colors.surfaceElevated, borderColor: colors.border }]}>
+    <TouchableOpacity onPress={show} accessibilityRole="button" accessibilityLabel="Open calorie challenges" style={[s.banner, { backgroundColor: colors.surfaceElevated }]}>
       <Ionicons name="trophy-outline" color={colors.primary} size={20} /><View style={{ flex: 1 }}><Text style={[s.small, text]}>Calorie challenges{active.length ? ` · ${active.length} ongoing` : ''}</Text>
       <Text style={[s.caption, muted]}>{active[0] ? `${active[0].mode === 'cut' ? 'Cut' : 'Bulk'} · ${active[0].target.toLocaleString()} kcal/day · ${active[0].status === 'waiting' ? 'Invite a friend' : `${active[0].players[active[0].you].score}/${active[0].days} days`}` : 'Challenge a friend to stay on target'}</Text></View><Ionicons name="chevron-forward" size={17} color={colors.textMuted} />
     </TouchableOpacity>
     {!compact && active.slice(0, 3).map(card)}
     <Modal visible={open} animationType="slide" onRequestClose={() => setOpen(false)}>
-      <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }}><ScrollView contentContainerStyle={{ padding: 20, paddingBottom: 50 }} keyboardShouldPersistTaps="handled">
-        <View style={s.row}><Text style={[s.title, text, { flex: 1 }]}>Calorie challenges</Text><TouchableOpacity accessibilityLabel="Close calorie challenges" onPress={() => setOpen(false)}><Ionicons name="close" size={26} color={colors.text} /></TouchableOpacity></View>
+      <View style={{ flex: 1, backgroundColor: colors.background, paddingTop: topInset, paddingBottom: Math.max(insets.bottom, 16) }}>
+        <ScrollView contentContainerStyle={{ padding: 20, paddingBottom: 50 }} keyboardShouldPersistTaps="handled">
+          <View style={s.row}>
+            <Text style={[s.title, text, { flex: 1 }]}>Calorie challenges</Text>
+            <TouchableOpacity hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }} accessibilityLabel="Close calorie challenges" onPress={() => setOpen(false)}>
+              <Ionicons name="close" size={26} color={colors.text} />
+            </TouchableOpacity>
+          </View>
         <Text style={[s.caption, muted, { marginVertical: 12 }]}>Stay within 10% of your agreed daily target, then finish your day. Most completed days wins; ties are a draw. Food totals are self-reported. Only totals and scores are shared.</Text>
-        {error ? <View style={[s.card, { borderColor: colors.border }]}><Text style={[s.caption, muted]}>Not synced: {error}</Text>{button('Retry sync', refresh)}</View> : null}
+        {error ? <View style={[s.card, { }]}><Text style={[s.caption, muted]}>Not synced: {error}</Text>{button('Retry sync', refresh)}</View> : null}
         <Text style={[s.heading, text]}>New challenge</Text>
         <View style={s.row}>{button('Cut', () => setMode('cut'), mode === 'cut')}{button('Bulk', () => setMode('bulk'), mode === 'bulk')}</View>
         <Text style={[s.label, muted]}>Daily calorie target (kcal)</Text>
-        <TextInput accessibilityLabel="Daily calorie target" value={target} onChangeText={setTarget} keyboardType="number-pad" style={[s.input, text, { borderColor: colors.border }]} />
+        <TextInput accessibilityLabel="Daily calorie target" value={target} onChangeText={setTarget} keyboardType="number-pad" style={[s.input, text, { }]} />
         <View style={[s.row, { flexWrap: 'wrap' }]}>{[1, 7, 14, 30].map(d => button(`${d} day${d === 1 ? '' : 's'}`, () => setDays(d), d === days))}</View>
         {friends.length > 0 && <><Text style={[s.label, muted]}>Invite a friend</Text><ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>{friends.map(f => button(f.displayName, () => setFriend(f.displayName), friend === f.displayName))}</ScrollView></>}
         <Text style={[s.caption, muted, { marginVertical: 10 }]}>Both people accept the same target. Choose one that fits you both. Challenge targets do not change your nutrition goals.</Text>
@@ -96,7 +104,7 @@ export function CalorieChallenges({ compact = false }: { compact?: boolean }) {
           setItems(await cachedChallenges(id)); await invite(challenge);
         }))}
         <Text style={[s.heading, text]}>Join a friend</Text>
-        <TextInput accessibilityLabel="Challenge invite code" placeholder="12-character invite code" placeholderTextColor={colors.textMuted} autoCapitalize="characters" autoCorrect={false} maxLength={12} value={code} onChangeText={setCode} style={[s.input, text, { borderColor: colors.border }]} />
+        <TextInput accessibilityLabel="Challenge invite code" placeholder="12-character invite code" placeholderTextColor={colors.textMuted} autoCapitalize="characters" autoCorrect={false} maxLength={12} value={code} onChangeText={setCode} style={[s.input, text, { }]} />
         <Text style={[s.caption, muted]}>Joining starts the challenge today in the creator’s time zone. You can review the target before accepting.</Text>
         {button('Review invite', () => run(async () => {
           const preview = await previewCalorieChallenge(code);
@@ -108,18 +116,19 @@ export function CalorieChallenges({ compact = false }: { compact?: boolean }) {
         <Text style={[s.heading, text]}>Your challenges</Text>
         {items.length ? items.map(card) : <Text style={[s.caption, muted]}>Create a challenge or join with your friend’s invite code.</Text>}
         {button('Refresh progress', refresh)}
-      </ScrollView></SafeAreaView>
-    </Modal>
+      </ScrollView>
+    </View>
+  </Modal>
   </>;
 }
 
 const s = StyleSheet.create({
-  banner: { borderWidth: 1, borderRadius: 16, padding: 14, flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 14 },
+  banner: { borderRadius: 18, borderWidth: 0, paddingVertical: 12, paddingHorizontal: 14, flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 0 },
   row: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  title: { fontFamily: SERIF_FONT, fontSize: 27 }, heading: { fontSize: 18, fontWeight: '700', marginTop: 22, marginBottom: 12 },
-  small: { fontSize: 12, fontWeight: '600' }, caption: { fontSize: 11, lineHeight: 17 }, label: { fontSize: 12, marginTop: 14, marginBottom: 7 },
-  pill: { paddingHorizontal: 12, paddingVertical: 10, borderWidth: 1, borderRadius: 20, marginVertical: 4 },
-  input: { borderWidth: 1, borderRadius: 12, padding: 13, fontSize: 16, marginBottom: 9 },
-  card: { padding: 16, borderWidth: 1, borderRadius: 18, marginBottom: 12 }, cardTitle: { fontSize: 14, fontWeight: '700', flex: 1 },
-  track: { height: 4, borderRadius: 3, overflow: 'hidden', marginTop: 7 },
+  title: { fontSize: 28, letterSpacing: -0.3 }, heading: { fontSize: 18, fontWeight: '700', marginTop: 22, marginBottom: 12 },
+  small: { fontSize: 13, fontWeight: '600' }, caption: { fontSize: 12, lineHeight: 18 }, label: { fontSize: 12, marginTop: 14, marginBottom: 7 },
+  pill: { paddingHorizontal: 16, paddingVertical: 10, borderRadius: 24, marginVertical: 4 },
+  input: { borderRadius: 16, padding: 14, fontSize: 16, marginBottom: 10 },
+  card: { padding: 18, borderRadius: 22, marginBottom: 14 }, cardTitle: { fontSize: 15, fontWeight: '700', flex: 1 },
+  track: { height: 6, borderRadius: 3, overflow: 'hidden', marginTop: 8 },
 });

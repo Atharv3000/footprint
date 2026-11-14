@@ -296,7 +296,13 @@ export async function loadCustomRoutines(userId: string): Promise<CustomRoutine[
     const key = CUSTOM_ROUTINES_KEY(userId);
     const raw = await AsyncStorage.getItem(key);
     if (raw) {
-      return JSON.parse(raw);
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) {
+        return parsed.map((r: any) => ({
+          ...r,
+          exercises: Array.isArray(r.exercises) ? r.exercises : [],
+        }));
+      }
     }
   } catch (e) {
     console.error('Failed to load custom routines', e);
@@ -314,13 +320,13 @@ export async function saveCustomRoutines(userId: string, routines: CustomRoutine
 }
 
 export interface ProgressPhoto {
-
   id: string;
   userId: string;
   uri: string;
   date: string; // YYYY-MM-DD
   createdAt: string; // ISO
   caption?: string;
+  weightKg?: number;
 }
 
 const PROGRESS_PHOTOS_KEY = (userId: string) => `@stridetrack_progress_photos_${userId}`;
@@ -353,6 +359,7 @@ export async function loadProgressPhotos(userId: string): Promise<ProgressPhoto[
       date: dateStrA,
       createdAt: today.toISOString(),
       caption: 'Current check-in (Week 8)',
+      weightKg: 78.4,
     },
     {
       id: 'demo_photo_before',
@@ -361,6 +368,7 @@ export async function loadProgressPhotos(userId: string): Promise<ProgressPhoto[
       date: dateStrB,
       createdAt: dateB.toISOString(),
       caption: 'Starting baseline (Week 1)',
+      weightKg: 84.2,
     },
   ];
 
@@ -373,7 +381,7 @@ export async function loadProgressPhotos(userId: string): Promise<ProgressPhoto[
 
 export async function saveProgressPhoto(
   userId: string,
-  entry: { uri: string; date: string; caption?: string }
+  entry: { uri: string; date: string; caption?: string; weightKg?: number }
 ): Promise<ProgressPhoto> {
   const newPhoto: ProgressPhoto = {
     id: `photo_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
@@ -382,6 +390,7 @@ export async function saveProgressPhoto(
     date: entry.date,
     createdAt: new Date().toISOString(),
     caption: entry.caption,
+    weightKg: entry.weightKg,
   };
 
   try {
@@ -400,7 +409,7 @@ export async function saveProgressPhoto(
 export async function updateProgressPhoto(
   userId: string,
   photoId: string,
-  updates: { date?: string; caption?: string; uri?: string }
+  updates: { date?: string; caption?: string; uri?: string; weightKg?: number }
 ): Promise<void> {
   try {
     const key = PROGRESS_PHOTOS_KEY(userId);

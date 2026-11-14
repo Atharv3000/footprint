@@ -4,13 +4,31 @@ import Svg, { Circle, Line, Path } from 'react-native-svg';
 import { useTheme } from '@/constants/ThemeContext';
 import { BorderCountry, borderProgress } from '@/constants/countryQuests';
 
-export function CountryBorderMap({ country, steps = 0, height = 220 }: { country: BorderCountry; steps?: number; height?: number }) {
+export function CountryBorderMap({ country, steps = 0, height = 200 }: { country: BorderCountry; steps?: number; height?: number }) {
   const { colors } = useTheme();
   const outline = useMemo(() => country.rings.map(r => `M ${r.points.map(p => p.join(' ')).join(' L ')} Z`).join(' '), [country]);
   const progress = useMemo(() => borderProgress(country, steps), [country, steps]);
   const start = country.rings[0].points[0];
-  return <View accessible accessibilityLabel={`${country.name} virtual border route, ${Math.min(100, steps / (country.totalKm*1310)*100).toFixed(1)} percent completed`}>
-    <Svg width="100%" height={height} viewBox="0 0 1000 700" preserveAspectRatio="xMidYMid meet">
+
+  // Compute tight dynamic bounding box for the country so it centers perfectly without overflowing vertically
+  const viewBox = useMemo(() => {
+    let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+    country.rings.forEach(r => r.points.forEach(([x, y]) => {
+      if (x < minX) minX = x;
+      if (x > maxX) maxX = x;
+      if (y < minY) minY = y;
+      if (y > maxY) maxY = y;
+    }));
+    const pad = 48;
+    const w = Math.max(100, maxX - minX + pad * 2);
+    const h = Math.max(100, maxY - minY + pad * 2);
+    const originX = minX - pad;
+    const originY = minY - pad;
+    return `${originX} ${originY} ${w} ${h}`;
+  }, [country]);
+
+  return <View style={{ alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }} accessible accessibilityLabel={`${country.name} virtual border route, ${Math.min(100, steps / (country.totalKm*1310)*100).toFixed(1)} percent completed`}>
+    <Svg width="100%" height={height} viewBox={viewBox} preserveAspectRatio="xMidYMid meet">
       {[150, 350, 550].map(y => <Line key={`y${y}`} x1={0} y1={y} x2={1000} y2={y} stroke={colors.border} strokeWidth={1.5} strokeDasharray="5 10" />)}
       {[150, 350, 550, 750, 950].map(x => <Line key={`x${x}`} x1={x} y1={0} x2={x} y2={700} stroke={colors.border} strokeWidth={1.5} strokeDasharray="5 10" />)}
       <Path d={outline} fill={colors.primary} fillOpacity={.07} fillRule="evenodd" stroke={colors.textMuted} strokeOpacity={.4} strokeWidth={4} strokeLinejoin="round" />

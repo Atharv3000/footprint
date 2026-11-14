@@ -874,7 +874,7 @@ export async function searchPlaces(
   const cleanQuery = query.trim();
 
   // Helper to classify place category
-  const getCategory = (text: string): 'park' | 'nature' | 'water' | 'viewpoint' | 'monument' | 'trail' | 'place' => {
+  const getCategory = (text: string): 'park' | 'nature' | 'water' | 'viewpoint' | 'trail' | 'place' => {
     const s = text.toLowerCase();
     if (s.includes('park') || s.includes('garden') || s.includes('recreation') || s.includes('playground')) {
       return 'park';
@@ -886,8 +886,6 @@ export async function searchPlaces(
       return 'nature';
     } else if (s.includes('view') || s.includes('lookout') || s.includes('peak') || s.includes('hill') || s.includes('mountain') || s.includes('ridge')) {
       return 'viewpoint';
-    } else if (s.includes('monument') || s.includes('memorial') || s.includes('historic') || s.includes('castle') || s.includes('square') || s.includes('museum')) {
-      return 'monument';
     }
     return 'place';
   };
@@ -933,13 +931,13 @@ export async function searchPlaces(
         const fullText = `${shortName} ${subtitle} ${p.osm_key || ''} ${p.osm_value || ''}`.toLowerCase();
         const category = getCategory(fullText);
 
-        const photoKey = category === 'place' ? 'monument' : category;
+        const photoKey = (category === 'place' ? 'park' : category) as keyof typeof CURATED_POI_PHOTOS;
         const img = getRandomImage(photoKey, Math.round(Math.abs(pLat) * 1000 + Math.abs(pLng) * 1000 + idx));
 
         const placeType = p.osm_value ? p.osm_value.replace(/_/g, ' ') : '';
         const description = subtitle
           ? `${placeType ? placeType.toUpperCase() + ' • ' : ''}${subtitle}`
-          : `${category.toUpperCase()} • Notable location`;
+          : (category !== 'place' ? `${category.toUpperCase()} • Notable location` : subtitle || shortName);
 
         return {
           placeId: String(p.osm_id || Math.random()),
@@ -988,7 +986,7 @@ export async function searchPlaces(
 
           let img = item.extratags?.image || item.extratags?.wikimedia_commons;
           if (!img || typeof img !== 'string' || !img.startsWith('http')) {
-            const photoKey = category === 'place' ? 'monument' : category;
+            const photoKey = (category === 'place' ? 'park' : category) as keyof typeof CURATED_POI_PHOTOS;
             img = getRandomImage(photoKey, Math.round(Math.abs(pLat) * 1000 + Math.abs(pLng) * 1000 + idx));
           }
 
@@ -996,7 +994,7 @@ export async function searchPlaces(
           const placeClass = item.class ? item.class.replace(/_/g, ' ') : '';
           const description = subtitle
             ? `${placeType ? placeType.toUpperCase() + ' • ' : ''}${subtitle}`
-            : `${category.toUpperCase()} • ${placeClass || 'Notable location'}`;
+            : (category !== 'place' ? `${category.toUpperCase()} • ${placeClass || 'Notable location'}` : subtitle || shortName);
 
           return {
             placeId: String(item.place_id || Math.random()),

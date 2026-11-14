@@ -102,8 +102,8 @@ export const InteractiveBadge: React.FC<InteractiveBadgeProps> = ({
 
           {/* Outer Circular Progress Ring around the symbol */}
           <CircularProgressRing
-            size={88}
-            strokeWidth={6}
+            size={74}
+            strokeWidth={5}
             strokeLinecap="butt"
             progressPercent={badge.progressPercent}
             activeColor={tierInfo.base}
@@ -141,7 +141,7 @@ export const InteractiveBadge: React.FC<InteractiveBadgeProps> = ({
                 )}
                 <Ionicons
                   name={badge.icon as any}
-                  size={26}
+                  size={21}
                   color={badge.currentTier ? tierInfo.base : (isDark ? '#71717a' : '#a1a1aa')}
                 />
               </View>
@@ -257,32 +257,32 @@ export const SpinnableCoinHero: React.FC<SpinnableCoinHeroProps> = ({
 
 const styles = StyleSheet.create({
   coinColWrapper: {
-    width: '48%',
+    width: '31.5%',
     alignItems: 'center',
-    marginBottom: 26,
-    paddingVertical: 4,
+    marginBottom: 20,
+    paddingVertical: 2,
   },
   coinAnchor: {
-    width: 104,
-    height: 104,
+    width: 86,
+    height: 86,
     alignItems: 'center',
     justifyContent: 'center',
     position: 'relative',
   },
   coinRadiantGlow: {
     position: 'absolute',
-    width: 90,
-    height: 90,
-    borderRadius: 45,
+    width: 76,
+    height: 76,
+    borderRadius: 38,
     filter: Platform.OS === 'web' ? 'blur(12px)' : undefined,
   },
   coinEdgeDepth: {
     position: 'absolute',
-    width: 94,
-    height: 94,
-    borderRadius: 47,
+    width: 80,
+    height: 80,
+    borderRadius: 40,
     borderWidth: 2,
-    top: 6,
+    top: 5,
     opacity: 0.7,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 6 },
@@ -292,26 +292,26 @@ const styles = StyleSheet.create({
   },
   coinEdgeDepthLayer2: {
     position: 'absolute',
-    width: 96,
-    height: 96,
-    borderRadius: 48,
+    width: 82,
+    height: 82,
+    borderRadius: 41,
     borderWidth: 1.5,
-    top: 4,
+    top: 3,
     opacity: 0.6,
   },
   coinEdgeDepthLayer3: {
     position: 'absolute',
-    width: 98,
-    height: 98,
-    borderRadius: 49,
+    width: 84,
+    height: 84,
+    borderRadius: 42,
     borderWidth: 1,
-    top: 2,
+    top: 1,
     opacity: 0.45,
   },
   coinFaceCircle: {
-    width: 76,
-    height: 76,
-    borderRadius: 38,
+    width: 62,
+    height: 62,
+    borderRadius: 31,
     borderWidth: 1.5,
     alignItems: 'center',
     justifyContent: 'center',
@@ -319,10 +319,10 @@ const styles = StyleSheet.create({
     position: 'relative',
   },
   iconCoreCircle: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
-    borderWidth: 1.5,
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    borderWidth: 1.2,
     alignItems: 'center',
     justifyContent: 'center',
     overflow: 'hidden',
@@ -337,27 +337,27 @@ const styles = StyleSheet.create({
     top: 0,
     left: 0,
     right: 0,
-    height: 25,
-    borderTopLeftRadius: 25,
-    borderTopRightRadius: 25,
+    height: 21,
+    borderTopLeftRadius: 21,
+    borderTopRightRadius: 21,
     opacity: 0.6,
   },
   coinLabelBlock: {
     alignItems: 'center',
-    marginTop: 8,
+    marginTop: 6,
     width: '100%',
-    paddingHorizontal: 4,
+    paddingHorizontal: 2,
   },
   badgeCoinTitle: {
-    fontSize: 13,
+    fontSize: 11,
     fontWeight: '700',
     textAlign: 'center',
     letterSpacing: -0.2,
   },
   coinProgressHint: {
-    fontSize: 11,
+    fontSize: 10,
     fontWeight: '700',
-    marginTop: 3,
+    marginTop: 2,
     letterSpacing: -0.1,
   },
 

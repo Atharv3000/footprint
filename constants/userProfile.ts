@@ -21,6 +21,8 @@ export interface UserProfile {
   joinedAt?: string; // e.g. "September 2026"
   stepsGoal: number; // Daily steps goal, default 8000
   distanceGoalKm?: number; // Daily distance goal in km, default 5 (approx 3.1 miles)
+  targetWeightKg?: number; // Goal target weight in kg
+  weightGoalPace?: 'slow' | 'steady' | 'fast'; // Rate of weight change
 }
 
 export const DEFAULT_PROFILE: UserProfile = {

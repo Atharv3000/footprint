@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   View,
   Text,
@@ -24,39 +24,91 @@ import {
   cmToInches,
   inchesToCm,
 } from '@/constants/userProfile';
+import { InteractiveScaleRuler } from '@/components/InteractiveScaleRuler';
 import { FlipNumberPicker } from '@/components/FlipNumberPicker';
 import { getOrCreateMyUsername, setMyUsername } from '@/constants/socialEngine';
 import { ensureMockDataSeeded } from '@/constants/stepsStorage';
+import { loadWeightLogs, recordWeightLog } from '@/constants/workoutStorage';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
-const TOTAL_STEPS = 4;
+const TOTAL_STEPS = 5;
 
 export default function OnboardingScreen() {
   const { user, profile, updateProfile } = useAuth();
-  const { colors } = useTheme();
+  const themeContext = useTheme();
+  const colors = themeContext?.colors;
+  const isDark = themeContext?.isDark ?? colors?.isDark ?? true;
 
-  const scrollRef = useRef<ScrollView>(null);
+  const scrollRef = useRef<any>(null);
   const [currentStep, setCurrentStep] = useState(0);
   const progressAnim = useRef(new Animated.Value(0)).current;
   const [saving, setSaving] = useState(false);
 
-  // Step 1: Identity
-  const [nameInput, setNameInput] = useState(user?.name || '');
+  // Preference: Units
+  const [unitSystem, setUnitSystem] = useState<UnitSystem>(profile?.unitSystem || 'us_customary');
+  const isUS = unitSystem === 'us_customary';
+  const unitLabel = isUS ? 'lbs' : 'kg';
+
+  // Step 1: Weight Scale (Starting with last saved profile or weight logs)
+  const initialWeightLbs = profile?.weightKg ? Math.round(kgToLbs(profile.weightKg)) : 155;
+  const initialWeightKg = profile?.weightKg ? Math.round(profile.weightKg) : 70;
+  const [weightVal, setWeightVal] = useState<number>(isUS ? initialWeightLbs : initialWeightKg);
+
+  // Step 2: Target Weight Scale
+  const [targetWeightVal, setTargetWeightVal] = useState<number>(isUS ? initialWeightLbs : initialWeightKg);
+
+  // Step 3: Pace / Speed of weight change
+  const [weightPace, setWeightPace] = useState<'slow' | 'steady' | 'fast'>('steady');
+
+  // Step 4: Physiology (Height, Age, Sex)
+  const [heightFeet, setHeightFeet] = useState(profile?.heightFeet || 5);
+  const [heightInches, setHeightInches] = useState(profile?.heightInches || 9);
+  const [heightCm, setHeightCm] = useState(profile?.heightCm || 175);
+  const [age, setAge] = useState(profile?.age || 26);
+  const [gender, setGender] = useState<GenderOption>(profile?.gender || 'na');
+
+  // Step 5: Profile Identity & Daily Step Goal
+  const [nameInput, setNameInput] = useState(profile?.name || user?.name || '');
   const [usernameInput, setUsernameInput] = useState('');
+  const [stepsGoal, setStepsGoal] = useState(profile?.stepsGoal || 8000);
 
-  // Step 2: Measurements
-  const [unitSystem, setUnitSystem] = useState<UnitSystem>('us_customary');
-  const [weightLbs, setWeightLbs] = useState(154);
-  const [heightFeet, setHeightFeet] = useState(5);
-  const [heightInches, setHeightInches] = useState(9);
-  const [weightKg, setWeightKg] = useState(70);
-  const [heightCm, setHeightCm] = useState(175);
-  const [age, setAge] = useState(25);
-  const [gender, setGender] = useState<GenderOption>('na');
+  // Load last saved weight entry on mount
+  useEffect(() => {
+    async function loadLastWeight() {
+      if (user?.id) {
+        try {
+          const logs = await loadWeightLogs(user.id);
+          if (logs.length > 0) {
+            const lastLog = logs[logs.length - 1];
+            if (lastLog?.weightKg) {
+              const val = isUS ? Math.round(kgToLbs(lastLog.weightKg)) : Math.round(lastLog.weightKg);
+              setWeightVal(val);
+              setTargetWeightVal(val);
+            }
+          }
+        } catch (e) {}
+      }
+    }
+    loadLastWeight();
+  }, [user?.id, isUS]);
 
-  // Step 3: Steps Goal
-  const [stepsGoal, setStepsGoal] = useState(8000);
-  const [stepsInputText, setStepsInputText] = useState('8000');
+  // Handle unit switch
+  const handleToggleUnit = (newUnit: UnitSystem) => {
+    if (newUnit === unitSystem) return;
+    Haptics.selectionAsync().catch(() => {});
+    if (newUnit === 'us_customary') {
+      const convertedCurrent = Math.round(kgToLbs(weightVal));
+      const convertedTarget = Math.round(kgToLbs(targetWeightVal));
+      setWeightVal(convertedCurrent);
+      setTargetWeightVal(convertedTarget);
+    } else {
+      const convertedCurrent = Math.round(lbsToKg(weightVal));
+      const convertedTarget = Math.round(lbsToKg(targetWeightVal));
+      setWeightVal(convertedCurrent);
+      setTargetWeightVal(convertedTarget);
+    }
+    setUnitSystem(newUnit);
+  };
 
   const animateProgress = (step: number) => {
     Animated.spring(progressAnim, {
@@ -75,12 +127,6 @@ export default function OnboardingScreen() {
   };
 
   const handleNext = () => {
-    if (currentStep === 0) {
-      if (!nameInput.trim()) {
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {});
-        return;
-      }
-    }
     if (currentStep < TOTAL_STEPS - 1) {
       goToStep(currentStep + 1);
     }
@@ -94,34 +140,35 @@ export default function OnboardingScreen() {
       if (user?.id && usernameInput.trim()) {
         await setMyUsername(user.id, usernameInput.trim()).catch(() => {});
       } else if (user?.id) {
-        await getOrCreateMyUsername(user.id, nameInput.trim()).catch(() => {});
+        await getOrCreateMyUsername(user.id, nameInput.trim() || 'User').catch(() => {});
       }
 
       // Compute canonical values
-      let canonicalKg = unitSystem === 'us_customary' ? lbsToKg(weightLbs) : weightKg;
-      let canonicalCm = unitSystem === 'us_customary' ? inchesToCm(heightFeet * 12 + heightInches) : heightCm;
-      let saveFeet = unitSystem === 'us_customary' ? heightFeet : Math.floor(cmToInches(canonicalCm) / 12);
-      let saveInches = unitSystem === 'us_customary' ? heightInches : Math.round(cmToInches(canonicalCm) % 12);
-
-      const parsedGoal = parseInt(stepsInputText.replace(/\D/g, '')) || stepsGoal;
-      const clampedGoal = Math.max(1000, Math.min(50000, parsedGoal));
+      const canonicalCurrentKg = isUS ? lbsToKg(weightVal) : weightVal;
+      const canonicalTargetKg = isUS ? lbsToKg(targetWeightVal) : targetWeightVal;
+      const canonicalCm = isUS ? inchesToCm(heightFeet * 12 + heightInches) : heightCm;
+      const saveFeet = isUS ? heightFeet : Math.floor(cmToInches(canonicalCm) / 12);
+      const saveInches = isUS ? heightInches : Math.round(cmToInches(canonicalCm) % 12);
 
       await updateProfile({
         name: nameInput.trim() || 'Walker',
-        weightKg: canonicalKg,
+        weightKg: canonicalCurrentKg,
+        targetWeightKg: canonicalTargetKg,
+        weightGoalPace: weightPace,
         heightCm: canonicalCm,
         heightFeet: saveFeet,
         heightInches: saveInches,
         age,
         gender,
         unitSystem,
-        stepsGoal: clampedGoal,
+        stepsGoal,
         hasCompletedSetup: true,
       });
 
-      // Seed mock step data
+      // Record weight log entry
       if (user?.id) {
-        await ensureMockDataSeeded(user.id, clampedGoal);
+        await recordWeightLog(user.id, canonicalCurrentKg).catch(() => {});
+        await ensureMockDataSeeded(user.id, stepsGoal).catch(() => {});
       }
 
       router.replace('/(tabs)');
@@ -137,37 +184,43 @@ export default function OnboardingScreen() {
     outputRange: ['0%', '100%'],
   });
 
-  const stepLabels = ['Who are you?', 'Your body', 'Your goal'];
+  const stepLabels = ['Current Weight', 'Target Weight', 'Goal Pace', 'Body & Stats', 'Profile & Steps'];
+
+  // Weight difference insight
+  const weightDiff = targetWeightVal - weightVal;
+  const isLossGoal = weightDiff < -0.5;
+  const isGainGoal = weightDiff > 0.5;
+  const diffMagnitude = Math.abs(weightDiff);
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
-      {/* Header */}
+    <View style={[styles.container, { backgroundColor: colors?.background || '#09090b' }]}>
+      {/* Top Header */}
       <View style={styles.header}>
-        <View style={[styles.logoMark, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-          <Ionicons name="footsteps" size={22} color={colors.primary} />
+        <View style={[styles.logoMark, { backgroundColor: colors?.surface || '#141417', borderColor: colors?.border || '#242429' }]}>
+          <Ionicons name="scale-outline" size={20} color={colors?.primary || '#a3e635'} />
         </View>
         <View style={styles.stepInfo}>
-          <Text style={[styles.stepLabel, { color: colors.textMuted }]}>
-            Step {currentStep + 1} of {TOTAL_STEPS - 1} — {stepLabels[Math.min(currentStep, stepLabels.length - 1)]}
+          <Text style={[styles.stepLabel, { color: colors?.textMuted || '#71717a' }]}>
+            Step {currentStep + 1} of {TOTAL_STEPS} — {stepLabels[currentStep]}
           </Text>
         </View>
         {currentStep > 0 && (
           <TouchableOpacity
-            style={[styles.backBtn, { backgroundColor: colors.surfaceElevated }]}
+            style={[styles.backBtn, { backgroundColor: colors?.surfaceElevated || '#1c1c20' }]}
             onPress={() => goToStep(currentStep - 1)}
             activeOpacity={0.7}
           >
-            <Ionicons name="chevron-back" size={18} color={colors.text} />
+            <Ionicons name="chevron-back" size={18} color={colors?.text || '#fff'} />
           </TouchableOpacity>
         )}
       </View>
 
-      {/* Progress Bar */}
-      <View style={[styles.progressTrack, { backgroundColor: colors.border }]}>
-        <Animated.View style={[styles.progressFill, { backgroundColor: colors.primary, width: progressWidth }]} />
+      {/* Progress Track */}
+      <View style={[styles.progressTrack, { backgroundColor: colors?.border || '#242429' }]}>
+        <Animated.View style={[styles.progressFill, { backgroundColor: colors?.primary || '#a3e635', width: progressWidth }]} />
       </View>
 
-      {/* Scrollable Steps */}
+      {/* Scrollable Step Pages */}
       <ScrollView
         ref={scrollRef}
         horizontal
@@ -176,219 +229,322 @@ export default function OnboardingScreen() {
         showsHorizontalScrollIndicator={false}
         style={{ flex: 1 }}
       >
-        {/* ──────── STEP 1: Identity ──────── */}
-        <KeyboardAvoidingView
-          style={{ width: SCREEN_WIDTH }}
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        >
-          <ScrollView contentContainerStyle={styles.stepContent} keyboardShouldPersistTaps="handled">
-            <Text style={[styles.stepTitle, { color: colors.text }]}>Let's set up your profile</Text>
-            <Text style={[styles.stepSubtitle, { color: colors.textSecondary }]}>
-              This helps us personalize your experience.
-            </Text>
-
-            <View style={styles.fieldGroup}>
-              <Text style={[styles.fieldLabel, { color: colors.textMuted }]}>NAME</Text>
-              <View style={[styles.inputBox, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-                <Ionicons name="person-outline" size={16} color={colors.textMuted} style={{ marginRight: 10 }} />
-                <TextInput
-                  style={[styles.input, { color: colors.text }]}
-                  value={nameInput}
-                  onChangeText={setNameInput}
-                  placeholder="Your name"
-                  placeholderTextColor={colors.textMuted}
-                  autoCapitalize="words"
-                  autoCorrect={false}
-                />
-              </View>
-            </View>
-
-            <View style={styles.fieldGroup}>
-              <Text style={[styles.fieldLabel, { color: colors.textMuted }]}>USERNAME</Text>
-              <View style={[styles.inputBox, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-                <Text style={[styles.atSign, { color: colors.primary }]}>@</Text>
-                <TextInput
-                  style={[styles.input, { color: colors.text }]}
-                  value={usernameInput}
-                  onChangeText={(t) => setUsernameInput(t.toLowerCase().replace(/[^a-z0-9_]/g, ''))}
-                  placeholder="username"
-                  placeholderTextColor={colors.textMuted}
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                />
-              </View>
-            </View>
-
-            <TouchableOpacity
-              style={[styles.nextBtn, { backgroundColor: colors.primary }, !nameInput.trim() && styles.nextBtnDisabled]}
-              onPress={handleNext}
-              activeOpacity={0.85}
-              disabled={!nameInput.trim()}
-            >
-              <Text style={styles.nextBtnText}>Continue</Text>
-              <Ionicons name="arrow-forward" size={18} color="#09090b" />
-            </TouchableOpacity>
-          </ScrollView>
-        </KeyboardAvoidingView>
-
-        {/* ──────── STEP 2: Measurements ──────── */}
+        {/* ──────── STEP 1: CURRENT WEIGHT (CENTERED INTERACTIVE SCALE) ──────── */}
         <ScrollView style={{ width: SCREEN_WIDTH }} contentContainerStyle={styles.stepContent}>
-          <Text style={[styles.stepTitle, { color: colors.text }]}>Your body measurements</Text>
-          <Text style={[styles.stepSubtitle, { color: colors.textSecondary }]}>
-            Used to calculate accurate calorie burns.
+          <Text style={[styles.stepTitle, { color: colors?.text }]}>What is your weight?</Text>
+          <Text style={[styles.stepSubtitle, { color: colors?.textSecondary }]}>
+            Slide the interactive scale to set your current weight. Starts with your last saved entry.
           </Text>
 
-          {/* Units Toggle */}
-          <View style={[styles.pillTrack, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+          {/* Unit Toggle */}
+          <View style={[styles.pillTrack, { backgroundColor: colors?.surface, borderColor: colors?.border }]}>
             {(['us_customary', 'metric'] as UnitSystem[]).map((u) => (
               <TouchableOpacity
                 key={u}
-                style={[styles.pillOption, unitSystem === u && [styles.pillOptionActive, { backgroundColor: colors.primary }]]}
-                onPress={() => setUnitSystem(u)}
+                style={[styles.pillOption, unitSystem === u && [styles.pillOptionActive, { backgroundColor: colors?.primary }]]}
+                onPress={() => handleToggleUnit(u)}
                 activeOpacity={0.85}
               >
-                <Text style={[styles.pillText, { color: colors.textMuted }, unitSystem === u && styles.pillTextActive]}>
-                  {u === 'us_customary' ? 'US Customary' : 'Metric'}
+                <Text style={[styles.pillText, { color: colors?.textMuted }, unitSystem === u && { color: isDark ? '#09090b' : '#ffffff' }]}>
+                  {u === 'us_customary' ? 'Pounds (lbs)' : 'Kilograms (kg)'}
                 </Text>
               </TouchableOpacity>
             ))}
           </View>
 
-          <View style={styles.measureRow}>
-            <View style={styles.measureCol}>
-              <Text style={[styles.fieldLabel, { color: colors.textMuted }]}>
-                {unitSystem === 'us_customary' ? 'WEIGHT (LBS)' : 'WEIGHT (KG)'}
-              </Text>
-              <FlipNumberPicker
-                value={unitSystem === 'us_customary' ? weightLbs : weightKg}
-                min={unitSystem === 'us_customary' ? 60 : 30}
-                max={unitSystem === 'us_customary' ? 450 : 210}
-                step={1}
-                unit={unitSystem === 'us_customary' ? 'lbs' : 'kg'}
-                onChange={(v) => unitSystem === 'us_customary' ? setWeightLbs(v) : setWeightKg(v)}
-              />
-            </View>
-            <View style={styles.measureCol}>
-              <Text style={[styles.fieldLabel, { color: colors.textMuted }]}>AGE</Text>
-              <FlipNumberPicker value={age} min={13} max={99} step={1} unit="yrs" onChange={setAge} />
-            </View>
+          {/* Interactive Scale Ruler */}
+          <InteractiveScaleRuler
+            value={weightVal}
+            min={isUS ? 60 : 30}
+            max={isUS ? 420 : 200}
+            step={1}
+            unit={unitLabel}
+            onValueChange={setWeightVal}
+            accentColor={colors?.primary}
+          />
+
+          <View style={[styles.scaleHelperCard, { backgroundColor: colors?.surfaceElevated }]}>
+            <Ionicons name="checkmark-circle-outline" size={18} color={colors?.primary} />
+            <Text style={[styles.scaleHelperText, { color: colors?.textSecondary }]}>
+              Ready as-is! You can adjust anytime or immediately hit continue.
+            </Text>
           </View>
 
-          {unitSystem === 'us_customary' ? (
+          <TouchableOpacity
+            style={[styles.nextBtn, { backgroundColor: colors?.primary }]}
+            onPress={handleNext}
+            activeOpacity={0.85}
+          >
+            <Text style={[styles.nextBtnText, { color: isDark ? '#09090b' : '#ffffff' }]}>Continue</Text>
+            <Ionicons name="arrow-forward" size={18} color={isDark ? '#09090b' : '#ffffff'} />
+          </TouchableOpacity>
+        </ScrollView>
+
+        {/* ──────── STEP 2: TARGET WEIGHT ──────── */}
+        <ScrollView style={{ width: SCREEN_WIDTH }} contentContainerStyle={styles.stepContent}>
+          <Text style={[styles.stepTitle, { color: colors?.text }]}>What is your target weight?</Text>
+          <Text style={[styles.stepSubtitle, { color: colors?.textSecondary }]}>
+            Set your ideal goal weight. We will tailor your calorie expenditure and nutrition plan to match.
+          </Text>
+
+          {/* Interactive Target Scale Ruler */}
+          <InteractiveScaleRuler
+            value={targetWeightVal}
+            min={isUS ? 60 : 30}
+            max={isUS ? 420 : 200}
+            step={1}
+            unit={unitLabel}
+            onValueChange={setTargetWeightVal}
+            accentColor="#38bdf8"
+          />
+
+          {/* Insight card */}
+          <View style={[styles.scaleHelperCard, { backgroundColor: colors?.surfaceElevated }]}>
+            <Ionicons
+              name={isLossGoal ? 'trending-down' : isGainGoal ? 'trending-up' : 'checkmark-done'}
+              size={18}
+              color={colors?.primary}
+            />
+            <Text style={[styles.scaleHelperText, { color: colors?.textSecondary }]}>
+              {isLossGoal
+                ? `Goal: Shed ${diffMagnitude} ${unitLabel} at a sustainable, muscle-preserving pace.`
+                : isGainGoal
+                ? `Goal: Gain ${diffMagnitude} ${unitLabel} of clean lean muscle.`
+                : `Goal: Maintain your current weight of ${weightVal} ${unitLabel} and recomposition.`}
+            </Text>
+          </View>
+
+          <TouchableOpacity
+            style={[styles.nextBtn, { backgroundColor: colors?.primary }]}
+            onPress={handleNext}
+            activeOpacity={0.85}
+          >
+            <Text style={[styles.nextBtnText, { color: isDark ? '#09090b' : '#ffffff' }]}>Continue</Text>
+            <Ionicons name="arrow-forward" size={18} color={isDark ? '#09090b' : '#ffffff'} />
+          </TouchableOpacity>
+        </ScrollView>
+
+        {/* ──────── STEP 3: SPEED OF WEIGHT CHANGE ──────── */}
+        <ScrollView style={{ width: SCREEN_WIDTH }} contentContainerStyle={styles.stepContent}>
+          <Text style={[styles.stepTitle, { color: colors?.text }]}>Choose your pace</Text>
+          <Text style={[styles.stepSubtitle, { color: colors?.textSecondary }]}>
+            Select how quickly you want to reach your goal. Steady paces are the most sustainable.
+          </Text>
+
+          <View style={styles.paceOptionsList}>
+            {[
+              {
+                id: 'slow',
+                title: 'Gentle & Steady',
+                paceStr: isUS ? '0.5 lb / week' : '0.25 kg / week',
+                desc: 'Minimal diet disruption. Easiest to maintain long-term with zero fatigue.',
+                icon: 'leaf-outline',
+              },
+              {
+                id: 'steady',
+                title: 'Optimal Balance',
+                paceStr: isUS ? '1.0 lb / week' : '0.5 kg / week',
+                desc: 'The recommended sweet spot for sustainable results while fueling training.',
+                icon: 'fitness-outline',
+              },
+              {
+                id: 'fast',
+                title: 'Accelerated',
+                paceStr: isUS ? '1.5–2.0 lbs / week' : '0.75–1.0 kg / week',
+                desc: 'Fastest timeline. Best for dedicated routines and short-term cuts or bulks.',
+                icon: 'flash-outline',
+              },
+            ].map((opt) => {
+              const isSelected = weightPace === opt.id;
+              return (
+                <TouchableOpacity
+                  key={opt.id}
+                  style={[
+                    styles.paceCard,
+                    {
+                      backgroundColor: isSelected ? `${colors?.primary}22` : colors?.surfaceElevated,
+                      borderColor: isSelected ? colors?.primary : 'transparent',
+                    },
+                  ]}
+                  onPress={() => {
+                    Haptics.selectionAsync().catch(() => {});
+                    setWeightPace(opt.id as any);
+                  }}
+                  activeOpacity={0.8}
+                >
+                  <View style={[styles.paceIconWrap, { backgroundColor: isSelected ? colors?.primary : colors?.surfaceSecondary }]}>
+                    <Ionicons name={opt.icon as any} size={20} color={isSelected ? '#09090b' : colors?.text} />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <Text style={[styles.paceTitle, { color: colors?.text }]}>{opt.title}</Text>
+                      <Text style={[styles.paceBadge, { color: colors?.primary }]}>{opt.paceStr}</Text>
+                    </View>
+                    <Text style={[styles.paceDesc, { color: colors?.textSecondary }]}>{opt.desc}</Text>
+                  </View>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+
+          <TouchableOpacity
+            style={[styles.nextBtn, { backgroundColor: colors?.primary }]}
+            onPress={handleNext}
+            activeOpacity={0.85}
+          >
+            <Text style={[styles.nextBtnText, { color: isDark ? '#09090b' : '#ffffff' }]}>Continue</Text>
+            <Ionicons name="arrow-forward" size={18} color={isDark ? '#09090b' : '#ffffff'} />
+          </TouchableOpacity>
+        </ScrollView>
+
+        {/* ──────── STEP 4: BODY PHYSIOLOGY (HEIGHT, AGE, SEX) ──────── */}
+        <ScrollView style={{ width: SCREEN_WIDTH }} contentContainerStyle={styles.stepContent}>
+          <Text style={[styles.stepTitle, { color: colors?.text }]}>Your physiology</Text>
+          <Text style={[styles.stepSubtitle, { color: colors?.textSecondary }]}>
+            These physical parameters calibrate your metabolic baseline (BMR).
+          </Text>
+
+          {/* Height Input */}
+          {isUS ? (
             <View style={styles.measureRow}>
               <View style={styles.measureCol}>
-                <Text style={[styles.fieldLabel, { color: colors.textMuted }]}>HEIGHT (FT)</Text>
+                <Text style={[styles.fieldLabel, { color: colors?.textMuted }]}>HEIGHT (FT)</Text>
                 <FlipNumberPicker value={heightFeet} min={3} max={8} step={1} unit="ft" onChange={setHeightFeet} />
               </View>
               <View style={styles.measureCol}>
-                <Text style={[styles.fieldLabel, { color: colors.textMuted }]}>HEIGHT (IN)</Text>
+                <Text style={[styles.fieldLabel, { color: colors?.textMuted }]}>HEIGHT (IN)</Text>
                 <FlipNumberPicker value={heightInches} min={0} max={11} step={1} unit="in" onChange={setHeightInches} />
               </View>
             </View>
           ) : (
             <View style={styles.measureRow}>
               <View style={[styles.measureCol, { flex: 1 }]}>
-                <Text style={[styles.fieldLabel, { color: colors.textMuted }]}>HEIGHT (CM)</Text>
+                <Text style={[styles.fieldLabel, { color: colors?.textMuted }]}>HEIGHT (CM)</Text>
                 <FlipNumberPicker value={heightCm} min={90} max={250} step={1} unit="cm" onChange={setHeightCm} />
               </View>
             </View>
           )}
 
-          {/* Sex */}
-          <Text style={[styles.fieldLabel, { color: colors.textMuted, marginTop: 12 }]}>SEX</Text>
-          <View style={[styles.genderRow, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+          {/* Age */}
+          <View style={styles.measureRow}>
+            <View style={[styles.measureCol, { flex: 1 }]}>
+              <Text style={[styles.fieldLabel, { color: colors?.textMuted }]}>AGE</Text>
+              <FlipNumberPicker value={age} min={13} max={99} step={1} unit="yrs" onChange={setAge} />
+            </View>
+          </View>
+
+          {/* Biological Sex */}
+          <Text style={[styles.fieldLabel, { color: colors?.textMuted, marginTop: 12 }]}>BIOLOGICAL SEX</Text>
+          <View style={[styles.genderRow, { backgroundColor: colors?.surface, borderColor: colors?.border }]}>
             {(['female', 'male', 'na'] as GenderOption[]).map((g) => (
               <TouchableOpacity
                 key={g}
-                style={[styles.genderChip, gender === g && [styles.genderChipActive, { backgroundColor: colors.primary }]]}
-                onPress={() => { Haptics.selectionAsync().catch(() => {}); setGender(g); }}
+                style={[styles.genderChip, gender === g && [styles.genderChipActive, { backgroundColor: colors?.primary }]]}
+                onPress={() => {
+                  Haptics.selectionAsync().catch(() => {});
+                  setGender(g);
+                }}
                 activeOpacity={0.8}
               >
-                <Text style={[styles.genderChipText, { color: gender === g ? '#09090b' : colors.textMuted }]}>
-                  {g === 'female' ? 'Female' : g === 'male' ? 'Male' : '-'}
+                <Text style={[styles.genderChipText, { color: gender === g ? '#09090b' : colors?.textMuted }]}>
+                  {g === 'female' ? 'Female' : g === 'male' ? 'Male' : 'Non-Binary'}
                 </Text>
               </TouchableOpacity>
             ))}
           </View>
 
-          <TouchableOpacity style={[styles.nextBtn, { backgroundColor: colors.primary }]} onPress={handleNext} activeOpacity={0.85}>
-            <Text style={styles.nextBtnText}>Continue</Text>
-            <Ionicons name="arrow-forward" size={18} color="#09090b" />
+          <TouchableOpacity
+            style={[styles.nextBtn, { backgroundColor: colors?.primary }]}
+            onPress={handleNext}
+            activeOpacity={0.85}
+          >
+            <Text style={[styles.nextBtnText, { color: isDark ? '#09090b' : '#ffffff' }]}>Continue</Text>
+            <Ionicons name="arrow-forward" size={18} color={isDark ? '#09090b' : '#ffffff'} />
           </TouchableOpacity>
         </ScrollView>
 
-        {/* ──────── STEP 3: Units (skipped — combined into step 2) ──────── */}
-        {/* ──────── STEP 4: Steps Goal ──────── */}
+        {/* ──────── STEP 5: PROFILE IDENTITY & STEPS ──────── */}
         <KeyboardAvoidingView
           style={{ width: SCREEN_WIDTH }}
           behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         >
           <ScrollView contentContainerStyle={styles.stepContent} keyboardShouldPersistTaps="handled">
-            <Text style={[styles.stepTitle, { color: colors.text }]}>Set your daily steps goal</Text>
-            <Text style={[styles.stepSubtitle, { color: colors.textSecondary }]}>
-              You can always change this later from your profile.
+            <Text style={[styles.stepTitle, { color: colors?.text }]}>Finalize your profile</Text>
+            <Text style={[styles.stepSubtitle, { color: colors?.textSecondary }]}>
+              Set your walker identity and your starting daily steps target.
             </Text>
 
-            {/* Goal display */}
-            <View style={[styles.goalDisplay, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-              <Text style={[styles.goalNumber, { color: colors.primary, fontFamily: SERIF_FONT }]}>
-                {stepsGoal.toLocaleString()}
-              </Text>
-              <Text style={[styles.goalUnit, { color: colors.textMuted }]}>steps / day</Text>
+            <View style={styles.fieldGroup}>
+              <Text style={[styles.fieldLabel, { color: colors?.textMuted }]}>DISPLAY NAME</Text>
+              <View style={[styles.inputBox, { backgroundColor: colors?.surface, borderColor: colors?.border }]}>
+                <Ionicons name="person-outline" size={16} color={colors?.textMuted} style={{ marginRight: 10 }} />
+                <TextInput
+                  style={[styles.input, { color: colors?.text }]}
+                  value={nameInput}
+                  onChangeText={setNameInput}
+                  placeholder="Your Name"
+                  placeholderTextColor={colors?.textMuted}
+                  autoCapitalize="words"
+                />
+              </View>
             </View>
 
-            {/* Quick presets */}
+            <View style={styles.fieldGroup}>
+              <Text style={[styles.fieldLabel, { color: colors?.textMuted }]}>USERNAME</Text>
+              <View style={[styles.inputBox, { backgroundColor: colors?.surface, borderColor: colors?.border }]}>
+                <Text style={[styles.atSign, { color: colors?.primary }]}>@</Text>
+                <TextInput
+                  style={[styles.input, { color: colors?.text }]}
+                  value={usernameInput}
+                  onChangeText={(t) => setUsernameInput(t.toLowerCase().replace(/[^a-z0-9_]/g, ''))}
+                  placeholder="username"
+                  placeholderTextColor={colors?.textMuted}
+                  autoCapitalize="none"
+                />
+              </View>
+            </View>
+
+            {/* Steps Goal Display */}
+            <Text style={[styles.fieldLabel, { color: colors?.textMuted, marginTop: 10 }]}>DAILY STEPS GOAL</Text>
+            <View style={[styles.goalDisplay, { backgroundColor: colors?.surface, borderColor: colors?.border }]}>
+              <Text style={[styles.goalNumber, { color: colors?.primary, fontFamily: SERIF_FONT }]}>
+                {stepsGoal.toLocaleString()}
+              </Text>
+              <Text style={[styles.goalUnit, { color: colors?.textMuted }]}>steps / day</Text>
+            </View>
+
             <View style={styles.presetsRow}>
-              {[5000, 7500, 10000, 12500, 15000].map((preset) => (
+              {[6000, 8000, 10000, 12000, 15000].map((preset) => (
                 <TouchableOpacity
                   key={preset}
                   style={[
                     styles.presetChip,
-                    { backgroundColor: colors.surface, borderColor: colors.border },
-                    stepsGoal === preset && [styles.presetChipActive, { backgroundColor: colors.primary, borderColor: colors.primary }],
+                    { backgroundColor: colors?.surface, borderColor: colors?.border },
+                    stepsGoal === preset && { backgroundColor: colors?.primary, borderColor: colors?.primary },
                   ]}
                   onPress={() => {
                     Haptics.selectionAsync().catch(() => {});
                     setStepsGoal(preset);
-                    setStepsInputText(String(preset));
                   }}
                   activeOpacity={0.8}
                 >
-                  <Text style={[styles.presetChipText, { color: stepsGoal === preset ? '#09090b' : colors.textSecondary }]}>
-                    {(preset / 1000).toFixed(preset % 1000 === 0 ? 0 : 1)}k
+                  <Text style={[styles.presetChipText, { color: stepsGoal === preset ? '#09090b' : colors?.textSecondary }]}>
+                    {(preset / 1000).toFixed(0)}k
                   </Text>
                 </TouchableOpacity>
               ))}
             </View>
 
-            {/* Custom input */}
-            <View style={styles.fieldGroup}>
-              <Text style={[styles.fieldLabel, { color: colors.textMuted }]}>OR ENTER CUSTOM GOAL</Text>
-              <View style={[styles.inputBox, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-                <Ionicons name="footsteps-outline" size={16} color={colors.textMuted} style={{ marginRight: 10 }} />
-                <TextInput
-                  style={[styles.input, { color: colors.text }]}
-                  value={stepsInputText}
-                  onChangeText={(t) => {
-                    setStepsInputText(t);
-                    const n = parseInt(t.replace(/\D/g, ''));
-                    if (!isNaN(n) && n > 0) setStepsGoal(Math.min(50000, n));
-                  }}
-                  keyboardType="numeric"
-                  placeholder="e.g. 10000"
-                  placeholderTextColor={colors.textMuted}
-                />
-              </View>
-            </View>
-
             <TouchableOpacity
-              style={[styles.nextBtn, { backgroundColor: colors.primary }, saving && styles.nextBtnDisabled]}
+              style={[styles.nextBtn, { backgroundColor: colors?.primary }, saving && styles.nextBtnDisabled]}
               onPress={handleFinish}
               activeOpacity={0.85}
               disabled={saving}
             >
-              <Text style={styles.nextBtnText}>{saving ? 'Setting up...' : "Let's Go!"}</Text>
-              <Ionicons name="checkmark-circle" size={18} color="#09090b" />
+              <Text style={[styles.nextBtnText, { color: isDark ? '#09090b' : '#ffffff' }]}>
+                {saving ? 'Setting up...' : "Let's Go!"}
+              </Text>
+              <Ionicons name="checkmark-circle" size={18} color={isDark ? '#09090b' : '#ffffff'} />
             </TouchableOpacity>
           </ScrollView>
         </KeyboardAvoidingView>
@@ -396,12 +552,12 @@ export default function OnboardingScreen() {
 
       {/* Step dots */}
       <View style={styles.dotsRow}>
-        {Array.from({ length: TOTAL_STEPS - 1 }, (_, i) => (
+        {Array.from({ length: TOTAL_STEPS }, (_, i) => (
           <View
             key={i}
             style={[
               styles.dot,
-              { backgroundColor: i === currentStep ? colors.primary : colors.border },
+              { backgroundColor: i === currentStep ? colors?.primary : colors?.border },
               i === currentStep && styles.dotActive,
             ]}
           />
@@ -447,52 +603,87 @@ const styles = StyleSheet.create({
   progressFill: { height: 3, borderRadius: 2 },
   stepContent: {
     padding: 24,
-    paddingTop: 32,
+    paddingTop: 24,
     paddingBottom: 48,
   },
   stepTitle: {
     fontFamily: SERIF_FONT,
-    fontSize: 28,
+    fontSize: 27,
     fontWeight: '700',
-    letterSpacing: -0.5,
+    letterSpacing: -0.4,
     marginBottom: 8,
   },
   stepSubtitle: {
-    fontSize: 15,
-    lineHeight: 22,
-    marginBottom: 32,
+    fontSize: 14.5,
+    lineHeight: 21,
+    marginBottom: 20,
   },
-  fieldGroup: { marginBottom: 20 },
+  pillTrack: {
+    flexDirection: 'row',
+    borderRadius: 14,
+    borderWidth: 1,
+    padding: 4,
+    marginBottom: 16,
+    height: 44,
+  },
+  pillOption: { flex: 1, alignItems: 'center', justifyContent: 'center', borderRadius: 10 },
+  pillOptionActive: {},
+  pillText: { fontSize: 13.5, fontWeight: '700' },
+  scaleHelperCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    padding: 14,
+    borderRadius: 16,
+    marginTop: 14,
+    marginBottom: 8,
+  },
+  scaleHelperText: {
+    fontSize: 13,
+    lineHeight: 18,
+    flex: 1,
+    fontWeight: '500',
+  },
+  paceOptionsList: {
+    gap: 12,
+    marginVertical: 12,
+  },
+  paceCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 14,
+    borderRadius: 18,
+    borderWidth: 1.5,
+    gap: 12,
+  },
+  paceIconWrap: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  paceTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+  },
+  paceBadge: {
+    fontSize: 12,
+    fontWeight: '800',
+  },
+  paceDesc: {
+    fontSize: 12,
+    marginTop: 3,
+    lineHeight: 16,
+  },
+  measureRow: { flexDirection: 'row', gap: 14, marginBottom: 12 },
+  measureCol: { flex: 1 },
   fieldLabel: {
     fontSize: 10.5,
     fontWeight: '800',
     letterSpacing: 0.9,
     marginBottom: 8,
   },
-  inputBox: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderRadius: 14,
-    borderWidth: 1,
-    paddingHorizontal: 14,
-    height: 50,
-  },
-  atSign: { fontSize: 16, fontWeight: '800', marginRight: 6 },
-  input: { flex: 1, fontSize: 16, fontWeight: '600' },
-  pillTrack: {
-    flexDirection: 'row',
-    borderRadius: 14,
-    borderWidth: 1,
-    padding: 4,
-    marginBottom: 24,
-    height: 46,
-  },
-  pillOption: { flex: 1, alignItems: 'center', justifyContent: 'center', borderRadius: 10 },
-  pillOptionActive: {},
-  pillText: { fontSize: 14, fontWeight: '700' },
-  pillTextActive: { color: '#09090b' },
-  measureRow: { flexDirection: 'row', gap: 14, marginBottom: 12 },
-  measureCol: { flex: 1 },
   genderRow: {
     flexDirection: 'row',
     borderRadius: 14,
@@ -504,46 +695,55 @@ const styles = StyleSheet.create({
   genderChip: { flex: 1, alignItems: 'center', justifyContent: 'center', borderRadius: 10 },
   genderChipActive: {},
   genderChipText: { fontSize: 13, fontWeight: '700' },
+  fieldGroup: { marginBottom: 16 },
+  inputBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderRadius: 14,
+    borderWidth: 1,
+    paddingHorizontal: 14,
+    height: 48,
+  },
+  atSign: { fontSize: 16, fontWeight: '800', marginRight: 6 },
+  input: { flex: 1, fontSize: 15, fontWeight: '600' },
+  goalDisplay: {
+    alignItems: 'center',
+    borderRadius: 18,
+    borderWidth: 1,
+    paddingVertical: 18,
+    marginBottom: 16,
+  },
+  goalNumber: {
+    fontSize: 44,
+    fontWeight: '700',
+    letterSpacing: -1.5,
+  },
+  goalUnit: { fontSize: 13, fontWeight: '600', marginTop: 2 },
+  presetsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginBottom: 20,
+    justifyContent: 'center',
+  },
+  presetChip: {
+    paddingVertical: 7,
+    paddingHorizontal: 16,
+    borderRadius: 18,
+    borderWidth: 1,
+  },
+  presetChipText: { fontSize: 13, fontWeight: '700' },
   nextBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 10,
+    gap: 8,
     height: 52,
     borderRadius: 26,
-    marginTop: 28,
+    marginTop: 20,
   },
   nextBtnDisabled: { opacity: 0.5 },
-  nextBtnText: { fontSize: 16, fontWeight: '800', color: '#09090b' },
-  // Goal step
-  goalDisplay: {
-    alignItems: 'center',
-    borderRadius: 20,
-    borderWidth: 1,
-    paddingVertical: 28,
-    marginBottom: 24,
-  },
-  goalNumber: {
-    fontSize: 52,
-    fontWeight: '700',
-    letterSpacing: -2,
-  },
-  goalUnit: { fontSize: 14, fontWeight: '600', marginTop: 4 },
-  presetsRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 10,
-    marginBottom: 24,
-    justifyContent: 'center',
-  },
-  presetChip: {
-    paddingVertical: 8,
-    paddingHorizontal: 18,
-    borderRadius: 20,
-    borderWidth: 1,
-  },
-  presetChipActive: {},
-  presetChipText: { fontSize: 14, fontWeight: '700' },
+  nextBtnText: { fontSize: 15.5, fontWeight: '800' },
   dotsRow: {
     flexDirection: 'row',
     justifyContent: 'center',

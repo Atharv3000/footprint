@@ -1137,7 +1137,7 @@ export function StepsCharts({
           onPress={() => handleSwitchMetric('steps')}
           activeOpacity={0.75}
         >
-          <Animated.Text
+          <Text
             style={[
               styles.subTabText,
               {
@@ -1147,7 +1147,7 @@ export function StepsCharts({
             ]}
           >
             steps
-          </Animated.Text>
+          </Text>
         </TouchableOpacity>
 
         <TouchableOpacity
@@ -1155,7 +1155,7 @@ export function StepsCharts({
           onPress={() => handleSwitchMetric('distance')}
           activeOpacity={0.75}
         >
-          <Animated.Text
+          <Text
             style={[
               styles.subTabText,
               {
@@ -1165,7 +1165,7 @@ export function StepsCharts({
             ]}
           >
             distance
-          </Animated.Text>
+          </Text>
         </TouchableOpacity>
 
         <TouchableOpacity
@@ -1173,7 +1173,7 @@ export function StepsCharts({
           onPress={() => handleSwitchMetric('history')}
           activeOpacity={0.75}
         >
-          <Animated.Text
+          <Text
             style={[
               styles.subTabText,
               {
@@ -1183,7 +1183,7 @@ export function StepsCharts({
             ]}
           >
             history
-          </Animated.Text>
+          </Text>
         </TouchableOpacity>
 
         {/* Animated line highlighted under selected metric */}

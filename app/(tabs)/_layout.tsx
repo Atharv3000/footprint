@@ -46,14 +46,21 @@ fontSize: 16,
         tabBarItemStyle: {
           justifyContent: 'center',
           alignItems: 'center',
+          height: '100%',
+          paddingVertical: 4,
         },
         tabBarStyle: {
-          backgroundColor: colors.surfaceElevated,
-          borderTopColor: colors.border,
+          backgroundColor: '#ffffff',
+          borderTopColor: '#e5e7eb',
           borderTopWidth: 1,
-          height: Platform.OS === 'ios' ? 70 : 60,
-          paddingBottom: Platform.OS === 'ios' ? 16 : 0,
-          paddingTop: 0,
+          height: Platform.OS === 'ios' ? 76 : 68,
+          paddingBottom: Platform.OS === 'ios' ? 20 : 8,
+          paddingTop: 6,
+          shadowColor: '#000',
+          shadowOffset: { width: 0, height: -2 },
+          shadowOpacity: 0.05,
+          shadowRadius: 8,
+          elevation: 6,
         },
       }}>
       <Tabs.Screen
@@ -75,10 +82,10 @@ fontSize: 16,
         options={{
           title: 'Log',
           headerShown: false,
-          tabBarIcon: ({ color, size, focused }) => (
+          tabBarIcon: ({ color, focused }) => (
             <Ionicons
               name={focused ? 'barbell' : 'barbell-outline'}
-              size={size || 25}
+              size={26}
               color={color}
             />
           ),
@@ -89,10 +96,10 @@ fontSize: 16,
         options={{
           title: 'Calorie Tracker',
           headerShown: false,
-          tabBarIcon: ({ color, size, focused }) => (
+          tabBarIcon: ({ color, focused }) => (
             <Ionicons
               name={focused ? 'restaurant' : 'restaurant-outline'}
-              size={size || 24}
+              size={25}
               color={color}
             />
           ),
@@ -103,10 +110,10 @@ fontSize: 16,
         options={{
           title: 'Track',
           headerShown: false,
-          tabBarIcon: ({ color, size, focused }) => (
+          tabBarIcon: ({ color, focused }) => (
             <Ionicons
               name={focused ? 'compass' : 'compass-outline'}
-              size={size || 26}
+              size={27}
               color={color}
             />
           ),
@@ -117,10 +124,10 @@ fontSize: 16,
         options={{
           title: 'Community',
           headerShown: false,
-          tabBarIcon: ({ color, size, focused }) => (
+          tabBarIcon: ({ color, focused }) => (
             <Ionicons
               name={focused ? 'people' : 'people-outline'}
-              size={size || 24}
+              size={25}
               color={color}
             />
           ),
@@ -132,8 +139,8 @@ name="profile"
 options={{
 title: 'Profile',
 headerShown: false,
-tabBarIcon: ({ color, size, focused }) => {
-  const iconSize = size || 26;
+tabBarIcon: ({ color, focused }) => {
+  const iconSize = 28;
   if (profile.avatarUrl) {
     return (
       <View
@@ -142,9 +149,9 @@ tabBarIcon: ({ color, size, focused }) => {
           height: iconSize,
           borderRadius: iconSize / 2,
           borderWidth: focused ? 2 : 1,
-          borderColor: focused ? colors.primary : colors.border,
+          borderColor: focused ? colors.primary : '#d1d5db',
           overflow: 'hidden',
-          backgroundColor: colors.surfaceElevated,
+          backgroundColor: '#f3f4f6',
           alignItems: 'center',
           justifyContent: 'center',
         }}
@@ -164,8 +171,8 @@ tabBarIcon: ({ color, size, focused }) => {
         height: iconSize,
         borderRadius: iconSize / 2,
         borderWidth: focused ? 2 : 1,
-        borderColor: focused ? colors.primary : colors.border,
-        backgroundColor: focused ? `${colors.primary}25` : colors.surfaceElevated,
+        borderColor: focused ? colors.primary : '#d1d5db',
+        backgroundColor: focused ? `${colors.primary}25` : '#f3f4f6',
         alignItems: 'center',
         justifyContent: 'center',
       }}

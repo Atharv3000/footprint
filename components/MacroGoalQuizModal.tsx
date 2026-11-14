@@ -36,7 +36,9 @@ export function MacroGoalQuizModal({
   onSaved,
   initialAnswers,
 }: MacroGoalQuizModalProps) {
-  const { colors, isDark } = useTheme();
+  const themeContext = useTheme();
+  const colors = themeContext?.colors;
+  const isDark = themeContext?.isDark ?? colors?.isDark ?? true;
 
   const [step, setStep] = useState<number>(1);
   const totalSteps = 4;
@@ -114,17 +116,26 @@ export function MacroGoalQuizModal({
           <View style={{ width: 40 }} />
         </View>
 
-        {/* Progress Bar Indicator */}
-        <View style={[styles.progressTrack, { backgroundColor: colors.border }]}>
-          <View
-            style={[
-              styles.progressFill,
-              {
-                width: `${(step / totalSteps) * 100}%`,
-                backgroundColor: colors.primary,
-              },
-            ]}
-          />
+        {/* Notched Step Segments (Fills as you advance steps) */}
+        <View style={styles.notchedStepContainer}>
+          {Array.from({ length: totalSteps }).map((_, idx) => {
+            const isFilled = idx < step;
+            const isCurrent = idx === step - 1;
+            return (
+              <View
+                key={idx}
+                style={[
+                  styles.notchedStepSegment,
+                  {
+                    backgroundColor: isFilled
+                      ? colors.primary
+                      : colors.surfaceSecondary,
+                    opacity: isCurrent ? 1 : isFilled ? 0.8 : 0.4,
+                  },
+                ]}
+              />
+            );
+          })}
         </View>
 
         <ScrollView contentContainerStyle={styles.scrollBody} showsVerticalScrollIndicator={false}>
@@ -441,10 +452,10 @@ export function MacroGoalQuizModal({
             style={[styles.primaryBtn, { backgroundColor: colors.primary }]}
             onPress={handleNext}
           >
-            <Text style={styles.primaryBtnText}>
+            <Text style={[styles.primaryBtnText, { color: isDark ? '#09090b' : '#ffffff' }]}>
               {step === totalSteps ? 'Save & Apply Macro Targets' : 'Continue'}
             </Text>
-            <Ionicons name="arrow-forward" size={18} color="#09090b" />
+            <Ionicons name="arrow-forward" size={18} color={isDark ? '#09090b' : '#ffffff'} />
           </TouchableOpacity>
         </View>
       </View>
@@ -474,6 +485,18 @@ const styles = StyleSheet.create({
   headerSubtitle: {
     fontSize: 12,
     marginTop: 2,
+  },
+  notchedStepContainer: {
+    flexDirection: 'row',
+    height: 6,
+    paddingHorizontal: 20,
+    gap: 8,
+    marginVertical: 10,
+  },
+  notchedStepSegment: {
+    flex: 1,
+    height: '100%',
+    borderRadius: 3,
   },
   progressTrack: {
     height: 3,

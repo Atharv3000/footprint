@@ -37,6 +37,7 @@ async function hashPassword(password: string): Promise<string> {
 }
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { DEMO_ACCOUNT, preloadDemoAccountData } from './demoPreload';
 
 async function loadEmailAccounts(): Promise<EmailAccount[]> {
   try {
@@ -46,7 +47,21 @@ async function loadEmailAccounts(): Promise<EmailAccount[]> {
     } else {
       raw = await SecureStore.getItemAsync(EMAIL_ACCOUNTS_KEY);
     }
-    return raw ? JSON.parse(raw) : [];
+    const accounts: EmailAccount[] = raw ? JSON.parse(raw) : [];
+
+    // Ensure preloaded fake account always exists in local credentials registry
+    const demoEmailLower = DEMO_ACCOUNT.email.toLowerCase();
+    if (!accounts.some((a) => a.email.toLowerCase() === demoEmailLower)) {
+      const demoHash = await hashPassword(DEMO_ACCOUNT.password);
+      accounts.push({
+        email: demoEmailLower,
+        name: DEMO_ACCOUNT.name,
+        passwordHash: demoHash,
+      });
+      await saveEmailAccounts(accounts);
+    }
+
+    return accounts;
   } catch {
     return [];
   }
@@ -120,6 +135,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     (async () => {
       try {
+        // Guarantee demo account credentials exist in registry on startup
+        loadEmailAccounts().catch(() => {});
+
         const p = await loadUserProfile();
         setProfile(p);
         if (p.isLoggedIn && p.email && p.authProvider !== 'guest') {
@@ -250,6 +268,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
     if (account.passwordHash !== hash) {
       throw new Error('Incorrect password. Please try again.');
+    }
+    // If logging into the preloaded demo account, ensure full dataset is initialized
+    if (account.email.toLowerCase() === DEMO_ACCOUNT.email.toLowerCase()) {
+      await preloadDemoAccountData(account.email);
     }
     await persistSignIn({ name: account.name, email: account.email, provider: 'email' });
   }, [profile]);

@@ -87,17 +87,17 @@ export default function ProfileScreen() {
   const [nameInput, setNameInput] = useState<string>('');
   const [usernameLoading, setUsernameLoading] = useState<boolean>(false);
 
-  // Active Profile Sub-tab: 'activity' | 'insights' | 'badges' | 'ranks' with animated indicator
-  const [activeSubTab, setActiveSubTab] = useState<'activity' | 'insights' | 'badges' | 'ranks'>('ranks');
-  const tabAnim = useRef(new Animated.Value(0)).current; // ranks, activity, insights, badges
+  // Active Profile Sub-tab: 'activity' | 'insights' | 'badges' with animated indicator
+  const [activeSubTab, setActiveSubTab] = useState<'activity' | 'insights' | 'badges'>('activity');
+  const tabAnim = useRef(new Animated.Value(0)).current; // activity, insights, badges
   const [badges, setBadges] = useState<BadgeDefinition[]>([]);
   const [selectedBadge, setSelectedBadge] = useState<BadgeDefinition | null>(null);
 
-  const switchTab = (tab: 'activity' | 'insights' | 'badges' | 'ranks') => {
+  const switchTab = (tab: 'activity' | 'insights' | 'badges') => {
     if (tab === activeSubTab) return;
     Haptics.selectionAsync().catch(() => {});
     setActiveSubTab(tab);
-    const targetVal = tab === 'ranks' ? 0 : tab === 'activity' ? 1 : tab === 'insights' ? 2 : 3;
+    const targetVal = tab === 'activity' ? 0 : tab === 'insights' ? 1 : 2;
     Animated.timing(tabAnim, {
       toValue: targetVal,
       duration: 220,
@@ -782,15 +782,15 @@ export default function ProfileScreen() {
 
       {/* ── LOWER SCREEN CONTAINER (Sub-tab bar and entire content below it: pure white in light mode, pure black in dark mode) ── */}
       <View style={[styles.lowerScreenSection, { backgroundColor: isDark ? '#000000' : '#ffffff', borderTopColor: isDark ? '#1a1a1f' : '#ededf0' }]}>
-        {/* Animated Sub-Tab Selector: activity, insights, badges, ranks */}
+        {/* Animated Sub-Tab Selector: activity, insights, badges */}
         <View style={[styles.subTabBarContainer, { backgroundColor: isDark ? '#000000' : '#ffffff', borderBottomColor: isDark ? '#1f1f24' : '#e5e5ea' }]}>
-          {(['ranks', 'activity', 'insights', 'badges'] as const).map(tab => (
+          {(['activity', 'insights', 'badges'] as const).map(tab => (
             <TouchableOpacity key={tab} accessibilityRole="tab" accessibilityState={{ selected: activeSubTab === tab }}
               style={styles.subTabBtn} onPress={() => switchTab(tab)} activeOpacity={0.75}>
-              <Animated.Text style={[styles.subTabText, {
+              <Text style={[styles.subTabText, {
                 color: activeSubTab === tab ? (isDark ? '#ffffff' : '#000000') : (isDark ? '#71717a' : '#9ca3af'),
                 fontWeight: activeSubTab === tab ? '800' : '600',
-              }]}>{tab}</Animated.Text>
+              }]}>{tab.toUpperCase()}</Text>
             </TouchableOpacity>
           ))}
 
@@ -801,20 +801,16 @@ export default function ProfileScreen() {
               {
                 backgroundColor: isDark ? '#ffffff' : '#000000',
                 left: tabAnim.interpolate({
-                  inputRange: [0, 1, 2, 3],
-                  outputRange: ['0%', '25%', '50%', '75%'],
+                  inputRange: [0, 1, 2],
+                  outputRange: ['0%', '33.333%', '66.666%'],
                 }),
-                width: '25%',
+                width: '33.333%',
               },
             ]}
           />
         </View>
 
         {/* ── PERSISTENT SUB-TAB CONTENT: ACTIVITY vs INSIGHTS vs BADGES ── */}
-        <View style={activeSubTab !== 'ranks' ? { display: 'none' } : undefined}>
-          <MuscleRanksSection userId={effectiveUserId} active={activeSubTab === 'ranks'} />
-        </View>
-
         <View style={[styles.activityTabWrapper, activeSubTab !== 'activity' && { display: 'none' }]}>
           <ProfileActivitySection
             userId={effectiveUserId}
@@ -870,6 +866,9 @@ export default function ProfileScreen() {
               />
             ))}
           </View>
+
+          {/* Muscle Ranks Section placed at the bottom of the Badges tab */}
+          <MuscleRanksSection userId={effectiveUserId} active={activeSubTab === 'badges'} />
 
           {/* BADGE DETAIL POPUP BOTTOM SHEET */}
           <InteractiveBottomModal
@@ -1856,7 +1855,7 @@ const styles = StyleSheet.create({
   badgesGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 12,
+    gap: 8,
     justifyContent: 'space-between',
   },
   badgeCard: {

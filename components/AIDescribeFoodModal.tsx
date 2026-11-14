@@ -45,6 +45,7 @@ export function AIDescribeFoodModal({
   }, [visible, initialMealType]);
 
   const handleCalculate = async () => {
+    Keyboard.dismiss();
     if (!description.trim()) {
       alert('Please describe what you ate or drank.');
       return;
@@ -66,6 +67,7 @@ export function AIDescribeFoodModal({
   };
 
   const handleSave = async () => {
+    Keyboard.dismiss();
     if (!calculatedResult) return;
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
 
@@ -173,18 +175,31 @@ export function AIDescribeFoodModal({
               Include counts and portions. E.g., "3 cookies", "2 glasses of lemonade", "1 bowl of oats with blueberries".
             </Text>
 
-            <TextInput
-              style={[
-                styles.textInput,
-                { backgroundColor: colors.surfaceSecondary, color: colors.text, borderColor: colors.border },
-              ]}
-              placeholder="e.g. 3 cookies and a cold glass of lemonade..."
-              placeholderTextColor={colors.textMuted}
-              multiline
-              numberOfLines={3}
-              value={description}
-              onChangeText={setDescription}
-            />
+            <View style={{ position: 'relative' }}>
+              <TextInput
+                style={[
+                  styles.textInput,
+                  { backgroundColor: colors.surfaceSecondary, color: colors.text, borderColor: colors.border },
+                ]}
+                placeholder="e.g. 3 cookies and a cold glass of lemonade..."
+                placeholderTextColor={colors.textMuted}
+                multiline
+                numberOfLines={3}
+                value={description}
+                onChangeText={setDescription}
+                returnKeyType="done"
+                blurOnSubmit={true}
+                onSubmitEditing={() => Keyboard.dismiss()}
+              />
+              <TouchableOpacity
+                onPress={() => Keyboard.dismiss()}
+                style={styles.floatingDismissBtn}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              >
+                <Ionicons name="checkmark-circle" size={16} color={colors.primary} />
+                <Text style={[styles.floatingDismissText, { color: colors.primary }]}>Done</Text>
+              </TouchableOpacity>
+            </View>
 
             {/* Quick Inspiration Pills */}
             <View style={styles.examplesWrap}>
@@ -334,6 +349,22 @@ export function AIDescribeFoodModal({
 }
 
 const styles = StyleSheet.create({
+  floatingDismissBtn: {
+    position: 'absolute',
+    right: 8,
+    bottom: 18,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 12,
+  },
+  floatingDismissText: {
+    fontSize: 11,
+    fontWeight: '800',
+  },
   header: {
     flexDirection: 'row',
     alignItems: 'center',

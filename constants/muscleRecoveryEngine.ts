@@ -236,17 +236,32 @@ export function computeMuscleRecoveryMap(
     let statusColor: string;
     let statusText: string;
 
+    // Smooth continuous color calculation across 0 -> 50 -> 100
+    const clampedPct = Math.max(0, Math.min(100, recoveryPercent));
+    let r: number, g: number, b: number;
+    if (clampedPct <= 50) {
+      // 0%: #ef4444 (239, 68, 68) -> 50%: #f59e0b (245, 158, 11)
+      const t = clampedPct / 50;
+      r = Math.round(239 + (245 - 239) * t);
+      g = Math.round(68 + (158 - 68) * t);
+      b = Math.round(68 + (11 - 68) * t);
+    } else {
+      // 50%: #f59e0b (245, 158, 11) -> 100%: #10b981 (16, 185, 129)
+      const t = (clampedPct - 50) / 50;
+      r = Math.round(245 + (16 - 245) * t);
+      g = Math.round(158 + (185 - 158) * t);
+      b = Math.round(11 + (129 - 11) * t);
+    }
+    statusColor = `#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${b.toString(16).padStart(2, '0')}`;
+
     if (recoveryPercent < 55) {
       status = 'sore';
-      statusColor = '#ef4444'; // Red (Peak Soreness / DOMS)
       statusText = `Sore (${hoursUntilRecovered}h left)`;
     } else if (recoveryPercent < 90) {
       status = 'recovering';
-      statusColor = '#f59e0b'; // Amber / Yellow (Recovering)
       statusText = `Recovering (${hoursUntilRecovered}h left)`;
     } else {
       status = 'ready';
-      statusColor = '#10b981'; // Green (Ready)
       statusText = '100% Ready';
     }
 

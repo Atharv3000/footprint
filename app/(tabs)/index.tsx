@@ -16,13 +16,14 @@ import {
   Animated,
   Image,
 } from 'react-native';
+import Svg, { Rect, Path as SvgPath, Circle as SvgCircle, G as SvgG, Defs, LinearGradient as SvgGradient, Stop as SvgStop } from 'react-native-svg';
 import MapView, { Marker, Polyline, Circle, Region, MapType } from 'react-native-maps';
 import * as Location from 'expo-location';
 import * as Haptics from 'expo-haptics';
 import * as Speech from 'expo-speech';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '@/constants/AuthContext';
-import { useTheme } from '@/constants/ThemeContext';
+import { useTheme, BRAND_ROUNDED_FONT, BRAND_ROUNDED_FONT_EXTRA } from '@/constants/ThemeContext';
 import { saveWalk, loadWalks, WalkRecord } from '@/constants/walkStorage';
 import { loadFriends, FriendUser } from '@/constants/socialEngine';
 import {
@@ -296,6 +297,7 @@ function DistanceSlider({
   const trackWidthRef = useRef<number>(0);
   const valueRef = useRef<number>(value);
   const startDragPageXRef = useRef<number>(0);
+  const startDragPageYRef = useRef<number>(0);
   const startDragTRef = useRef<number>(0);
   const isDraggingRef = useRef<boolean>(false);
   const [isPressed, setIsPressed] = useState<boolean>(false);
@@ -361,12 +363,23 @@ function DistanceSlider({
     PanResponder.create({
       onStartShouldSetPanResponder: () => true,
       onStartShouldSetPanResponderCapture: () => true,
-      onMoveShouldSetPanResponder: (_e, gestureState) => Math.abs(gestureState.dx) > 2,
-      onMoveShouldSetPanResponderCapture: (_e, gestureState) => Math.abs(gestureState.dx) > 2,
+      onMoveShouldSetPanResponder: (_e, gestureState) => {
+        // Claim pan responder if moving horizontally more than vertically
+        return Math.abs(gestureState.dx) > 2;
+      },
+      onMoveShouldSetPanResponderCapture: (_e, gestureState) => {
+        return Math.abs(gestureState.dx) > 2;
+      },
+      // Prevent parent scroll views from stealing the gesture once horizontal drag has begun
+      onPanResponderTerminationRequest: (_e, gestureState) => {
+        // Only allow termination if user deliberately pulled far vertically without horizontal intent
+        return Math.abs(gestureState.dy) > 75;
+      },
       onPanResponderGrant: (e) => {
         isDraggingRef.current = true;
         setIsPressed(true);
         startDragPageXRef.current = e.nativeEvent.pageX;
+        startDragPageYRef.current = e.nativeEvent.pageY;
 
         // Calculate initial touched T based on geometry
         if (trackRef.current) {
@@ -391,22 +404,38 @@ function DistanceSlider({
           startDragTRef.current = valToT(valueRef.current);
         }
       },
-      onPanResponderMove: (e) => {
+      onPanResponderMove: (e, gestureState) => {
         if (!isDraggingRef.current) return;
+        // If the finger wanders excessively far vertically off the bar (>65px),
+        // freeze / preserve the current position instead of projecting extreme horizontal deltas
+        const verticalDrift = Math.abs(e.nativeEvent.pageY - startDragPageYRef.current);
+        if (verticalDrift > 65) {
+          return;
+        }
+
         const deltaX = e.nativeEvent.pageX - startDragPageXRef.current;
         updateFromDelta(deltaX);
       },
-      onPanResponderRelease: (e) => {
+      onPanResponderRelease: (e, gestureState) => {
         setIsPressed(false);
         isDraggingRef.current = false;
+        const verticalDrift = Math.abs(e.nativeEvent.pageY - startDragPageYRef.current);
+        // If released after straying far off the bar, simply commit the current stable value
+        if (verticalDrift > 65) {
+          onCommit(valueRef.current);
+          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
+          return;
+        }
         const deltaX = e.nativeEvent.pageX - startDragPageXRef.current;
         updateFromDelta(deltaX, true);
       },
-      onPanResponderTerminate: (e) => {
+      onPanResponderTerminate: (e, gestureState) => {
         setIsPressed(false);
         isDraggingRef.current = false;
-        const deltaX = e.nativeEvent.pageX - startDragPageXRef.current;
-        updateFromDelta(deltaX, true);
+        // Do NOT jump to the ends on gesture cancel / termination!
+        // Lock and commit the last valid value in-place without applying erratic deltas.
+        onCommit(valueRef.current);
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
       },
     })
   ).current;
@@ -949,7 +978,7 @@ export default function TrackScreen() {
       }
 
       if (mapRef.current && initialPos) {
-        mapRef.current.animateToRegion({
+        mapRef.current?.animateToRegion?.({
           latitude: initialPos.coords.latitude,
           longitude: initialPos.coords.longitude,
           latitudeDelta: 0.005,
@@ -1036,7 +1065,7 @@ export default function TrackScreen() {
           if (followsUserRef.current && mapRef.current) {
             const currentHead = headingRef.current;
             if (is3DRef.current || followHeadingRef.current) {
-              mapRef.current.animateCamera(
+              mapRef.current?.animateCamera?.(
                 {
                   center: {
                     latitude: newLocation.coords.latitude,
@@ -1048,7 +1077,7 @@ export default function TrackScreen() {
                 { duration: 400 }
               );
             } else {
-              mapRef.current.animateCamera(
+              mapRef.current?.animateCamera?.(
                 {
                   center: {
                     latitude: newLocation.coords.latitude,
@@ -1083,7 +1112,7 @@ export default function TrackScreen() {
             cameraBearingRef.current = roundedHeading;
             setCameraBearing(roundedHeading);
 
-            mapRef.current.animateCamera(
+            mapRef.current?.animateCamera?.(
               {
                 center: {
                   latitude: locationRef.current.coords.latitude,
@@ -1139,7 +1168,7 @@ export default function TrackScreen() {
       const targetHeading = headingRef.current || heading || cameraBearingRef.current || cameraBearing || 0;
 
       // Animate immediately
-      mapRef.current.animateCamera(
+      mapRef.current?.animateCamera?.(
         {
           ...(center ? { center } : {}),
           pitch: next3D ? 65 : 0,
@@ -1153,7 +1182,7 @@ export default function TrackScreen() {
       // Follow-up frame ensures orientation locks in satellite mode without native desync
       setTimeout(() => {
         if (mapRef.current && is3DRef.current === next3D) {
-          mapRef.current.animateCamera(
+          mapRef.current?.animateCamera?.(
             {
               pitch: next3D ? 65 : 0,
               heading: next3D ? (headingRef.current || targetHeading) : 0,
@@ -1182,7 +1211,7 @@ export default function TrackScreen() {
 
     if (mapRef.current && location) {
       setTimeout(() => {
-        mapRef.current?.animateCamera({
+        mapRef.current?.animateCamera?.({
           center: {
             latitude: location.coords.latitude,
             longitude: location.coords.longitude,
@@ -1202,7 +1231,7 @@ export default function TrackScreen() {
     setSelectedFriend(selectedFriend?.id === fr.id ? null : fr);
     const coord = fr.currentLocation;
     if (coord && mapRef.current) {
-      mapRef.current.animateCamera(
+      mapRef.current?.animateCamera?.(
         {
           center: {
             latitude: coord.latitude,
@@ -1349,7 +1378,7 @@ export default function TrackScreen() {
         }
         if (allCoords.length > 0) {
           setTimeout(() => {
-            mapRef.current?.fitToCoordinates(allCoords, {
+            mapRef.current?.fitToCoordinates?.(allCoords, {
               edgePadding: { top: 90, right: 40, bottom: 420, left: 40 },
               animated: true,
             });
@@ -1393,7 +1422,7 @@ export default function TrackScreen() {
         setCurrentStepIndex(0);
         currentStepIndexRef.current = 0;
         if (mapRef.current && realRoute.coordinates.length > 0) {
-          mapRef.current.fitToCoordinates(realRoute.coordinates, {
+          mapRef.current?.fitToCoordinates?.(realRoute.coordinates, {
             edgePadding: { top: 180, right: 60, bottom: 280, left: 60 },
             animated: true,
           });
@@ -1419,7 +1448,7 @@ export default function TrackScreen() {
         setCurrentStepIndex(0);
         currentStepIndexRef.current = 0;
         if (mapRef.current && multiRoute.coordinates.length > 0) {
-          mapRef.current.fitToCoordinates(multiRoute.coordinates, {
+          mapRef.current?.fitToCoordinates?.(multiRoute.coordinates, {
             edgePadding: { top: 180, right: 60, bottom: 280, left: 60 },
             animated: true,
           });
@@ -1521,7 +1550,7 @@ export default function TrackScreen() {
       speakInstruction(selectedRoute.steps[0].instruction);
     }
     if (mapRef.current && selectedRoute && selectedRoute.coordinates.length > 0) {
-      mapRef.current.fitToCoordinates(selectedRoute.coordinates, {
+      mapRef.current?.fitToCoordinates?.(selectedRoute.coordinates, {
         edgePadding: { top: 180, right: 60, bottom: 220, left: 60 },
         animated: true,
       });
@@ -1536,7 +1565,7 @@ export default function TrackScreen() {
       setRouteDestination({ lat: last.latitude, lng: last.longitude });
     }
     if (mapRef.current && route.coordinates.length > 0) {
-      mapRef.current.fitToCoordinates(route.coordinates, {
+      mapRef.current?.fitToCoordinates?.(route.coordinates, {
         edgePadding: { top: 90, right: 40, bottom: 420, left: 40 },
         animated: true,
       });
@@ -1559,7 +1588,7 @@ export default function TrackScreen() {
       speakInstruction(route.steps[0].instruction);
     }
     if (mapRef.current && route.coordinates.length > 0) {
-      mapRef.current.fitToCoordinates(route.coordinates, {
+      mapRef.current?.fitToCoordinates?.(route.coordinates, {
         edgePadding: { top: 180, right: 60, bottom: 220, left: 60 },
         animated: true,
       });
@@ -1686,7 +1715,7 @@ export default function TrackScreen() {
 
     // If a planned route is selected, fit camera to show the whole planned route
     if (selectedRoute && selectedRoute.coordinates.length > 0) {
-      mapRef.current.fitToCoordinates(selectedRoute.coordinates, {
+      mapRef.current?.fitToCoordinates?.(selectedRoute.coordinates, {
         edgePadding: { top: 180, right: 60, bottom: 220, left: 60 },
         animated: true,
       });
@@ -1695,7 +1724,7 @@ export default function TrackScreen() {
 
     // If an active walk trail is recorded with multiple coordinates, frame the entire recorded route
     if (routeCoordinates.length > 1) {
-      mapRef.current.fitToCoordinates(routeCoordinates, {
+      mapRef.current?.fitToCoordinates?.(routeCoordinates, {
         edgePadding: { top: 180, right: 60, bottom: 220, left: 60 },
         animated: true,
       });
@@ -1708,7 +1737,7 @@ export default function TrackScreen() {
       setCameraBearing(0);
       lastAnimatedHeadingRef.current = 0;
 
-      mapRef.current.animateCamera(
+      mapRef.current?.animateCamera?.(
         {
           center: {
             latitude: location.coords.latitude,
@@ -1822,7 +1851,24 @@ export default function TrackScreen() {
       {/* Edge-to-Edge Map with Native 3D Building Models & Labels Toggle */}
       <MapView
         key={`map_${mapTheme}_${effectiveMapType}_${showsBuildings ? 'bldg_on' : 'bldg_off'}`}
-        ref={mapRef}
+        ref={(instance: any) => {
+          if (instance) {
+            // Provide safe fallback stubs on web / non-native to guarantee methods never throw
+            if (typeof instance.animateCamera !== 'function') instance.animateCamera = () => {};
+            if (typeof instance.animateToRegion !== 'function') instance.animateToRegion = () => {};
+            if (typeof instance.fitToCoordinates !== 'function') instance.fitToCoordinates = () => {};
+            if (typeof instance.getCamera !== 'function') {
+              instance.getCamera = async () => ({
+                center: { latitude: 0, longitude: 0 },
+                pitch: 0,
+                heading: 0,
+                altitude: 0,
+                zoom: 0,
+              });
+            }
+          }
+          (mapRef as any).current = instance;
+        }}
         style={styles.map}
         initialRegion={initialRegion}
         mapType={effectiveMapType}
@@ -2749,12 +2795,12 @@ export default function TrackScreen() {
                 renderItem={({ item }) => {
                   const distFormatted = item.distanceMeters !== undefined
                     ? (profile.unitSystem === 'us_customary'
-                        ? (item.distanceMeters >= 1609.34
+                        ? (item.distanceMeters >= 160.934
                             ? `${(item.distanceMeters / 1609.34).toFixed(1)} mi`
-                            : `${Math.round(item.distanceMeters * 3.28084)} ft`)
+                            : `${Math.round(item.distanceMeters * 3.28084 / 10) * 10} ft`)
                         : (item.distanceMeters >= 1000
                             ? `${(item.distanceMeters / 1000).toFixed(1)} km`
-                            : `${Math.round(item.distanceMeters)} m`))
+                            : `${Math.round(item.distanceMeters / 10) * 10} m`))
                     : null;
 
                   const catIcon =
@@ -2763,7 +2809,6 @@ export default function TrackScreen() {
                     : item.category === 'viewpoint' ? 'eye'
                     : item.category === 'trail' ? 'walk'
                     : item.category === 'nature' ? 'flower'
-                    : item.category === 'monument' ? 'business-outline'
                     : 'location';
 
                   return (
@@ -2811,6 +2856,7 @@ export default function TrackScreen() {
 
                       {distFormatted && (
                         <View style={[styles.searchResultDistBadge, { backgroundColor: themeColors.surfaceElevated, borderColor: themeColors.border }]}>
+                          <Ionicons name="navigate-outline" size={10} color={themeColors.primary} />
                           <Text style={[styles.searchResultDistText, { color: themeColors.primary }]}>
                             {distFormatted}
                           </Text>
@@ -3461,6 +3507,7 @@ export default function TrackScreen() {
                           style={{
                             fontSize: 12,
                             fontWeight: isActive ? '800' : '600',
+                            fontFamily: BRAND_ROUNDED_FONT_EXTRA,
                             color: isActive ? activeFg : themeColors.text,
                           }}
                         >
@@ -4119,18 +4166,12 @@ maxHeight: '80%',
 <View style={[styles.sheetHandle, { backgroundColor: themeColors.borderLight }]} />
 
 <View style={styles.sheetHeaderRow}>
-<View style={{ flex: 1, paddingRight: 8 }}>
+<View style={{ flex: 1 }}>
 <Text style={[styles.sheetTitle, { color: themeColors.text }]}>Map Themes & Buildings</Text>
 <Text style={[styles.sheetSubtitle, { color: themeColors.textSecondary }]}>
 Choose your theme & customize building labels
 </Text>
 </View>
-<TouchableOpacity
-style={[styles.sheetCloseButton, { backgroundColor: themeColors.surfaceElevated }]}
-onPress={() => setShowMapLayersModal(false)}
->
-<Ionicons name="close" size={20} color={themeColors.textSecondary} />
-</TouchableOpacity>
 </View>
 
 <ScrollView
@@ -4294,7 +4335,6 @@ Dark Mode
 </Text>
 {mapTheme === 'dark' && <Ionicons name="checkmark-circle" size={15} color={themeColors.primary} />}
 </View>
-<Text style={[styles.appearanceDesc, { color: themeColors.textMuted }]}>OLED deep contrast</Text>
 </TouchableOpacity>
 
 <TouchableOpacity
@@ -4319,7 +4359,6 @@ Light Mode
 </Text>
 {mapTheme === 'light' && <Ionicons name="checkmark-circle" size={15} color={themeColors.primary} />}
 </View>
-<Text style={[styles.appearanceDesc, { color: themeColors.textMuted }]}>Crisp sunlight clarity</Text>
 </TouchableOpacity>
 </View>
 </View>
@@ -4339,10 +4378,41 @@ onPress={() => selectMapType('standard')}
 activeOpacity={0.7}
 >
 <View style={[styles.texturePreviewStandard, { borderColor: themeColors.border }]}>
-<View style={styles.textureRoadMajor} />
-<View style={styles.textureRoadMinor} />
-<View style={styles.textureBuildingBlock1} />
-<View style={styles.textureBuildingBlock2} />
+  <Svg width="100%" height="100%" viewBox="0 0 140 52">
+    <Defs>
+      <SvgGradient id="stdGrass" x1="0" y1="0" x2="0" y2="1">
+        <SvgStop offset="0" stopColor="#eaf3e6" />
+        <SvgStop offset="1" stopColor="#dce8d9" />
+      </SvgGradient>
+      <SvgGradient id="stdWater" x1="0" y1="0" x2="1" y2="1">
+        <SvgStop offset="0" stopColor="#93c5fd" />
+        <SvgStop offset="1" stopColor="#60a5fa" />
+      </SvgGradient>
+      <SvgGradient id="stdRoute" x1="0" y1="0" x2="1" y2="1">
+        <SvgStop offset="0" stopColor="#10b981" />
+        <SvgStop offset="1" stopColor="#059669" />
+      </SvgGradient>
+    </Defs>
+    {/* Land/Grass background */}
+    <Rect width="140" height="52" fill="url(#stdGrass)" />
+    {/* River / Water body */}
+    <SvgPath d="M-10,38 Q35,46 70,30 T150,22 L150,55 L-10,55 Z" fill="url(#stdWater)" />
+    {/* Urban blocks */}
+    <Rect x="8" y="6" width="22" height="15" rx="3" fill="#ffffff" opacity="0.8" stroke="#cbd5e1" strokeWidth="0.5" />
+    <Rect x="34" y="8" width="26" height="12" rx="3" fill="#ffffff" opacity="0.8" stroke="#cbd5e1" strokeWidth="0.5" />
+    <Rect x="64" y="5" width="20" height="14" rx="3" fill="#f1f5f9" opacity="0.85" stroke="#cbd5e1" strokeWidth="0.5" />
+    <Rect x="100" y="7" width="32" height="11" rx="3" fill="#ffffff" opacity="0.8" stroke="#cbd5e1" strokeWidth="0.5" />
+    {/* Clean street grid lines */}
+    <SvgPath d="M0,23 L140,23" stroke="#ffffff" strokeWidth="2.5" />
+    <SvgPath d="M30,0 L30,52" stroke="#ffffff" strokeWidth="2" />
+    <SvgPath d="M95,0 L95,52" stroke="#ffffff" strokeWidth="2" />
+    {/* Highlighted active route polyline with glow shadow */}
+    <SvgPath d="M-5,16 Q45,26 80,10 T145,15" stroke="rgba(16, 185, 129, 0.25)" strokeWidth="6" strokeLinecap="round" />
+    <SvgPath d="M-5,16 Q45,26 80,10 T145,15" stroke="url(#stdRoute)" strokeWidth="2.8" strokeLinecap="round" />
+    {/* Start & End marker dots */}
+    <SvgCircle cx="12" cy="18" r="3" fill="#10b981" stroke="#ffffff" strokeWidth="1" />
+    <SvgCircle cx="128" cy="14" r="3" fill="#ef4444" stroke="#ffffff" strokeWidth="1" />
+  </Svg>
 </View>
 <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
 <Text style={[styles.mapTypeCardTitle, { color: themeColors.text }, mapType === 'standard' && { color: themeColors.primary }]}>
@@ -4350,7 +4420,6 @@ Standard
 </Text>
 {mapType === 'standard' && <Ionicons name="checkmark-circle" size={15} color={themeColors.primary} />}
 </View>
-<Text style={[styles.mapTypeCardSub, { color: themeColors.textMuted }]}>Apple vector map</Text>
 </TouchableOpacity>
 
 {/* Muted Standard */}
@@ -4364,8 +4433,36 @@ onPress={() => selectMapType('mutedStandard')}
 activeOpacity={0.7}
 >
 <View style={[styles.texturePreviewMuted, { borderColor: themeColors.border }]}>
-<View style={styles.textureRoadMuted} />
-<View style={styles.textureBlockMuted} />
+  <Svg width="100%" height="100%" viewBox="0 0 140 52">
+    <Defs>
+      <SvgGradient id="mutedLand" x1="0" y1="0" x2="0" y2="1">
+        <SvgStop offset="0" stopColor="#1e2126" />
+        <SvgStop offset="1" stopColor="#14161a" />
+      </SvgGradient>
+      <SvgGradient id="mutedCyanRoute" x1="0" y1="0" x2="1" y2="1">
+        <SvgStop offset="0" stopColor="#38bdf8" />
+        <SvgStop offset="1" stopColor="#0284c7" />
+      </SvgGradient>
+    </Defs>
+    {/* Deep low-contrast land */}
+    <Rect width="140" height="52" fill="url(#mutedLand)" />
+    {/* Subtle water */}
+    <SvgPath d="M-10,36 Q35,44 70,30 T150,22 L150,55 L-10,55 Z" fill="#0f172a" />
+    {/* Subtle blocks */}
+    <Rect x="8" y="6" width="22" height="15" rx="3" fill="#242831" stroke="#2d3340" strokeWidth="0.5" />
+    <Rect x="34" y="8" width="26" height="12" rx="3" fill="#20242c" stroke="#2d3340" strokeWidth="0.5" />
+    <Rect x="64" y="5" width="20" height="14" rx="3" fill="#242831" stroke="#2d3340" strokeWidth="0.5" />
+    <Rect x="100" y="7" width="32" height="11" rx="3" fill="#20242c" stroke="#2d3340" strokeWidth="0.5" />
+    {/* Soft roads */}
+    <SvgPath d="M0,23 L140,23" stroke="#2d3340" strokeWidth="2" />
+    <SvgPath d="M30,0 L30,52" stroke="#282e3a" strokeWidth="2" />
+    <SvgPath d="M95,0 L95,52" stroke="#282e3a" strokeWidth="2" />
+    {/* Sleek neon cyan route with glow */}
+    <SvgPath d="M-5,16 Q45,26 80,10 T145,15" stroke="rgba(56, 189, 248, 0.28)" strokeWidth="6" strokeLinecap="round" />
+    <SvgPath d="M-5,16 Q45,26 80,10 T145,15" stroke="url(#mutedCyanRoute)" strokeWidth="2.8" strokeLinecap="round" />
+    <SvgCircle cx="12" cy="18" r="3" fill="#38bdf8" stroke="#ffffff" strokeWidth="1" />
+    <SvgCircle cx="128" cy="14" r="3" fill="#ec4899" stroke="#ffffff" strokeWidth="1" />
+  </Svg>
 </View>
 <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
 <Text style={[styles.mapTypeCardTitle, { color: themeColors.text }, mapType === 'mutedStandard' && { color: themeColors.primary }]}>
@@ -4373,7 +4470,6 @@ Muted
 </Text>
 {mapType === 'mutedStandard' && <Ionicons name="checkmark-circle" size={15} color={themeColors.primary} />}
 </View>
-<Text style={[styles.mapTypeCardSub, { color: themeColors.textMuted }]}>Low-contrast route focus</Text>
 </TouchableOpacity>
 
 {/* Satellite Map */}
@@ -4387,9 +4483,40 @@ Muted
   activeOpacity={0.7}
 >
   <View style={[styles.texturePreviewSatellite, { borderColor: themeColors.border }]}>
-    <View style={styles.textureCanopyPatch} />
-    <View style={styles.textureOceanWater} />
-    <View style={styles.textureUrbanGrid} />
+    <Svg width="100%" height="100%" viewBox="0 0 140 52">
+      <Defs>
+        <SvgGradient id="satForest" x1="0" y1="0" x2="1" y2="1">
+          <SvgStop offset="0" stopColor="#1a331a" />
+          <SvgStop offset="0.5" stopColor="#112212" />
+          <SvgStop offset="1" stopColor="#0c180d" />
+        </SvgGradient>
+        <SvgGradient id="satCoast" x1="0" y1="0" x2="0" y2="1">
+          <SvgStop offset="0" stopColor="#072a42" />
+          <SvgStop offset="1" stopColor="#02141f" />
+        </SvgGradient>
+        <SvgGradient id="satAmberRoute" x1="0" y1="0" x2="1" y2="1">
+          <SvgStop offset="0" stopColor="#f59e0b" />
+          <SvgStop offset="1" stopColor="#d97706" />
+        </SvgGradient>
+      </Defs>
+      {/* Aerial Terrain Texture */}
+      <Rect width="140" height="52" fill="url(#satForest)" />
+      {/* Shoreline / Deep Coastal Water */}
+      <SvgPath d="M-10,32 Q30,42 65,28 T150,18 L150,55 L-10,55 Z" fill="url(#satCoast)" />
+      {/* Sandy reef / shallow water rim */}
+      <SvgPath d="M-10,32 Q30,42 65,28 T150,18" stroke="#0ea5e9" strokeWidth="2.5" opacity="0.45" fill="none" />
+      {/* Dense canopy textures */}
+      <SvgCircle cx="16" cy="14" r="10" fill="#2d5a27" opacity="0.75" />
+      <SvgCircle cx="44" cy="10" r="12" fill="#264e22" opacity="0.8" />
+      <SvgCircle cx="80" cy="8" r="9" fill="#2d5a27" opacity="0.7" />
+      {/* Runway / Secondary roads */}
+      <SvgPath d="M25,0 L35,52" stroke="rgba(255,255,255,0.22)" strokeWidth="1.5" />
+      {/* Glowing GPS Trail Polyline */}
+      <SvgPath d="M-5,16 Q45,26 80,10 T145,15" stroke="rgba(245, 158, 11, 0.35)" strokeWidth="6" strokeLinecap="round" />
+      <SvgPath d="M-5,16 Q45,26 80,10 T145,15" stroke="url(#satAmberRoute)" strokeWidth="2.8" strokeLinecap="round" />
+      <SvgCircle cx="12" cy="18" r="3" fill="#f59e0b" stroke="#ffffff" strokeWidth="1" />
+      <SvgCircle cx="128" cy="14" r="3" fill="#ef4444" stroke="#ffffff" strokeWidth="1" />
+    </Svg>
   </View>
   <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
     <Text style={[styles.mapTypeCardTitle, { color: themeColors.text }, (mapType === 'satellite' || mapType === 'hybrid') && { color: themeColors.primary }]}>
@@ -4397,7 +4524,6 @@ Muted
     </Text>
     {(mapType === 'satellite' || mapType === 'hybrid') && <Ionicons name="checkmark-circle" size={15} color={themeColors.primary} />}
   </View>
-  <Text style={[styles.mapTypeCardSub, { color: themeColors.textMuted }]}>High-res aerial imagery</Text>
 </TouchableOpacity>
 </View>
 </View>
@@ -4481,6 +4607,7 @@ style={{ marginRight: 5 }}
 style={{
 fontSize: 13,
 fontWeight: routeType === 'loop' ? '800' : '600',
+fontFamily: BRAND_ROUNDED_FONT_EXTRA,
 color: routeType === 'loop' ? (themeColors.isDark ? '#000000' : '#ffffff') : themeColors.textMuted,
 }}
 >
@@ -4512,6 +4639,7 @@ style={{ marginRight: 5 }}
 style={{
 fontSize: 13,
 fontWeight: routeType === 'oneway' ? '800' : '600',
+fontFamily: BRAND_ROUNDED_FONT_EXTRA,
 color: routeType === 'oneway' ? (themeColors.isDark ? '#000000' : '#ffffff') : themeColors.textMuted,
 }}
 >
@@ -4525,7 +4653,7 @@ One-Way
 <View style={styles.sheetSection}>
 <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
 <Text style={[styles.sheetSectionTitle, { color: themeColors.textMuted, marginBottom: 0 }]}>TARGET DISTANCE</Text>
-<Text style={{ fontSize: 13, fontWeight: '800', color: themeColors.primary }}>
+<Text style={{ fontSize: 13, fontWeight: '800', fontFamily: BRAND_ROUNDED_FONT_EXTRA, color: themeColors.primary }}>
 {isUS
 ? targetDistanceKm * 0.621371 < 0.25
 ? `${Math.round(targetDistanceKm * 3280.84 / 50) * 50} ft`
@@ -4602,6 +4730,7 @@ color={isActive ? activeFg : themeColors.textSecondary}
 style={{
 fontSize: 12,
 fontWeight: isActive ? '800' : '600',
+fontFamily: BRAND_ROUNDED_FONT_EXTRA,
 color: isActive ? activeFg : themeColors.text,
 }}
 >
@@ -4697,6 +4826,7 @@ ROUTING PREFERENCES
                 style={{
                   fontSize: 12,
                   fontWeight: isActive ? '800' : '600',
+                  fontFamily: BRAND_ROUNDED_FONT_EXTRA,
                   color: isActive ? activeFg : themeColors.text,
                 }}
               >
@@ -5107,18 +5237,18 @@ const styles = StyleSheet.create({
   },
   searchResultsDropdown: {
     position: 'absolute',
-    top: Platform.OS === 'ios' ? 116 : 80,
-    left: 14,
-    right: 14,
-    maxHeight: 320,
-    borderRadius: 18,
+    top: Platform.OS === 'ios' ? 116 : 76,
+    left: 8,
+    right: 8,
+    maxHeight: 380,
+    borderRadius: 20,
     borderWidth: 1,
     overflow: 'hidden',
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.3,
-    shadowRadius: 12,
-    elevation: 16,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.14,
+    shadowRadius: 18,
+    elevation: 6,
     zIndex: 35,
   },
   searchResultsBottomMenu: {
@@ -5171,28 +5301,34 @@ const styles = StyleSheet.create({
   searchResultItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
-    paddingVertical: 10,
+    gap: 12,
+    paddingVertical: 12,
     paddingHorizontal: 14,
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
   searchResultName: {
-    fontSize: 13,
+    fontSize: 14,
     fontWeight: '700',
+    fontFamily: BRAND_ROUNDED_FONT_EXTRA,
   },
   searchResultAddress: {
-    fontSize: 11,
-    marginTop: 2,
+    fontSize: 11.5,
+    marginTop: 3,
+    lineHeight: 15,
   },
   searchResultDistBadge: {
-    paddingHorizontal: 7,
-    paddingVertical: 3,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
     borderRadius: 8,
     borderWidth: 1,
   },
   searchResultDistText: {
-    fontSize: 10,
-    fontWeight: '700',
+    fontSize: 11,
+    fontWeight: '800',
+    fontFamily: BRAND_ROUNDED_FONT,
   },
   searchOptionsHeader: {
     flexDirection: 'row',
@@ -6234,10 +6370,11 @@ const styles = StyleSheet.create({
     backgroundColor: '#dc2626',
   },
   actionButtonText: {
+    fontFamily: BRAND_ROUNDED_FONT_EXTRA,
     color: '#09090b',
-    fontSize: 16,
-    fontWeight: '900',
-    letterSpacing: 1,
+    fontSize: 16.5,
+    fontWeight: '800',
+    letterSpacing: 0.8,
   },
   modalBackdrop: {
     flex: 1,
@@ -6773,24 +6910,19 @@ const styles = StyleSheet.create({
   /* Bottom Sheet Map Styles Modal */
   bottomSheetBackdrop: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.65)',
+    backgroundColor: 'rgba(0, 0, 0, 0.40)',
     justifyContent: 'flex-end',
   },
   bottomSheetCard: {
     backgroundColor: '#121215',
-    borderTopLeftRadius: 28,
-    borderTopRightRadius: 28,
+    borderTopLeftRadius: 36,
+    borderTopRightRadius: 36,
     paddingHorizontal: 20,
     paddingTop: 12,
     paddingBottom: Platform.OS === 'ios' ? 40 : 26,
     borderWidth: 1,
     borderColor: '#27272a',
     borderBottomWidth: 0,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: -6 },
-    shadowOpacity: 0.5,
-    shadowRadius: 16,
-    elevation: 24,
   },
   sheetHandle: {
     width: 38,
@@ -6810,6 +6942,7 @@ const styles = StyleSheet.create({
     color: '#fafafa',
     fontSize: 18,
     fontWeight: '800',
+    fontFamily: BRAND_ROUNDED_FONT_EXTRA,
     letterSpacing: -0.2,
   },
   sheetSubtitle: {
@@ -6832,7 +6965,8 @@ const styles = StyleSheet.create({
     color: '#71717a',
     fontSize: 11,
     fontWeight: '800',
-    letterSpacing: 1,
+    fontFamily: BRAND_ROUNDED_FONT_EXTRA,
+    letterSpacing: 0.8,
     marginBottom: 10,
   },
   /* Buildings Toggle Card */
@@ -7087,6 +7221,10 @@ const styles = StyleSheet.create({
   },
 
   /* High-Definition Map Texture Previews */
+  realisticMapOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0, 0, 0, 0.08)',
+  },
   texturePreviewStandard: {
     width: '100%',
     height: 52,
@@ -7288,6 +7426,7 @@ const styles = StyleSheet.create({
     color: '#fafafa',
     fontSize: 14,
     fontWeight: '700',
+    fontFamily: BRAND_ROUNDED_FONT_EXTRA,
   },
   mapTypeTitleActive: {
     color: '#a3e635',
@@ -7310,6 +7449,7 @@ const styles = StyleSheet.create({
     color: '#09090b',
     fontSize: 15,
     fontWeight: '800',
+    fontFamily: BRAND_ROUNDED_FONT_EXTRA,
   },
 
   /* Route Builder & Explorer Styles */
@@ -7326,20 +7466,26 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   distanceChipActive: {
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 3,
-    elevation: 3,
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.12,
+    shadowRadius: 4,
+    elevation: 2,
   },
   distanceChipText: {
     fontSize: 12,
     fontWeight: '700',
+    fontFamily: BRAND_ROUNDED_FONT,
   },
   routeCard: {
     borderRadius: 16,
     padding: 14,
     borderWidth: 1,
     marginBottom: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 8,
+    elevation: 1,
   },
   routeCardTop: {
     flexDirection: 'row',
@@ -7351,6 +7497,7 @@ const styles = StyleSheet.create({
   routeCardTitle: {
     fontSize: 15,
     fontWeight: '800',
+    fontFamily: BRAND_ROUNDED_FONT_EXTRA,
   },
   routeCardDesc: {
     fontSize: 12,
@@ -7366,6 +7513,7 @@ const styles = StyleSheet.create({
   routeDiffText: {
     fontSize: 10,
     fontWeight: '800',
+    fontFamily: BRAND_ROUNDED_FONT,
   },
   routeStatsRow: {
     flexDirection: 'row',
@@ -7384,6 +7532,7 @@ const styles = StyleSheet.create({
   routeStatVal: {
     fontSize: 13,
     fontWeight: '700',
+    fontFamily: BRAND_ROUNDED_FONT_EXTRA,
   },
   routeStatSub: {
     fontSize: 9,
@@ -7410,10 +7559,11 @@ const styles = StyleSheet.create({
   selectRouteActionText: {
     fontSize: 12,
     fontWeight: '800',
+    fontFamily: BRAND_ROUNDED_FONT_EXTRA,
   },
   routeModalBackdrop: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.18)',
+    backgroundColor: 'rgba(0, 0, 0, 0.25)',
     justifyContent: 'flex-end',
   },
   routeModalTopDismissArea: {
@@ -7421,17 +7571,14 @@ const styles = StyleSheet.create({
   },
   routeModalBottomCard: {
     maxHeight: '54%',
-    borderTopLeftRadius: 28,
-    borderTopRightRadius: 28,
+    borderTopLeftRadius: 36,
+    borderTopRightRadius: 36,
     paddingHorizontal: 20,
     paddingTop: 12,
     paddingBottom: Platform.OS === 'ios' ? 36 : 24,
-    borderWidth: 0,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: -12 },
-    shadowOpacity: 0.10,
-    shadowRadius: 32,
-    elevation: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.08)',
+    borderBottomWidth: 0,
   },
   emptyRoutesBox: {
     padding: 20,

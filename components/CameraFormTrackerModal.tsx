@@ -8,7 +8,7 @@ import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
 import Svg, { Circle, Line } from 'react-native-svg';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '@/constants/AuthContext';
-import { useTheme } from '@/constants/ThemeContext';
+import { useTheme, BRAND_ROUNDED_FONT, BRAND_ROUNDED_FONT_EXTRA } from '@/constants/ThemeContext';
 import { DragSlider } from '@/components/DragSlider';
 import { landmarkFrame, previewFrame } from '@/constants/cameraFraming';
 import { WorkoutTrackingData } from '@/constants/workoutStorage';
@@ -41,7 +41,7 @@ export function CameraFormTrackerModal({ visible, onClose, onSaveTrackedWorkout 
   const [ultraWideLens, setUltraWideLens] = useState<string>();
   const [standardLens, setStandardLens] = useState<string>();
   const [cameraZoom, setCameraZoom] = useState(0);
-  const [fitFullFrame, setFitFullFrame] = useState(true);
+  const [fitFullFrame, setFitFullFrame] = useState(false);
   const [showZoomControls, setShowZoomControls] = useState(false);
   const [cameraAspect, setCameraAspect] = useState(.75);
   const discoveredFacing = useRef<string | null>(null);
@@ -302,6 +302,24 @@ export function CameraFormTrackerModal({ visible, onClose, onSaveTrackedWorkout 
   const frameHeight = projected.height;
   const framingLocked = running || !!battle;
 
+  const hasUltraWide = !!ultraWideLens;
+  function toggleUltraWide() {
+    if (framingLocked) return;
+    Haptics.selectionAsync().catch(() => {});
+    if (isUltraWide) {
+      // Switch back to normal standard lens
+      setIsUltraWide(false);
+      setCameraZoom(0);
+      setFitFullFrame(true);
+    } else {
+      // Switch to actual hardware ultrawide lens (or ultra-wide FOV mode)
+      setIsUltraWide(true);
+      setCameraZoom(0);
+      setFitFullFrame(true);
+    }
+    setPose(previous => previous ? { ...previous, valid: false, calibrated: false, keypoints: {} } : null);
+  }
+
   function changeFraming(apply: () => void) {
     if (current.current.running || current.current.battle) return;
     apply();
@@ -403,21 +421,35 @@ export function CameraFormTrackerModal({ visible, onClose, onSaveTrackedWorkout 
         <TouchableOpacity accessibilityLabel="Close rep tracker" style={styles.circleIconButton} onPress={close}>
           <Ionicons name="close" size={24} color="#fff" />
         </TouchableOpacity>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flexShrink: 1, marginHorizontal: 6 }} contentContainerStyle={styles.exerciseSelectorRow}>
-          {(['boxing', 'pushups', 'squats', 'bicep_curls'] as const).map(ex => {
-            const selected = (mode === 'battle' ? 'pushups' : exercise) === ex;
-            return <TouchableOpacity key={ex} disabled={running || mode === 'battle'}
-              style={[styles.exercisePill, selected && { backgroundColor: colors.primary, borderColor: colors.primary }]}
-              onPress={() => { Haptics.selectionAsync().catch(() => {}); setExercise(ex); reset(ex); }}>
-              <Text style={[styles.exercisePillText, selected && { color: '#09090b', fontWeight: '800' }]}>{ex === 'boxing' ? 'Boxing' : ex === 'pushups' ? 'Pushups' : ex === 'squats' ? 'Squats' : 'Curls'}</Text>
-            </TouchableOpacity>;
-          })}
-        </ScrollView>
+        <View style={styles.exerciseScrollContainer}>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.exerciseSelectorRow}
+            style={styles.exerciseScrollView}
+          >
+            {(['boxing', 'pushups', 'squats', 'bicep_curls'] as const).map(ex => {
+              const selected = (mode === 'battle' ? 'pushups' : exercise) === ex;
+              return <TouchableOpacity key={ex} disabled={running || mode === 'battle'}
+                style={[styles.exercisePill, selected && { backgroundColor: colors.primary, borderColor: colors.primary }]}
+                onPress={() => { Haptics.selectionAsync().catch(() => {}); setExercise(ex); reset(ex); }}>
+                <Text style={[styles.exercisePillText, selected && { color: '#09090b', fontWeight: '800' }]}>{ex === 'boxing' ? 'Boxing' : ex === 'pushups' ? 'Pushups' : ex === 'squats' ? 'Squats' : 'Curls'}</Text>
+              </TouchableOpacity>;
+            })}
+          </ScrollView>
+        </View>
         <View style={{ flexDirection: 'row', gap: 8 }}>
-          <TouchableOpacity accessibilityLabel="Adjust camera zoom and framing"
-            style={[styles.circleIconButton, (isUltraWide || fitFullFrame) && { borderColor: colors.primary }]}
-            onPress={() => setShowZoomControls(true)}>
-            <Ionicons name="expand-outline" size={20} color="#fff" />
+          <TouchableOpacity accessibilityLabel="Toggle between Ultrawide and Normal camera"
+            disabled={framingLocked}
+            style={[
+              styles.circleIconButton,
+              isUltraWide && { backgroundColor: colors.primary, borderColor: colors.primary },
+              framingLocked && { opacity: 0.45 }
+            ]}
+            onPress={toggleUltraWide}>
+            <Text style={[styles.lensToggleText, isUltraWide && { color: '#09090b' }]}>
+              {isUltraWide ? '.5x' : '1x'}
+            </Text>
           </TouchableOpacity>
           <TouchableOpacity accessibilityLabel="Flip camera" disabled={running || !!battle}
             style={[styles.circleIconButton, (running || !!battle) && { opacity: .45 }]}
@@ -599,27 +631,27 @@ const styles = StyleSheet.create({
   },
   framingGuideBox: {
     position: 'absolute',
-    top: '16%',
-    bottom: '22%',
-    left: '8%',
-    right: '8%',
+    top: '8%',
+    bottom: '10%',
+    left: '2%',
+    right: '2%',
     borderWidth: 1.5,
     borderStyle: 'dashed',
-    borderRadius: 20,
+    borderRadius: 24,
     justifyContent: 'flex-start',
     alignItems: 'center',
-    padding: 12,
+    padding: 10,
   },
   guideCorner: {
     position: 'absolute',
-    width: 20,
-    height: 20,
+    width: 24,
+    height: 24,
     borderWidth: 3,
   },
-  guideCornerTL: { top: -2, left: -2, borderBottomWidth: 0, borderRightWidth: 0, borderTopLeftRadius: 18 },
-  guideCornerTR: { top: -2, right: -2, borderBottomWidth: 0, borderLeftWidth: 0, borderTopRightRadius: 18 },
-  guideCornerBL: { bottom: -2, left: -2, borderTopWidth: 0, borderRightWidth: 0, borderBottomLeftRadius: 18 },
-  guideCornerBR: { bottom: -2, right: -2, borderTopWidth: 0, borderLeftWidth: 0, borderBottomRightRadius: 18 },
+  guideCornerTL: { top: -2, left: -2, borderBottomWidth: 0, borderRightWidth: 0, borderTopLeftRadius: 22 },
+  guideCornerTR: { top: -2, right: -2, borderBottomWidth: 0, borderLeftWidth: 0, borderTopRightRadius: 22 },
+  guideCornerBL: { bottom: -2, left: -2, borderTopWidth: 0, borderRightWidth: 0, borderBottomLeftRadius: 22 },
+  guideCornerBR: { bottom: -2, right: -2, borderTopWidth: 0, borderLeftWidth: 0, borderBottomRightRadius: 22 },
   distanceBadge: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -629,19 +661,21 @@ const styles = StyleSheet.create({
     borderRadius: 16,
   },
   distanceBadgeText: {
+    fontFamily: BRAND_ROUNDED_FONT_EXTRA,
     color: '#ffffff',
-    fontSize: 10.5,
+    fontSize: 10,
     fontWeight: '800',
     letterSpacing: 0.4,
   },
   topBar: {
     position: 'absolute',
-    top: Platform.OS === 'ios' ? 56 : 28,
+    top: Platform.OS === 'ios' ? 44 : 14,
     left: 12,
     right: 12,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    height: 38,
     zIndex: 20,
   },
   circleIconButton: {
@@ -654,6 +688,28 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.15)',
   },
+  lensToggleText: {
+    fontFamily: BRAND_ROUNDED_FONT_EXTRA,
+    fontSize: 13,
+    fontWeight: '900',
+    color: '#ffffff',
+    letterSpacing: -0.3,
+  },
+  exerciseScrollContainer: {
+    flex: 1,
+    maxWidth: 220,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: 'rgba(0,0,0,0.65)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.15)',
+    overflow: 'hidden',
+    marginHorizontal: 8,
+    justifyContent: 'center',
+  },
+  exerciseScrollView: {
+    height: 38,
+  },
   lensBadgeText: {
     fontSize: 12,
     fontWeight: '800',
@@ -661,28 +717,30 @@ const styles = StyleSheet.create({
   },
   exerciseSelectorRow: {
     flexDirection: 'row',
-    backgroundColor: 'rgba(0,0,0,0.65)',
-    borderRadius: 20,
-    padding: 3,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.15)',
-    gap: 2,
+    alignItems: 'center',
+    paddingHorizontal: 4,
+    gap: 4,
+    height: 36,
   },
   exercisePill: {
+    height: 28,
     paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 16,
+    borderRadius: 14,
+    justifyContent: 'center',
+    alignItems: 'center',
     borderWidth: 1,
     borderColor: 'transparent',
   },
   exercisePillText: {
+    fontFamily: BRAND_ROUNDED_FONT_EXTRA,
     fontSize: 11.5,
-    fontWeight: '600',
+    fontWeight: '700',
     color: '#ffffff',
+    letterSpacing: 0.2,
   },
   hudOverlay: {
     position: 'absolute',
-    top: Platform.OS === 'ios' ? 120 : 90,
+    top: Platform.OS === 'ios' ? 90 : 58,
     left: 16,
     right: 16,
     gap: 10,
@@ -700,13 +758,15 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   hudLabel: {
-    fontSize: 11,
+    fontFamily: BRAND_ROUNDED_FONT,
+    fontSize: 10,
     fontWeight: '800',
     color: '#9ca3af',
-    letterSpacing: 1,
+    letterSpacing: 0.8,
   },
   hudValue: {
-    fontSize: 30,
+    fontFamily: BRAND_ROUNDED_FONT_EXTRA,
+    fontSize: 26,
     fontWeight: '900',
     color: '#ffffff',
     fontVariant: ['tabular-nums'],
@@ -729,8 +789,9 @@ const styles = StyleSheet.create({
     backgroundColor: '#22c55e',
   },
   autoStatusText: {
+    fontFamily: BRAND_ROUNDED_FONT_EXTRA,
     color: '#22c55e',
-    fontSize: 11,
+    fontSize: 10,
     fontWeight: '800',
     letterSpacing: 0.6,
   },
@@ -752,7 +813,8 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   adviceTitle: {
-    fontSize: 11,
+    fontFamily: BRAND_ROUNDED_FONT_EXTRA,
+    fontSize: 10,
     fontWeight: '800',
     color: '#22c55e',
     letterSpacing: 0.8,
@@ -765,7 +827,7 @@ const styles = StyleSheet.create({
   },
   bottomDeck: {
     position: 'absolute',
-    bottom: Platform.OS === 'ios' ? 44 : 24,
+    bottom: Platform.OS === 'ios' ? 24 : 12,
     left: 16,
     right: 16,
     zIndex: 20,
@@ -954,9 +1016,9 @@ const s = StyleSheet.create({
   midline: { position: 'absolute', left: '50%', height: '100%', width: 1, backgroundColor: '#09090b55' },
   deck: { gap: 10 },
   link: { color: '#22c55e', fontSize: 12, fontWeight: '800' },
-  action: { flexGrow: 1, borderRadius: 24, paddingHorizontal: 16, paddingVertical: 14, alignItems: 'center', justifyContent: 'center' },
+  action: { flexGrow: 1, borderRadius: 20, paddingHorizontal: 14, paddingVertical: 10, alignItems: 'center', justifyContent: 'center' },
   secondary: { backgroundColor: 'rgba(0,0,0,0.65)', borderWidth: 1.5, borderColor: 'rgba(255,255,255,0.3)' },
-  actionText: { color: '#09090b', fontSize: 14, fontWeight: '800' },
+  actionText: { fontFamily: BRAND_ROUNDED_FONT_EXTRA, color: '#09090b', fontSize: 13, fontWeight: '800' },
   input: { flex: 1, minWidth: 90, backgroundColor: 'rgba(0,0,0,0.65)', borderRadius: 16, borderWidth: 1, borderColor: 'rgba(255,255,255,0.15)', color: '#fff', padding: 12, fontSize: 12, letterSpacing: 1 },
   roomCode: { color: '#fff', fontSize: 24, letterSpacing: 3, fontWeight: '800' },
   countdown: { position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, backgroundColor: '#09090b88', alignItems: 'center', justifyContent: 'center' },

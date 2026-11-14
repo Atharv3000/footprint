@@ -141,18 +141,20 @@ export function MuscleSorenessModal({
               {/* User Soreness / Recovery Tuner */}
               <View style={styles.recoveryTunerSection}>
                 <Text style={[styles.tunerTitle, { color: colors.textMuted }]}>
-                  LOG YOUR SORENESS LEVEL
+                  MARK SORENESS
                 </Text>
                 <View style={styles.tunerButtonRow}>
                   {[
-                    { label: 'Sore (DOMS)', percent: 30, color: '#ef4444' },
-                    { label: 'Moderate', percent: 65, color: '#f59e0b' },
+                    { label: 'Sore', percent: 25, color: '#ef4444' },
+                    { label: 'Mild', percent: 50, color: '#f97316' },
+                    { label: 'Moderate', percent: 70, color: '#eab308' },
                     { label: 'Recovered', percent: 100, color: '#10b981' },
                   ].map((level) => {
                     const isCurrent =
-                      (level.percent === 30 && selectedMuscleData.recoveryPercent < 55) ||
-                      (level.percent === 65 && selectedMuscleData.recoveryPercent >= 55 && selectedMuscleData.recoveryPercent < 90) ||
-                      (level.percent === 100 && selectedMuscleData.recoveryPercent >= 90);
+                      (level.percent === 25 && selectedMuscleData.recoveryPercent < 40) ||
+                      (level.percent === 50 && selectedMuscleData.recoveryPercent >= 40 && selectedMuscleData.recoveryPercent < 60) ||
+                      (level.percent === 70 && selectedMuscleData.recoveryPercent >= 60 && selectedMuscleData.recoveryPercent < 88) ||
+                      (level.percent === 100 && selectedMuscleData.recoveryPercent >= 88);
 
                     return (
                       <TouchableOpacity
@@ -160,7 +162,9 @@ export function MuscleSorenessModal({
                         style={[
                           styles.tunerBtn,
                           {
-                            backgroundColor: isCurrent ? level.color + '18' : 'transparent',
+                            backgroundColor: isCurrent ? level.color + '22' : isDark ? 'rgba(255,255,255,0.04)' : '#f1f5f9',
+                            borderColor: isCurrent ? level.color : isDark ? 'rgba(255,255,255,0.08)' : '#e2e8f0',
+                            borderWidth: 1.5,
                           },
                         ]}
                         onPress={() => {
@@ -175,7 +179,7 @@ export function MuscleSorenessModal({
                             styles.tunerBtnText,
                             {
                               color: isCurrent ? level.color : (isDark ? '#a1a1aa' : '#71717a'),
-                              fontWeight: isCurrent ? '700' : '500',
+                              fontWeight: isCurrent ? '800' : '600',
                             },
                           ]}
                         >

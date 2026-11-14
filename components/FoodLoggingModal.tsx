@@ -13,19 +13,25 @@ import {
   Animated,
   Easing,
   SafeAreaView,
+  ActivityIndicator,
+  Keyboard,
+  KeyboardAvoidingView,
+  TouchableWithoutFeedback,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { CameraView, useCameraPermissions } from 'expo-camera';
 import * as ImagePicker from 'expo-image-picker';
 import * as Haptics from 'expo-haptics';
 import { useTheme, SERIF_FONT } from '@/constants/ThemeContext';
 import { analyzeFoodImageAsync, describeFoodAsync, FoodVisionAnalysisResult } from '@/constants/foodVisionAI';
 import { MealLog, MealType, saveMealLog, getTodayDateKey } from '@/constants/nutritionStorage';
-
 import { FoodItemIndex, HUGE_FOOD_INDEX } from '@/constants/foodDatabase';
 
-const { height: SCREEN_HEIGHT } = Dimensions.get('window');
+const { height: SCREEN_HEIGHT, width: SCREEN_WIDTH } = Dimensions.get('window');
 
 const CATEGORIES = ['All', 'Popular Foods', 'Snacks & Treats', 'Drinks & Shakes', 'Protein & Dairy', 'Breakfast & Bakery', 'Fruits & Veggies'] as const;
+
+export type FoodScanMode = 'food' | 'label' | 'receipt';
 
 interface FoodLoggingModalProps {
   visible: boolean;
@@ -48,19 +54,24 @@ export function FoodLoggingModal({
   const [recipeSearchQuery, setRecipeSearchQuery] = useState<string>('');
   const [selectedCategory, setSelectedCategory] = useState<string>('All');
   const [isAnalyzing, setIsAnalyzing] = useState<boolean>(false);
+  const [isCapturing, setIsCapturing] = useState<boolean>(false);
   const [analysisResult, setAnalysisResult] = useState<FoodVisionAnalysisResult | null>(null);
   const [servingMultiplier, setServingMultiplier] = useState<number>(1);
 
-  // Active section tracking: 'photo' | 'describe' | 'recipes' | 'none'
-  const [activeSection, setActiveSection] = useState<'photo' | 'describe' | 'recipes' | 'none'>('none');
-  const [showOtherOptions, setShowOtherOptions] = useState<boolean>(false);
+  // Active scan mode: 'food' | 'label' | 'receipt'
+  const [scanMode, setScanMode] = useState<FoodScanMode>('food');
 
-  // Food-themed animation values: spinning fork, hovering plate, and pulse
+  // Sub-feature drawers/sections: 'none' | 'describe' | 'preselected'
+  const [activeSheet, setActiveSheet] = useState<'none' | 'describe' | 'preselected'>('none');
+
+  // Camera permissions & ref
+  const [permission, requestPermission] = useCameraPermissions();
+  const cameraRef = useRef<CameraView>(null);
+
+  // Animation values
   const pulseAnim = useRef(new Animated.Value(1)).current;
   const scanLineAnim = useRef(new Animated.Value(0)).current;
   const glowAnim = useRef(new Animated.Value(0.3)).current;
-  const forkSpinAnim = useRef(new Animated.Value(0)).current;
-  const plateBounceAnim = useRef(new Animated.Value(0)).current;
 
   // Real-time analysis status stages and percent display
   const [scanStatusText, setScanStatusText] = useState<string>('Scanning meal composition...');
@@ -72,37 +83,16 @@ export function FoodLoggingModal({
     }
   }, [visible, initialMealType]);
 
-  // Satisfying spinning fork and plate animation loop
+  // Request camera permission when modal becomes visible if not yet determined
+  useEffect(() => {
+    if (visible && !permission?.granted && permission?.canAskAgain) {
+      requestPermission().catch(() => {});
+    }
+  }, [visible, permission]);
+
+  // Scanner animation loop
   useEffect(() => {
     if (isAnalyzing) {
-      // Continuous smooth 360-degree spinning fork
-      const spinLoop = Animated.loop(
-        Animated.timing(forkSpinAnim, {
-          toValue: 1,
-          duration: 1100,
-          easing: Easing.linear,
-          useNativeDriver: true,
-        })
-      );
-
-      // Gentle floating plate hover
-      const plateBounceLoop = Animated.loop(
-        Animated.sequence([
-          Animated.timing(plateBounceAnim, {
-            toValue: -6,
-            duration: 550,
-            easing: Easing.inOut(Easing.ease),
-            useNativeDriver: true,
-          }),
-          Animated.timing(plateBounceAnim, {
-            toValue: 0,
-            duration: 550,
-            easing: Easing.inOut(Easing.ease),
-            useNativeDriver: true,
-          }),
-        ])
-      );
-
       const pulseLoop = Animated.loop(
         Animated.sequence([
           Animated.timing(pulseAnim, {
@@ -120,7 +110,6 @@ export function FoodLoggingModal({
         ])
       );
 
-      // Smooth continuous forward progress from 0% to 95%
       scanLineAnim.setValue(0);
       const progressTiming = Animated.timing(scanLineAnim, {
         toValue: 0.95,
@@ -144,21 +133,28 @@ export function FoodLoggingModal({
         ])
       );
 
-      spinLoop.start();
-      plateBounceLoop.start();
       pulseLoop.start();
       progressTiming.start();
       glowLoop.start();
 
-      // Sequential descriptive AI phases that advance forward without resetting or looping
-      const phases = [
+      const phases = scanMode === 'receipt' ? [
+        { text: 'Scanning receipt text & line items...', pct: 25, delay: 0 },
+        { text: 'Detecting grocery items & quantities...', pct: 50, delay: 900 },
+        { text: 'Matching products to USDA nutrition...', pct: 75, delay: 1900 },
+        { text: 'Calculating cumulative macros...', pct: 92, delay: 2800 },
+      ] : scanMode === 'label' ? [
+        { text: 'Scanning Nutrition Facts panel...', pct: 25, delay: 0 },
+        { text: 'Reading serving size & calories...', pct: 55, delay: 900 },
+        { text: 'Extracting protein, carbs & fats...', pct: 80, delay: 1900 },
+        { text: 'Validating label macros...', pct: 95, delay: 2800 },
+      ] : [
         { text: 'Scanning meal composition...', pct: 22, delay: 0 },
-        { text: 'Identifying bowl & dish ingredients...', pct: 48, delay: 900 },
+        { text: 'Identifying dish & ingredients...', pct: 48, delay: 900 },
         { text: 'Matching against USDA clinical macros...', pct: 74, delay: 1900 },
         { text: 'Calibrating portion weight & calories...', pct: 89, delay: 2800 },
         { text: 'Finalizing nutritional breakdown...', pct: 96, delay: 3500 },
       ];
-      
+
       setScanStatusText(phases[0].text);
       setScanPercent(phases[0].pct);
 
@@ -171,31 +167,55 @@ export function FoodLoggingModal({
 
       return () => {
         timeouts.forEach((t) => clearTimeout(t));
-        spinLoop.stop();
-        plateBounceLoop.stop();
         pulseLoop.stop();
         progressTiming.stop();
         glowLoop.stop();
       };
     } else {
-      forkSpinAnim.setValue(0);
-      plateBounceAnim.setValue(0);
       pulseAnim.setValue(1);
       scanLineAnim.setValue(1);
       glowAnim.setValue(0.3);
       setScanPercent(100);
     }
-  }, [isAnalyzing]);
+  }, [isAnalyzing, scanMode]);
 
-  // Take photo with camera
-  const handleTakePhoto = async () => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
-    const permission = await ImagePicker.requestCameraPermissionsAsync();
-    if (!permission.granted) {
-      alert('Camera permission is required to photograph meals.');
+  // Capture snapshot directly from CameraView and analyze
+  const handleCaptureFromCamera = async (overrideMode?: FoodScanMode) => {
+    const activeTargetMode = overrideMode || scanMode;
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
+    if (!cameraRef.current) {
+      // Fallback to ImagePicker camera if CameraView ref is not ready
+      await handleFallbackCamera(activeTargetMode);
       return;
     }
 
+    try {
+      setIsCapturing(true);
+      const photo = await cameraRef.current.takePictureAsync({
+        quality: 0.7,
+        base64: true,
+        skipProcessing: false,
+      });
+
+      if (photo && photo.uri) {
+        setSelectedImage(photo.uri);
+        setActiveSheet('none');
+        runVisionAnalysis(photo.base64 || '', photo.uri, activeTargetMode);
+      }
+    } catch (e) {
+      console.warn('CameraView capture error, trying image picker fallback:', e);
+      await handleFallbackCamera(activeTargetMode);
+    } finally {
+      setIsCapturing(false);
+    }
+  };
+
+  const handleFallbackCamera = async (targetMode: FoodScanMode) => {
+    const perm = await ImagePicker.requestCameraPermissionsAsync();
+    if (!perm.granted) {
+      alert('Camera permission is required to photograph meals.');
+      return;
+    }
     const result = await ImagePicker.launchCameraAsync({
       mediaTypes: ['images'],
       allowsEditing: true,
@@ -203,17 +223,15 @@ export function FoodLoggingModal({
       quality: 0.7,
       base64: true,
     });
-
     if (!result.canceled && result.assets && result.assets.length > 0) {
       const asset = result.assets[0];
       setSelectedImage(asset.uri);
-      setActiveSection('photo');
-      setShowOtherOptions(false);
-      runVisionAnalysis(asset.base64 || '', asset.uri);
+      setActiveSheet('none');
+      runVisionAnalysis(asset.base64 || '', asset.uri, targetMode);
     }
   };
 
-  // Pick photo from library
+  // Upload an already existing photo from gallery
   const handlePickLibrary = async () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
     const result = await ImagePicker.launchImageLibraryAsync({
@@ -227,18 +245,23 @@ export function FoodLoggingModal({
     if (!result.canceled && result.assets && result.assets.length > 0) {
       const asset = result.assets[0];
       setSelectedImage(asset.uri);
-      setActiveSection('photo');
-      setShowOtherOptions(false);
-      runVisionAnalysis(asset.base64 || '', asset.uri);
+      setActiveSheet('none');
+      runVisionAnalysis(asset.base64 || '', asset.uri, scanMode);
     }
   };
 
-  const runVisionAnalysis = async (base64: string, uri: string) => {
+  const runVisionAnalysis = async (base64: string, uri: string, modeHint: FoodScanMode = scanMode) => {
     setIsAnalyzing(true);
     setAnalysisResult(null);
     setServingMultiplier(1);
     try {
-      const result = await analyzeFoodImageAsync(base64, mealType, descriptionInput);
+      const contextHint = modeHint === 'receipt' 
+        ? `${mealType} (grocery receipt / itemized bill)` 
+        : modeHint === 'label' 
+        ? `${mealType} (nutrition facts label / barcode)` 
+        : mealType;
+
+      const result = await analyzeFoodImageAsync(base64, contextHint, descriptionInput);
       setAnalysisResult(result);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
     } catch (e) {
@@ -248,18 +271,17 @@ export function FoodLoggingModal({
     }
   };
 
-  // AI Description Text Calculator
+  // AI Description Text Calculator ("Write what it is")
   const handleCalculateFromDescription = async () => {
     if (!descriptionInput.trim()) {
       alert('Please type what you ate (e.g. 3 cookies and a glass of lemonade).');
       return;
     }
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
-    setActiveSection('describe');
-    setShowOtherOptions(false);
     setIsAnalyzing(true);
     setAnalysisResult(null);
     setServingMultiplier(1);
+    setActiveSheet('none');
 
     try {
       const result = await describeFoodAsync(descriptionInput);
@@ -272,11 +294,10 @@ export function FoodLoggingModal({
     }
   };
 
-  // Quick Recipe / Food Index Tap Selection
+  // Quick Recipe / Food Index Tap Selection ("Choose from preselected stuff")
   const handleSelectRecipe = (rec: FoodItemIndex) => {
     Haptics.selectionAsync().catch(() => {});
-    setActiveSection('recipes');
-    setShowOtherOptions(false);
+    setActiveSheet('none');
     setServingMultiplier(1);
     setAnalysisResult({
       dishTitle: rec.name,
@@ -306,6 +327,7 @@ export function FoodLoggingModal({
 
   // Save Meal to Today's Log
   const handleSaveMeal = async () => {
+    Keyboard.dismiss();
     if (!analysisResult) return;
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
 
@@ -347,8 +369,8 @@ export function FoodLoggingModal({
     setSelectedCategory('All');
     setServingMultiplier(1);
     setIsAnalyzing(false);
-    setActiveSection('none');
-    setShowOtherOptions(false);
+    setIsCapturing(false);
+    setActiveSheet('none');
     onClose();
   };
 
@@ -360,119 +382,298 @@ export function FoodLoggingModal({
     return matchesCat && matchesQuery;
   });
 
-  // Logic: When an action is chosen, hide other options unless expanded
-  const hasActiveChoice = activeSection !== 'none' || !!analysisResult || !!selectedImage;
-  const showPhotoSection = !hasActiveChoice || activeSection === 'photo' || showOtherOptions;
-  const showDescribeSection = !hasActiveChoice || activeSection === 'describe' || showOtherOptions;
-  const showRecipeSection = !hasActiveChoice || activeSection === 'recipes' || showOtherOptions;
+  // Mode button press handler: toggle mode & trigger scan immediately if tapped
+  const handleModePress = (mode: FoodScanMode) => {
+    Haptics.selectionAsync().catch(() => {});
+    setScanMode(mode);
+    if (!selectedImage && !isAnalyzing) {
+      handleCaptureFromCamera(mode);
+    }
+  };
 
   return (
     <Modal visible={visible} animationType="slide" presentationStyle="fullScreen" onRequestClose={handleResetAndClose}>
-      <SafeAreaView style={[styles.safeArea, { backgroundColor: colors.background }]}>
-        <View style={[styles.fullPageContainer, { backgroundColor: colors.background }]}>
-          {/* Top Header with In-Frame Exit Button */}
-          <View style={[styles.header, { borderBottomColor: colors.border }]}>
-            <TouchableOpacity onPress={handleResetAndClose} style={[styles.exitBtn, { backgroundColor: colors.surfaceSecondary, borderColor: colors.border }]} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
-              <Ionicons name="close" size={20} color={colors.text} />
+      <SafeAreaView style={[styles.safeArea, { backgroundColor: '#09090b' }]}>
+        <View style={styles.fullPageContainer}>
+          {/* Top Bar Floating Controls */}
+          <View style={styles.topBar}>
+            <TouchableOpacity onPress={handleResetAndClose} style={styles.topIconBtn} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
+              <Ionicons name="close" size={22} color="#ffffff" />
             </TouchableOpacity>
 
-            <View style={{ alignItems: 'center' }}>
-              <Text style={[styles.headerTitle, { color: colors.text }]}>Log {mealType.charAt(0).toUpperCase() + mealType.slice(1)}</Text>
+            <View style={styles.topMealTag}>
+              <Ionicons name="restaurant-outline" size={14} color={colors.primary} />
+              <Text style={[styles.topMealTagText, { color: '#ffffff' }]}>
+                {mealType.toUpperCase()}
+              </Text>
             </View>
 
-            <View style={{ width: 36 }} />
+            {selectedImage ? (
+              <TouchableOpacity
+                onPress={() => {
+                  setSelectedImage(null);
+                  setAnalysisResult(null);
+                }}
+                style={styles.topIconBtn}
+              >
+                <Ionicons name="refresh" size={20} color="#ffffff" />
+              </TouchableOpacity>
+            ) : (
+              <View style={{ width: 40 }} />
+            )}
           </View>
 
-          <ScrollView contentContainerStyle={styles.scrollBody} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
-            {/* TOP SECTION: PHOTO SCANNER */}
-            {showPhotoSection && (
-              <View style={[styles.photoHalfSection, { borderColor: colors.border, backgroundColor: colors.surfaceElevated }]}>
-                {selectedImage ? (
-                  <View style={styles.photoContainer}>
-                    <Image source={{ uri: selectedImage }} style={styles.photoFill} resizeMode="cover" />
-                    {/* Viewfinder crosshairs overlaid on captured photo */}
-                    <View style={styles.viewfinderOverlay}>
-                      <View style={[styles.cornerTL, { borderColor: colors.primary }]} />
-                      <View style={[styles.cornerTR, { borderColor: colors.primary }]} />
-                      <View style={[styles.cornerBL, { borderColor: colors.primary }]} />
-                      <View style={[styles.cornerBR, { borderColor: colors.primary }]} />
-                      
-                      {/* Laser sweep animation across the photo */}
-                      {isAnalyzing && (
-                        <Animated.View
-                          style={[
-                            styles.photoScanBeam,
+          {/* MAIN CAMERA VIEWER */}
+          <View style={styles.cameraViewportWrap}>
+            {selectedImage ? (
+              <View style={styles.previewContainer}>
+                <Image source={{ uri: selectedImage }} style={styles.cameraFill} resizeMode="cover" />
+                {/* Viewfinder crosshairs overlaid on captured photo */}
+                <View style={styles.viewfinderOverlay}>
+                  <View style={styles.cornerTL} />
+                  <View style={styles.cornerTR} />
+                  <View style={styles.cornerBL} />
+                  <View style={styles.cornerBR} />
+
+                  {isAnalyzing && (
+                    <Animated.View
+                      style={[
+                        styles.photoScanBeam,
+                        {
+                          backgroundColor: '#ffffff',
+                          transform: [
                             {
-                              backgroundColor: colors.primary,
-                              transform: [
-                                {
-                                  translateY: scanLineAnim.interpolate({
-                                    inputRange: [0, 1],
-                                    outputRange: [10, 220],
-                                  }),
-                                },
-                              ],
+                              translateY: scanLineAnim.interpolate({
+                                inputRange: [0, 1],
+                                outputRange: [10, 260],
+                              }),
                             },
-                          ]}
-                        />
-                      )}
-                    </View>
+                          ],
+                        },
+                      ]}
+                    />
+                  )}
+                </View>
+              </View>
+            ) : permission?.granted ? (
+              <View style={styles.cameraContainer}>
+                <CameraView ref={cameraRef} style={styles.cameraFill} facing="back">
+                  {/* Viewfinder target bounds */}
+                  <View style={styles.viewfinderOverlay}>
+                    <View style={styles.cornerTL} />
+                    <View style={styles.cornerTR} />
+                    <View style={styles.cornerBL} />
+                    <View style={styles.cornerBR} />
 
-                    <TouchableOpacity
-                      style={styles.retakeBtn}
-                      onPress={() => {
-                        setSelectedImage(null);
-                        setAnalysisResult(null);
-                        setActiveSection('none');
-                      }}
-                    >
-                      <Ionicons name="refresh" size={15} color="#ffffff" />
-                      <Text style={styles.retakeBtnText}>Retake Photo</Text>
-                    </TouchableOpacity>
-                  </View>
-                ) : (
-                  <View style={styles.emptyPhotoBox}>
-                    <View style={styles.viewfinderEmptyBox}>
-                      <View style={[styles.cornerTL, { borderColor: `${colors.primary}80` }]} />
-                      <View style={[styles.cornerTR, { borderColor: `${colors.primary}80` }]} />
-                      <View style={[styles.cornerBL, { borderColor: `${colors.primary}80` }]} />
-                      <View style={[styles.cornerBR, { borderColor: `${colors.primary}80` }]} />
-                      <View style={[styles.cameraCircle, { backgroundColor: `${colors.primary}20` }]}>
-                        <Ionicons name="camera" size={30} color={colors.primary} />
-                      </View>
-                    </View>
-
-                    <Text style={[styles.photoPromptTitle, { color: colors.text }]}>Snap Plate, Snack, or Label</Text>
-
-                    <View style={styles.photoActionRow}>
-                      <TouchableOpacity
-                        style={[styles.cameraActionBtn, { backgroundColor: colors.primary }]}
-                        onPress={handleTakePhoto}
-                      >
-                        <Ionicons name="camera" size={17} color="#09090b" />
-                        <Text style={styles.cameraActionText}>Take Photo</Text>
-                      </TouchableOpacity>
-
-                      <TouchableOpacity
-                        style={[styles.libraryActionBtn, { backgroundColor: colors.surfaceSecondary, borderColor: colors.border }]}
-                        onPress={handlePickLibrary}
-                      >
-                        <Ionicons name="images-outline" size={17} color={colors.text} />
-                        <Text style={[styles.libraryActionText, { color: colors.text }]}>Upload</Text>
-                      </TouchableOpacity>
+                    {/* Mode tag indicator inside the viewfinder */}
+                    <View style={styles.cameraModeIndicator}>
+                      <Text style={styles.cameraModeIndicatorText}>
+                        {scanMode === 'food' ? 'FOOD SCAN' : scanMode === 'label' ? 'NUTRITION LABEL' : 'RECEIPT'}
+                      </Text>
                     </View>
                   </View>
-                )}
+                </CameraView>
+              </View>
+            ) : (
+              <View style={[styles.permissionBox, { backgroundColor: '#18181b' }]}>
+                <Ionicons name="camera-outline" size={44} color="#ffffff" />
+                <Text style={[styles.permissionTitle, { color: '#ffffff' }]}>Camera Access Required</Text>
+                <Text style={[styles.permissionSubtitle, { color: 'rgba(255,255,255,0.6)' }]}>
+                  StrideTrack uses live vision to scan meals, nutrition labels, and grocery receipts.
+                </Text>
+                <TouchableOpacity
+                  style={styles.grantPermissionBtn}
+                  onPress={() => requestPermission()}
+                >
+                  <Text style={styles.grantPermissionBtnText}>Enable Camera</Text>
+                </TouchableOpacity>
               </View>
             )}
 
-            {/* MODERN SCANNING PROGRESS BAR & ANALYSIS INDICATOR */}
+            {/* Shutter Capture Button (Clean normal camera shutter: white circle with inner disc) */}
+            {!selectedImage && !isAnalyzing && (
+              <View style={styles.shutterRow}>
+                <TouchableOpacity
+                  style={styles.shutterOuterRing}
+                  onPress={() => handleCaptureFromCamera()}
+                  disabled={isCapturing}
+                  activeOpacity={0.8}
+                >
+                  <View style={styles.shutterInnerCircle} />
+                </TouchableOpacity>
+              </View>
+            )}
+
+            {/* TRANSLUCENT OVERLAY MODAL / MENU IN FRONT OF CAMERA FOR TYPING & PRESELECTED */}
+            {activeSheet !== 'none' && (
+              <View style={styles.cameraSheetOverlayWrap}>
+                <View style={styles.cameraSheetCard}>
+                  {/* Close / Dismiss Bar */}
+                  <View style={styles.cameraSheetHeader}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                      <View style={styles.cameraSheetHeaderIcon}>
+                        <Ionicons
+                          name={activeSheet === 'describe' ? 'pencil' : 'list'}
+                          size={15}
+                          color="#ffffff"
+                        />
+                      </View>
+                      <Text style={styles.cameraSheetHeaderTitle}>
+                        {activeSheet === 'describe' ? 'Type / Describe Food' : 'Preselected Foods'}
+                      </Text>
+                    </View>
+                    <TouchableOpacity
+                      onPress={() => {
+                        Keyboard.dismiss();
+                        setActiveSheet('none');
+                      }}
+                      style={styles.cameraSheetCloseBtn}
+                      hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                    >
+                      <Ionicons name="close" size={17} color="#ffffff" />
+                    </TouchableOpacity>
+                  </View>
+
+                  {/* ACTIVE SHEET 1: TYPING / DESCRIBE */}
+                  {activeSheet === 'describe' && (
+                    <View style={styles.sheetBodyPadding}>
+                      <TextInput
+                        style={styles.describeTextInputClear}
+                        placeholder="e.g. 2 eggs, sourdough toast with butter, and an iced latte"
+                        placeholderTextColor="rgba(255,255,255,0.45)"
+                        value={descriptionInput}
+                        onChangeText={setDescriptionInput}
+                        multiline
+                        numberOfLines={3}
+                        returnKeyType="done"
+                        blurOnSubmit={true}
+                        autoFocus={true}
+                        onSubmitEditing={() => Keyboard.dismiss()}
+                      />
+
+                      <TouchableOpacity
+                        style={styles.calcDescribeBtnClear}
+                        onPress={handleCalculateFromDescription}
+                        activeOpacity={0.8}
+                      >
+                        <Ionicons name="sparkles" size={15} color="#000000" />
+                        <Text style={styles.calcDescribeBtnClearText}>Analyze Food</Text>
+                      </TouchableOpacity>
+                    </View>
+                  )}
+
+                  {/* ACTIVE SHEET 2: PRESELECTED DATABASE */}
+                  {activeSheet === 'preselected' && (
+                    <View style={styles.sheetBodyPaddingPreselected}>
+                      {/* Search Bar Input */}
+                      <View style={styles.searchBoxClear}>
+                        <Ionicons name="search" size={15} color="rgba(255,255,255,0.6)" />
+                        <TextInput
+                          style={styles.searchInputClear}
+                          placeholder="Search food, beverage, snack..."
+                          placeholderTextColor="rgba(255,255,255,0.45)"
+                          value={recipeSearchQuery}
+                          onChangeText={setRecipeSearchQuery}
+                          autoFocus={true}
+                        />
+                        {recipeSearchQuery.length > 0 && (
+                          <TouchableOpacity onPress={() => setRecipeSearchQuery('')}>
+                            <Ionicons name="close-circle" size={15} color="rgba(255,255,255,0.6)" />
+                          </TouchableOpacity>
+                        )}
+                      </View>
+
+                      {/* Category Pills */}
+                      <ScrollView
+                        horizontal
+                        showsHorizontalScrollIndicator={false}
+                        contentContainerStyle={styles.categoryScrollClear}
+                      >
+                        {CATEGORIES.map((cat) => {
+                          const isSelected = selectedCategory === cat;
+                          return (
+                            <TouchableOpacity
+                              key={cat}
+                              style={[
+                                styles.catChipClear,
+                                isSelected && styles.catChipClearSelected,
+                              ]}
+                              onPress={() => {
+                                Haptics.selectionAsync().catch(() => {});
+                                setSelectedCategory(cat);
+                              }}
+                            >
+                              <Text
+                                style={[
+                                  styles.catChipClearText,
+                                  isSelected && styles.catChipClearTextSelected,
+                                ]}
+                              >
+                                {cat}
+                              </Text>
+                            </TouchableOpacity>
+                          );
+                        })}
+                      </ScrollView>
+
+                      {/* Scrollable Preselected Items */}
+                      <ScrollView
+                        style={{ maxHeight: 220 }}
+                        keyboardShouldPersistTaps="handled"
+                        showsVerticalScrollIndicator={false}
+                      >
+                        <View style={styles.recipeListGroupClear}>
+                          {filteredRecipes.slice(0, 15).map((rec, index) => {
+                            const isLast = index === Math.min(filteredRecipes.length, 15) - 1;
+                            return (
+                              <React.Fragment key={rec.id}>
+                                <TouchableOpacity
+                                  style={styles.recipeRowItemClear}
+                                  onPress={() => {
+                                    handleSelectRecipe(rec);
+                                    setActiveSheet('none');
+                                  }}
+                                  activeOpacity={0.7}
+                                >
+                                  <View style={styles.recipeIconWrapClear}>
+                                    <Ionicons name={rec.icon as any} size={15} color="#ffffff" />
+                                  </View>
+                                  <View style={{ flex: 1, paddingRight: 6 }}>
+                                    <Text style={styles.recipeItemTitleClear} numberOfLines={1}>
+                                      {rec.name}
+                                    </Text>
+                                    <Text style={styles.recipeItemSubClear}>
+                                      {rec.portion} · P: {rec.protein}g · C: {rec.carbs}g · F: {rec.fat}g
+                                    </Text>
+                                  </View>
+                                  <Text style={styles.recipeItemCalsClear}>{rec.calories} kcal</Text>
+                                </TouchableOpacity>
+                                {!isLast && <View style={styles.recipeDividerClear} />}
+                              </React.Fragment>
+                            );
+                          })}
+                        </View>
+                      </ScrollView>
+                    </View>
+                  )}
+                </View>
+              </View>
+            )}
+          </View>
+
+          {/* LOWER CONTROLS & RESULTS AREA */}
+          <ScrollView
+            style={[styles.lowerSection, { backgroundColor: colors.background }]}
+            contentContainerStyle={styles.lowerScrollContent}
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={false}
+          >
+            {/* SCANNING PROGRESS CARD */}
             {isAnalyzing && (
               <View style={[styles.satisfyingLoadingCard, { backgroundColor: colors.surfaceElevated, borderColor: colors.primary }]}>
-                {/* Header with Live Status & Percentage */}
                 <View style={styles.scanBarHeaderRow}>
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1, marginRight: 8 }}>
-                    <View style={[styles.scanLiveDot, { backgroundColor: colors.primary }]} />
+                    <ActivityIndicator size="small" color={colors.primary} />
                     <Text style={[styles.satisfyingLoadingTitle, { color: colors.text }]} numberOfLines={1}>
                       {scanStatusText}
                     </Text>
@@ -496,37 +697,11 @@ export function FoodLoggingModal({
                       },
                     ]}
                   />
-                  {/* Glowing Laser Leading Edge */}
-                  <Animated.View
-                    style={[
-                      styles.scanBarLaserTip,
-                      {
-                        backgroundColor: '#ffffff',
-                        left: scanLineAnim.interpolate({
-                          inputRange: [0, 1],
-                          outputRange: ['6%', '98%'],
-                        }),
-                      },
-                    ]}
-                  />
-                </View>
-
-                {/* Stage Steps Indicator */}
-                <View style={styles.scanStagesRow}>
-                  <Text style={[styles.scanStageItem, { color: colors.textSecondary }]}>
-                    <Ionicons name="scan-outline" size={12} color={colors.primary} /> Vision Input
-                  </Text>
-                  <Text style={[styles.scanStageItem, { color: colors.textSecondary }]}>
-                    <Ionicons name="pie-chart-outline" size={12} color={colors.primary} /> Food Volume
-                  </Text>
-                  <Text style={[styles.scanStageItem, { color: colors.textSecondary }]}>
-                    <Ionicons name="flame-outline" size={12} color={colors.primary} /> Real USDA Cals
-                  </Text>
                 </View>
               </View>
             )}
 
-            {/* ACTIVE NUTRITION CARD (WHEN LOGGED VIA PHOTO, TEXT, OR RECIPE) */}
+            {/* ACTIVE NUTRITION CARD (WHEN LOGGED VIA SCAN, TEXT, OR PRESELECTED) */}
             {analysisResult && !isAnalyzing && (
               <View style={[styles.activeResultCard, { backgroundColor: colors.surfaceElevated, borderColor: colors.primary }]}>
                 <View style={styles.resultTitleRow}>
@@ -541,12 +716,10 @@ export function FoodLoggingModal({
                     </Text>
                   </View>
 
-                  {/* Clear Result Button */}
                   <TouchableOpacity
                     onPress={() => {
                       setAnalysisResult(null);
                       setSelectedImage(null);
-                      setActiveSection('none');
                     }}
                     style={styles.clearBtn}
                   >
@@ -636,34 +809,158 @@ export function FoodLoggingModal({
               </View>
             )}
 
-            {/* EXPAND / COLLAPSE BUTTON TO REVEAL OTHER OPTIONS WHEN ONE IS ACTIVE */}
-            {hasActiveChoice && (
-              <TouchableOpacity
-                style={[styles.expandToggleBtn, { backgroundColor: colors.surfaceElevated, borderColor: colors.border }]}
-                onPress={() => {
-                  Haptics.selectionAsync().catch(() => {});
-                  setShowOtherOptions((prev) => !prev);
-                }}
-              >
-                <Text style={[styles.expandToggleText, { color: colors.text }]}>
-                  {showOtherOptions ? 'Hide other options' : 'More logging options'}
-                </Text>
-                <Ionicons
-                  name={showOtherOptions ? 'chevron-up' : 'chevron-down'}
-                  size={18}
-                  color={colors.primary}
-                />
-              </TouchableOpacity>
-            )}
-
-            {/* OPTION 2: DESCRIBE FOOD */}
-            {showDescribeSection && (
-              <View style={[styles.typeSectionCard, { backgroundColor: colors.surfaceElevated, borderColor: colors.border }]}>
-                <View style={styles.sectionHeaderRow}>
-                  <View style={[styles.sectionIconWrap, { backgroundColor: '#38bdf820' }]}>
-                    <Ionicons name="chatbubble-ellipses" size={16} color="#38bdf8" />
+            {/* 3x2 BUTTON GRID (SOUTH OF THE CAMERA VIEWER) */}
+            <View style={styles.gridContainer}>
+              {/* ROW 1: SCAN MODES (Food | Nutrition Label | Receipt) */}
+              <View style={styles.gridRow}>
+                {/* 1. Food Scanner */}
+                <TouchableOpacity
+                  style={[
+                    styles.gridButton,
+                    scanMode === 'food' && styles.gridButtonActive,
+                  ]}
+                  onPress={() => handleModePress('food')}
+                  activeOpacity={0.7}
+                >
+                  <View style={[styles.gridIconCircle, scanMode === 'food' && styles.gridIconCircleActive]}>
+                    <Ionicons
+                      name="restaurant-outline"
+                      size={20}
+                      color={scanMode === 'food' ? '#000000' : '#ffffff'}
+                    />
                   </View>
-                  <Text style={[styles.sectionHeaderTitle, { color: colors.text }]}>Describe Food</Text>
+                  <Text style={[styles.gridButtonText, scanMode === 'food' && styles.gridButtonTextActive]} numberOfLines={1}>
+                    Food
+                  </Text>
+                </TouchableOpacity>
+
+                {/* 2. Nutrition Label Scanner */}
+                <TouchableOpacity
+                  style={[
+                    styles.gridButton,
+                    scanMode === 'label' && styles.gridButtonActive,
+                  ]}
+                  onPress={() => handleModePress('label')}
+                  activeOpacity={0.7}
+                >
+                  <View style={[styles.gridIconCircle, scanMode === 'label' && styles.gridIconCircleActive]}>
+                    <Ionicons
+                      name="barcode-outline"
+                      size={20}
+                      color={scanMode === 'label' ? '#000000' : '#ffffff'}
+                    />
+                  </View>
+                  <Text style={[styles.gridButtonText, scanMode === 'label' && styles.gridButtonTextActive]} numberOfLines={1}>
+                    Label
+                  </Text>
+                </TouchableOpacity>
+
+                {/* 3. Receipt Scanner */}
+                <TouchableOpacity
+                  style={[
+                    styles.gridButton,
+                    scanMode === 'receipt' && styles.gridButtonActive,
+                  ]}
+                  onPress={() => handleModePress('receipt')}
+                  activeOpacity={0.7}
+                >
+                  <View style={[styles.gridIconCircle, scanMode === 'receipt' && styles.gridIconCircleActive]}>
+                    <Ionicons
+                      name="receipt-outline"
+                      size={20}
+                      color={scanMode === 'receipt' ? '#000000' : '#ffffff'}
+                    />
+                  </View>
+                  <Text style={[styles.gridButtonText, scanMode === 'receipt' && styles.gridButtonTextActive]} numberOfLines={1}>
+                    Receipt
+                  </Text>
+                </TouchableOpacity>
+              </View>
+
+              {/* ROW 2: OTHER FEATURES (Typing / Describe | Preselected | Upload Photo) */}
+              <View style={styles.gridRow}>
+                {/* 4. Type / Describe */}
+                <TouchableOpacity
+                  style={[
+                    styles.gridButton,
+                    activeSheet === 'describe' && styles.gridButtonActive,
+                  ]}
+                  onPress={() => {
+                    Haptics.selectionAsync().catch(() => {});
+                    setActiveSheet((curr) => (curr === 'describe' ? 'none' : 'describe'));
+                  }}
+                  activeOpacity={0.7}
+                >
+                  <View style={[styles.gridIconCircle, activeSheet === 'describe' && styles.gridIconCircleActive]}>
+                    <Ionicons
+                      name="pencil-outline"
+                      size={20}
+                      color={activeSheet === 'describe' ? '#000000' : '#ffffff'}
+                    />
+                  </View>
+                  <Text style={[styles.gridButtonText, activeSheet === 'describe' && styles.gridButtonTextActive]} numberOfLines={1}>
+                    Typing
+                  </Text>
+                </TouchableOpacity>
+
+                {/* 5. Choose From Preselected */}
+                <TouchableOpacity
+                  style={[
+                    styles.gridButton,
+                    activeSheet === 'preselected' && styles.gridButtonActive,
+                  ]}
+                  onPress={() => {
+                    Haptics.selectionAsync().catch(() => {});
+                    setActiveSheet((curr) => (curr === 'preselected' ? 'none' : 'preselected'));
+                  }}
+                  activeOpacity={0.7}
+                >
+                  <View style={[styles.gridIconCircle, activeSheet === 'preselected' && styles.gridIconCircleActive]}>
+                    <Ionicons
+                      name="list-outline"
+                      size={20}
+                      color={activeSheet === 'preselected' ? '#000000' : '#ffffff'}
+                    />
+                  </View>
+                  <Text style={[styles.gridButtonText, activeSheet === 'preselected' && styles.gridButtonTextActive]} numberOfLines={1}>
+                    Preselected
+                  </Text>
+                </TouchableOpacity>
+
+                {/* 6. Upload Photo */}
+                <TouchableOpacity
+                  style={styles.gridButton}
+                  onPress={handlePickLibrary}
+                  activeOpacity={0.7}
+                >
+                  <View style={styles.gridIconCircle}>
+                    <Ionicons name="images-outline" size={20} color="#ffffff" />
+                  </View>
+                  <Text style={styles.gridButtonText} numberOfLines={1}>
+                    Upload
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            {/* EXPANDED DRAWER: WRITE WHAT IT IS */}
+            {activeSheet === 'describe' && (
+              <View style={[styles.typeSectionCard, { backgroundColor: colors.surfaceElevated, borderColor: colors.primary }]}>
+                <View style={[styles.sectionHeaderRow, { justifyContent: 'space-between' }]}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                    <View style={[styles.sectionIconWrap, { backgroundColor: '#38bdf820' }]}>
+                      <Ionicons name="chatbubble-ellipses" size={16} color="#38bdf8" />
+                    </View>
+                    <Text style={[styles.sectionHeaderTitle, { color: colors.text }]}>Describe Your Meal</Text>
+                  </View>
+                  <TouchableOpacity
+                    onPress={() => Keyboard.dismiss()}
+                    style={styles.keyboardDismissBtn}
+                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                  >
+                    <Ionicons name="chevron-down-circle" size={18} color={colors.primary} />
+                    <Text style={[styles.keyboardDismissText, { color: colors.primary }]}>Done</Text>
+                  </TouchableOpacity>
                 </View>
 
                 <TextInput
@@ -671,22 +968,21 @@ export function FoodLoggingModal({
                     styles.describeTextInput,
                     { backgroundColor: colors.surfaceSecondary, color: colors.text, borderColor: colors.border },
                   ]}
-                  placeholder="e.g. 3 cookies, chicken breast, or lemonade"
+                  placeholder="e.g. 2 eggs, sourdough toast with butter, and an iced latte"
                   placeholderTextColor={colors.textMuted}
                   value={descriptionInput}
-                  onChangeText={(text) => {
-                    setDescriptionInput(text);
-                    if (text && activeSection !== 'describe') {
-                      setActiveSection('describe');
-                    }
-                  }}
+                  onChangeText={setDescriptionInput}
                   multiline
                   numberOfLines={2}
+                  returnKeyType="done"
+                  blurOnSubmit={true}
+                  onSubmitEditing={() => Keyboard.dismiss()}
                 />
 
                 <TouchableOpacity
-                  style={[styles.calcDescribeBtn, { backgroundColor: '#38bdf8' }]}
+                  style={[styles.calcDescribeBtn, { backgroundColor: colors.primary }]}
                   onPress={handleCalculateFromDescription}
+                  activeOpacity={0.8}
                 >
                   <Ionicons name="flash-outline" size={15} color="#09090b" />
                   <Text style={styles.calcDescribeBtnText}>Calculate Nutrition</Text>
@@ -694,15 +990,15 @@ export function FoodLoggingModal({
               </View>
             )}
 
-            {/* OPTION 3: SEARCH RECIPES & MEALS (HUGE INDEX WITH CATEGORY FILTER CHIPS) */}
-            {showRecipeSection && (
-              <View style={[styles.recipeSectionCard, { backgroundColor: colors.surfaceElevated, borderColor: colors.border }]}>
+            {/* EXPANDED DRAWER: CHOOSE PRESELECTED FOODS */}
+            {activeSheet === 'preselected' && (
+              <View style={[styles.recipeSectionCard, { backgroundColor: colors.surfaceElevated, borderColor: colors.primary }]}>
                 <View style={styles.sectionHeaderRow}>
                   <View style={[styles.sectionIconWrap, { backgroundColor: `${colors.primary}20` }]}>
                     <Ionicons name="search" size={16} color={colors.primary} />
                   </View>
                   <View style={{ flex: 1, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <Text style={[styles.sectionHeaderTitle, { color: colors.text }]}>Search Foods & Meals</Text>
+                    <Text style={[styles.sectionHeaderTitle, { color: colors.text }]}>Preselected Food Database</Text>
                     <Text style={{ fontSize: 11, fontWeight: '700', color: colors.textMuted }}>{filteredRecipes.length} items</Text>
                   </View>
                 </View>
@@ -712,15 +1008,11 @@ export function FoodLoggingModal({
                   <Ionicons name="search" size={16} color={colors.textMuted} />
                   <TextInput
                     style={[styles.searchInput, { color: colors.text }]}
-                    placeholder="Search any food, drink, or meal..."
+                    placeholder="Search any food, beverage, or brand..."
                     placeholderTextColor={colors.textMuted}
                     value={recipeSearchQuery}
-                    onChangeText={(q) => {
-                      setRecipeSearchQuery(q);
-                      if (q && activeSection !== 'recipes') {
-                        setActiveSection('recipes');
-                      }
-                    }}
+                    onChangeText={setRecipeSearchQuery}
+                    autoFocus
                   />
                   {recipeSearchQuery.length > 0 && (
                     <TouchableOpacity onPress={() => setRecipeSearchQuery('')}>
@@ -729,7 +1021,7 @@ export function FoodLoggingModal({
                   )}
                 </View>
 
-                {/* Horizontal Category Filter Pills */}
+                {/* Category Pills */}
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.categoryScroll}>
                   {CATEGORIES.map((cat) => {
                     const isSelected = selectedCategory === cat;
@@ -764,7 +1056,7 @@ export function FoodLoggingModal({
                   })}
                 </ScrollView>
 
-                {/* Full Database Results List */}
+                {/* Results List */}
                 <View style={[styles.recipeListGroup, { backgroundColor: colors.surfaceSecondary, borderColor: colors.border }]}>
                   {filteredRecipes.slice(0, 10).map((rec, index) => {
                     const isLast = index === Math.min(filteredRecipes.length, 10) - 1;
@@ -788,7 +1080,6 @@ export function FoodLoggingModal({
                           </View>
                           <View style={{ alignItems: 'flex-end' }}>
                             <Text style={[styles.recipeItemCals, { color: colors.primary }]}>{rec.calories} kcal</Text>
-                            <Text style={{ fontSize: 9, color: colors.textMuted, fontWeight: '600' }}>{rec.category}</Text>
                           </View>
                         </TouchableOpacity>
                         {!isLast && <View style={[styles.recipeDivider, { backgroundColor: colors.border }]} />}
@@ -806,177 +1097,154 @@ export function FoodLoggingModal({
 }
 
 const styles = StyleSheet.create({
+  keyboardDismissBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+    backgroundColor: 'rgba(255,255,255,0.06)',
+  },
+  keyboardDismissText: {
+    fontSize: 12,
+    fontWeight: '700',
+  },
   safeArea: {
     flex: 1,
   },
   fullPageContainer: {
     flex: 1,
   },
-  header: {
+  topBar: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-  },
-  exitBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    borderWidth: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  headerTitle: {
-    fontSize: 18,
-    fontWeight: '800',
-    fontFamily: SERIF_FONT,
-  },
-  scrollBody: {
-    padding: 14,
-    paddingBottom: 36,
-    gap: 12,
-  },
-  photoHalfSection: {
-    height: Math.min(260, SCREEN_HEIGHT * 0.32),
-    borderRadius: 18,
-    borderWidth: 1,
-    overflow: 'hidden',
-  },
-  photoContainer: {
-    width: '100%',
-    height: '100%',
-    position: 'relative',
-  },
-  photoFill: {
-    width: '100%',
-    height: '100%',
-  },
-  retakeBtn: {
+    paddingVertical: 10,
     position: 'absolute',
-    bottom: 10,
-    right: 10,
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(0,0,0,0.75)',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 16,
-    gap: 6,
+    top: Platform.OS === 'ios' ? 44 : 10,
+    left: 0,
+    right: 0,
+    zIndex: 30,
   },
-  retakeBtnText: {
-    color: '#ffffff',
-    fontSize: 12,
-    fontWeight: '700',
-  },
-  emptyPhotoBox: {
-    flex: 1,
+  topIconBtn: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: 'rgba(0,0,0,0.65)',
     alignItems: 'center',
     justifyContent: 'center',
-    padding: 16,
-  },
-  cameraCircle: {
-    width: 58,
-    height: 58,
-    borderRadius: 29,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 8,
-  },
-  photoPromptTitle: {
-    fontSize: 16,
-    fontWeight: '800',
-    fontFamily: SERIF_FONT,
-    marginBottom: 12,
-    textAlign: 'center',
-  },
-  photoActionRow: {
-    flexDirection: 'row',
-    gap: 10,
-  },
-  cameraActionBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 16,
-    paddingVertical: 9,
-    borderRadius: 12,
-  },
-  cameraActionText: {
-    fontSize: 13,
-    fontWeight: '800',
-    color: '#09090b',
-  },
-  libraryActionBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 14,
-    paddingVertical: 9,
-    borderRadius: 12,
     borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.2)',
   },
-  libraryActionText: {
-    fontSize: 13,
-    fontWeight: '700',
+  topMealTag: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: 'rgba(0,0,0,0.65)',
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.15)',
+  },
+  topMealTagText: {
+    fontSize: 12,
+    fontWeight: '800',
+    letterSpacing: 0.5,
   },
 
-  /* Viewfinder crosshairs overlaid on image */
-  viewfinderOverlay: {
-    ...StyleSheet.absoluteFill,
-    padding: 16,
-    justifyContent: 'space-between',
-  },
-  viewfinderEmptyBox: {
-    width: 140,
-    height: 100,
+  /* MAIN CAMERA VIEWPORT */
+  cameraViewportWrap: {
+    width: '100%',
+    height: Math.min(420, SCREEN_HEIGHT * 0.44),
+    backgroundColor: '#000000',
     position: 'relative',
+    overflow: 'hidden',
+  },
+  cameraContainer: {
+    width: '100%',
+    height: '100%',
+  },
+  previewContainer: {
+    width: '100%',
+    height: '100%',
+  },
+  cameraFill: {
+    width: '100%',
+    height: '100%',
+  },
+  viewfinderOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    padding: 24,
+    justifyContent: 'space-between',
     alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 8,
+  },
+  cameraModeIndicator: {
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+    borderRadius: 16,
+    marginTop: 50,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.2)',
+  },
+  cameraModeIndicatorText: {
+    color: '#ffffff',
+    fontSize: 10,
+    fontWeight: '800',
+    letterSpacing: 0.8,
   },
   cornerTL: {
     position: 'absolute',
-    top: 0,
-    left: 0,
-    width: 20,
-    height: 20,
+    top: 50,
+    left: 20,
+    width: 26,
+    height: 26,
     borderTopWidth: 2.5,
     borderLeftWidth: 2.5,
+    borderColor: 'rgba(255,255,255,0.85)',
+    borderTopLeftRadius: 6,
   },
   cornerTR: {
     position: 'absolute',
-    top: 0,
-    right: 0,
-    width: 20,
-    height: 20,
+    top: 50,
+    right: 20,
+    width: 26,
+    height: 26,
     borderTopWidth: 2.5,
     borderRightWidth: 2.5,
+    borderColor: 'rgba(255,255,255,0.85)',
+    borderTopRightRadius: 6,
   },
   cornerBL: {
     position: 'absolute',
-    bottom: 0,
-    left: 0,
-    width: 20,
-    height: 20,
+    bottom: 20,
+    left: 20,
+    width: 26,
+    height: 26,
     borderBottomWidth: 2.5,
     borderLeftWidth: 2.5,
+    borderColor: 'rgba(255,255,255,0.85)',
+    borderBottomLeftRadius: 6,
   },
   cornerBR: {
     position: 'absolute',
-    bottom: 0,
-    right: 0,
-    width: 20,
-    height: 20,
+    bottom: 20,
+    right: 20,
+    width: 26,
+    height: 26,
     borderBottomWidth: 2.5,
     borderRightWidth: 2.5,
+    borderColor: 'rgba(255,255,255,0.85)',
+    borderBottomRightRadius: 6,
   },
   photoScanBeam: {
     position: 'absolute',
-    left: 10,
-    right: 10,
-    height: 2.5,
+    left: 20,
+    right: 20,
+    height: 2,
     borderRadius: 1,
     shadowColor: '#ffffff',
     shadowOffset: { width: 0, height: 0 },
@@ -985,22 +1253,309 @@ const styles = StyleSheet.create({
     elevation: 6,
   },
 
-  /* Food-Themed Scanning Bar Loading State */
-  satisfyingLoadingCard: {
-    padding: 18,
-    borderRadius: 18,
-    borderWidth: 1.5,
+  /* Shutter Capture Button */
+  shutterRow: {
+    position: 'absolute',
+    bottom: 16,
+    left: 0,
+    right: 0,
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 25,
+  },
+  shutterOuterRing: {
+    width: 68,
+    height: 68,
+    borderRadius: 34,
+    borderWidth: 4,
+    borderColor: '#ffffff',
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  shutterInnerCircle: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    backgroundColor: '#ffffff',
+  },
+
+  /* Camera Overlay Floating Modal / Menu (clearish in front of camera view) */
+  cameraSheetOverlayWrap: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    paddingHorizontal: 14,
+    paddingTop: 56,
+    paddingBottom: 16,
+    zIndex: 40,
+    justifyContent: 'center',
+  },
+  cameraSheetCard: {
+    backgroundColor: 'rgba(24, 24, 27, 0.88)',
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.18)',
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.5,
+    shadowRadius: 16,
+  },
+  cameraSheetHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255,255,255,0.08)',
+  },
+  cameraSheetHeaderIcon: {
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    backgroundColor: 'rgba(255,255,255,0.14)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  cameraSheetHeaderTitle: {
+    color: '#ffffff',
+    fontSize: 14,
+    fontWeight: '800',
+    letterSpacing: 0.2,
+  },
+  cameraSheetCloseBtn: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: 'rgba(255,255,255,0.12)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  sheetBodyPadding: {
+    padding: 14,
     gap: 12,
+  },
+  describeTextInputClear: {
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    borderColor: 'rgba(255,255,255,0.18)',
+    borderWidth: 1,
+    borderRadius: 14,
+    padding: 12,
+    color: '#ffffff',
+    fontSize: 13.5,
+    minHeight: 76,
+    textAlignVertical: 'top',
+  },
+  calcDescribeBtnClear: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#ffffff',
+    borderRadius: 14,
+    paddingVertical: 11,
+    gap: 6,
+  },
+  calcDescribeBtnClearText: {
+    color: '#000000',
+    fontSize: 13,
+    fontWeight: '800',
+  },
+  sheetBodyPaddingPreselected: {
+    padding: 12,
+    gap: 10,
+  },
+  searchBoxClear: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    borderColor: 'rgba(255,255,255,0.14)',
+    borderWidth: 1,
+    borderRadius: 12,
+    paddingHorizontal: 10,
+    height: 38,
+    gap: 8,
+  },
+  searchInputClear: {
+    flex: 1,
+    color: '#ffffff',
+    fontSize: 13,
+    paddingVertical: 0,
+  },
+  categoryScrollClear: {
+    flexDirection: 'row',
+    gap: 6,
+    paddingVertical: 2,
+  },
+  catChipClear: {
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 12,
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.1)',
+  },
+  catChipClearSelected: {
+    backgroundColor: '#ffffff',
+    borderColor: '#ffffff',
+  },
+  catChipClearText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: 'rgba(255,255,255,0.7)',
+  },
+  catChipClearTextSelected: {
+    color: '#000000',
+    fontWeight: '800',
+  },
+  recipeListGroupClear: {
+    backgroundColor: 'rgba(255,255,255,0.05)',
+    borderColor: 'rgba(255,255,255,0.1)',
+    borderWidth: 1,
+    borderRadius: 14,
+    overflow: 'hidden',
+  },
+  recipeRowItemClear: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+    gap: 10,
+  },
+  recipeIconWrapClear: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: 'rgba(255,255,255,0.1)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  recipeItemTitleClear: {
+    color: '#ffffff',
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  recipeItemSubClear: {
+    color: 'rgba(255,255,255,0.5)',
+    fontSize: 10.5,
+    marginTop: 1,
+  },
+  recipeItemCalsClear: {
+    color: '#ffffff',
+    fontSize: 12,
+    fontWeight: '800',
+  },
+  recipeDividerClear: {
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    marginHorizontal: 10,
+  },
+
+  /* Camera Permission Box */
+  permissionBox: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 24,
+    gap: 10,
+  },
+  permissionTitle: {
+    fontSize: 17,
+    fontWeight: '800',
+    marginTop: 6,
+  },
+  permissionSubtitle: {
+    fontSize: 13,
+    textAlign: 'center',
+    lineHeight: 18,
+    marginBottom: 8,
+  },
+  grantPermissionBtn: {
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 14,
+  },
+  grantPermissionBtnText: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#09090b',
+  },
+
+  /* LOWER CONTROLS & RESULTS */
+  lowerSection: {
+    flex: 1,
+  },
+  lowerScrollContent: {
+    padding: 14,
+    paddingBottom: 40,
+    gap: 14,
+  },
+
+  /* 3x2 Grid South of the Camera View: Circular White/Grey Buttons with transparent labels */
+  gridContainer: {
+    gap: 12,
+    paddingVertical: 4,
+  },
+  gridRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    alignItems: 'center',
+  },
+  gridButton: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    minWidth: 64,
+  },
+  gridButtonActive: {
+    opacity: 1,
+  },
+  gridIconCircle: {
+    width: 46,
+    height: 46,
+    borderRadius: 23,
+    backgroundColor: 'rgba(255, 255, 255, 0.12)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.2)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  gridIconCircleActive: {
+    backgroundColor: '#ffffff',
+    borderColor: '#ffffff',
+    shadowColor: '#ffffff',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 6,
+  },
+  gridButtonText: {
+    fontSize: 11,
+    fontWeight: '600',
+    textAlign: 'center',
+    color: 'rgba(255, 255, 255, 0.7)',
+    letterSpacing: 0.2,
+  },
+  gridButtonTextActive: {
+    color: '#ffffff',
+    fontWeight: '800',
+  },
+
+  /* Scanning Progress */
+  satisfyingLoadingCard: {
+    padding: 14,
+    borderRadius: 16,
+    borderWidth: 1.5,
+    gap: 10,
   },
   scanBarHeaderRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
   },
-  scanLiveDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
+  satisfyingLoadingTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+    letterSpacing: 0.2,
   },
   scanPercentText: {
     fontSize: 13,
@@ -1013,57 +1568,11 @@ const styles = StyleSheet.create({
     borderRadius: 6,
     borderWidth: 1,
     overflow: 'hidden',
-    position: 'relative',
     justifyContent: 'center',
   },
   scanBarFill: {
     height: '100%',
     borderRadius: 5,
-  },
-  scanBarLaserTip: {
-    position: 'absolute',
-    width: 12,
-    height: '100%',
-    borderRadius: 6,
-    opacity: 0.9,
-    shadowColor: '#ffffff',
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.9,
-    shadowRadius: 5,
-    elevation: 4,
-  },
-  scanStagesRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    paddingTop: 2,
-  },
-  scanStageItem: {
-    fontSize: 11,
-    fontWeight: '600',
-  },
-  satisfyingLoadingTitle: {
-    fontSize: 13,
-    fontWeight: '700',
-    letterSpacing: 0.2,
-  },
-  satisfyingLoadingSub: {
-    fontSize: 11,
-    fontWeight: '500',
-  },
-
-  /* Category Filter Chips */
-  categoryScroll: {
-    gap: 6,
-    paddingVertical: 2,
-  },
-  catChip: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 14,
-    borderWidth: 1,
-  },
-  catChipText: {
-    fontSize: 11,
   },
 
   /* Active Result Card */
@@ -1172,26 +1681,11 @@ const styles = StyleSheet.create({
     color: '#09090b',
   },
 
-  /* Expand / Collapse More Options */
-  expandToggleBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 10,
-    borderRadius: 12,
-    borderWidth: 1,
-    gap: 6,
-  },
-  expandToggleText: {
-    fontSize: 13,
-    fontWeight: '700',
-  },
-
-  /* Type & Recipe Sections */
+  /* Drawer Cards */
   typeSectionCard: {
     padding: 14,
     borderRadius: 16,
-    borderWidth: 1,
+    borderWidth: 1.5,
     gap: 10,
   },
   sectionHeaderRow: {
@@ -1216,7 +1710,7 @@ const styles = StyleSheet.create({
     padding: 10,
     fontSize: 13,
     textAlignVertical: 'top',
-    minHeight: 50,
+    minHeight: 52,
   },
   calcDescribeBtn: {
     flexDirection: 'row',
@@ -1231,10 +1725,11 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     color: '#09090b',
   },
+
   recipeSectionCard: {
     padding: 14,
     borderRadius: 16,
-    borderWidth: 1,
+    borderWidth: 1.5,
     gap: 10,
   },
   searchBox: {
@@ -1250,6 +1745,19 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 13,
     paddingVertical: 2,
+  },
+  categoryScroll: {
+    gap: 6,
+    paddingVertical: 2,
+  },
+  catChip: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 14,
+    borderWidth: 1,
+  },
+  catChipText: {
+    fontSize: 11,
   },
   recipeListGroup: {
     borderRadius: 14,

@@ -3,7 +3,7 @@ import { ActivityIndicator, DeviceEventEmitter, StyleSheet, Text, TouchableOpaci
 import { useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
-import { useTheme, SERIF_FONT } from '@/constants/ThemeContext';
+import { useTheme, SERIF_FONT, BRAND_ROUNDED_FONT, BRAND_ROUNDED_FONT_EXTRA } from '@/constants/ThemeContext';
 import { BODY_PARTS, BodyPart, computeMuscleRanks, MUSCLE_TIERS } from '@/constants/muscleRanks';
 import { DEFAULT_EXERCISES, loadRankableWorkoutLogs, WORKOUT_LOGS_CHANGED, WorkoutLogEntry } from '@/constants/workoutStorage';
 import { MuscleRankBody, RankEmblem } from './MuscleRankArtwork';
@@ -41,7 +41,6 @@ export function MuscleRanksSection({ userId, active }: { userId: string; active:
   const ranks = useMemo(() => computeMuscleRanks(ownHistory ? history.logs : [], DEFAULT_EXERCISES, userId), [ownHistory, history.logs, userId]);
   const rank = ranks.find(item => item.part === selected)!;
   const part = BODY_PARTS.find(item => item.id === selected)!;
-  const trainedParts = ranks.filter(item => item.days > 0).length;
   const choosePart = (value: BodyPart) => {
     setSelected(value);
     if (value === 'back') setBack(true);
@@ -52,10 +51,9 @@ export function MuscleRanksSection({ userId, active }: { userId: string; active:
 
   return <View style={s.container}>
     <View style={s.headingRow}>
-      <View style={{ flex: 1 }}><Text style={[s.eyebrow, { color: colors.textMuted }]}>TRAINING, LEVELLED UP</Text><Text style={[s.title, { color: colors.text }]}>Your muscle ranks</Text></View>
-      <View style={[s.summary, { backgroundColor: colors.primaryBg }]}><Ionicons name="shield-checkmark-outline" size={15} color={colors.primary} /><Text style={[s.summaryText, { color: colors.primary }]}>{trainedParts}/6 trained</Text></View>
+      <View style={{ flex: 1 }}><Text style={[s.title, { color: colors.text }]}>Your muscle ranks</Text></View>
     </View>
-    <Text style={[s.intro, { color: colors.textMuted }]}>Build your ranks one training day at a time.</Text>
+    <Text style={[s.intro, { color: colors.textMuted }]}>Build your ranks with every pound lifted.</Text>
     {(!ownHistory || history.loading) && <View style={s.loading}><ActivityIndicator color={colors.primary} /><Text style={[s.caption, { color: colors.textMuted }]}>Updating workout history...</Text></View>}
     {ownHistory && history.error ? <View style={[s.detail, panel]}>
       <Text style={[s.detailTitle, { color: colors.text }]}>Could not load your ranks</Text>
@@ -63,7 +61,7 @@ export function MuscleRanksSection({ userId, active }: { userId: string; active:
       <TouchableOpacity onPress={refresh}><Text style={{ color: colors.primary, fontWeight: '700' }}>Retry</Text></TouchableOpacity>
     </View> : <>
       <View style={s.hero}>
-        <View style={s.heroTop}><View><Text style={s.heroEyebrow}>YOUR TRAINING ARMOR</Text><Text style={s.heroHint}>Tap a muscle to inspect its rank</Text></View>
+        <View style={[s.heroTop, { justifyContent: 'flex-end' }]}>
           <View style={s.angleTabs}>{([false, true] as const).map(value => <TouchableOpacity key={String(value)} accessibilityRole="button" accessibilityState={{ selected: back === value }}
             onPress={() => setBack(value)} style={[s.angleTab, back === value && { backgroundColor: '#34343c' }]}><Text style={[s.angleText, back === value && { color: '#fff' }]}>{value ? 'Back' : 'Front'}</Text></TouchableOpacity>)}</View>
         </View>
@@ -78,40 +76,47 @@ export function MuscleRanksSection({ userId, active }: { userId: string; active:
       <View style={[s.detail, panel]}>
         <View style={s.detailRow}><RankEmblem tier={rank.tier} size={54} />
           <View style={{ flex: 1 }}><Text style={[s.caption, { color: colors.textMuted }]}>{part.label.toUpperCase()} / {part.description}</Text><Text style={[s.detailTitle, { color: colors.text }]}>{rank.tier.name}</Text></View>
-          <View style={{ alignItems: 'flex-end' }}><Text style={[s.dayCount, { color: colors.text }]}>{rank.days}</Text><Text style={[s.caption, { color: colors.textMuted }]}>{rank.days === 1 ? 'training day' : 'training days'}</Text></View>
+          <View style={{ alignItems: 'flex-end' }}><Text style={[s.dayCount, { color: colors.text }]}>{rank.volumeLbs >= 10000 ? `${(rank.volumeLbs / 1000).toFixed(1)}k` : rank.volumeLbs.toLocaleString()}</Text><Text style={[s.caption, { color: colors.textMuted }]}>lbs lifted</Text></View>
         </View>
         <View accessibilityRole="progressbar" accessibilityLabel={`${part.label} progress toward ${rank.next?.name || 'maximum rank'}`} accessibilityValue={{ min: 0, max: 100, now: Math.round(rank.progress * 100) }} style={[s.progressTrack, { backgroundColor: colors.surfaceSecondary }]}>
           <View style={[s.progressFill, { width: `${rank.progress * 100}%`, backgroundColor: rank.tier.color }]} />
         </View>
-        <View style={s.detailRow}><Text style={[s.progressText, { color: colors.textMuted }]}>{rank.next ? `${rank.remaining} more training ${rank.remaining === 1 ? 'day' : 'days'} to ${rank.next.name}` : 'Olympian reached. Your training keeps counting.'}</Text>
-          {rank.next && <Text style={[s.caption, { color: colors.textMuted }]}>{rank.days - rank.tier.days}/{rank.next.days - rank.tier.days}</Text>}
+        <View style={s.detailRow}><Text style={[s.progressText, { color: colors.textMuted }]}>{rank.next ? `${rank.remaining >= 10000 ? `${(rank.remaining / 1000).toFixed(1)}k` : rank.remaining.toLocaleString()} more lbs to ${rank.next.name}` : 'Olympian reached. Your volume keeps counting.'}</Text>
+          {rank.next && <Text style={[s.caption, { color: colors.textMuted }]}>{rank.volumeLbs.toLocaleString()}/{rank.next.volumeLbs.toLocaleString()} lbs</Text>}
         </View>
       </View>
 
       <View style={s.partsGrid}>{ranks.map(item => {
         const metadata = BODY_PARTS.find(body => body.id === item.part)!;
         const chosen = selected === item.part;
-        return <TouchableOpacity key={item.part} accessibilityRole="button" accessibilityLabel={`${metadata.label}: ${item.tier.name}, ${item.days} training days`} accessibilityState={{ selected: chosen }} onPress={() => choosePart(item.part)}
+        const volText = item.volumeLbs >= 10000 ? `${(item.volumeLbs / 1000).toFixed(1)}k lbs` : `${item.volumeLbs} lbs`;
+        return <TouchableOpacity key={item.part} accessibilityRole="button" accessibilityLabel={`${metadata.label}: ${item.tier.name}, ${item.volumeLbs} lbs lifted`} accessibilityState={{ selected: chosen }} onPress={() => choosePart(item.part)}
           style={[s.partCard, panel, chosen && { borderColor: isDark ? item.tier.color : colors.text, backgroundColor: isDark ? item.tier.dark + '25' : colors.surfaceSecondary }]}>
-          <RankEmblem tier={item.tier} size={34} /><View style={{ flex: 1 }}><Text style={[s.partName, { color: colors.text }]}>{metadata.label}</Text><Text style={[s.partTier, { color: colors.textMuted }]}>{item.tier.name} · {item.days}d</Text></View>
+          <RankEmblem tier={item.tier} size={34} /><View style={{ flex: 1 }}><Text style={[s.partName, { color: colors.text }]}>{metadata.label}</Text><Text style={[s.partTier, { color: colors.textMuted }]}>{item.tier.name} · {volText}</Text></View>
           {chosen && <Ionicons name="checkmark" size={14} color={colors.text} />}
         </TouchableOpacity>;
       })}</View>
 
-      {!trainedParts && !history.loading && <Text style={[s.emptyHint, { color: colors.textMuted }]}>Your first saved workout unlocks Bronze for its primary body part. Three training days unlock Silver.</Text>}
+      {rank.volumeLbs === 0 && !history.loading && <Text style={[s.emptyHint, { color: colors.textMuted }]}>Log workout sets to increase your total lifted pounds and rank up this muscle group.</Text>}
 
       <View style={[s.ladder, panel]}>
         <Text style={[s.ladderTitle, { color: colors.text }]}>The rank ladder</Text>
-        <Text style={[s.caption, { color: colors.textMuted }]}>A separate rank for every body part</Text>
-        <View style={s.tierGrid}>{MUSCLE_TIERS.map(tier => <View key={tier.id} style={[s.tierCell, tier.id === rank.tier.id && { backgroundColor: isDark ? tier.dark + '30' : colors.surfaceSecondary }]}>
-          <RankEmblem tier={tier} size={48} /><Text style={[s.tierName, { color: colors.text }]}>{tier.name}</Text><Text style={[s.caption, { color: colors.textMuted }]}>{tier.days === 0 ? 'Start here' : `${tier.days} ${tier.days === 1 ? 'day' : 'days'}`}</Text>
-        </View>)}</View>
+        <View style={s.tierGrid}>{MUSCLE_TIERS.map(tier => {
+          const volLabel = tier.volumeLbs >= 1000000
+            ? `${(tier.volumeLbs / 1000000).toFixed(1)}M lbs`
+            : tier.volumeLbs >= 1000
+            ? `${Math.round(tier.volumeLbs / 1000)}k lbs`
+            : tier.volumeLbs === 0 ? 'Start here' : `${tier.volumeLbs} lbs`;
+          return <View key={tier.id} style={[s.tierCell, tier.id === rank.tier.id && { backgroundColor: isDark ? tier.dark + '30' : colors.surfaceSecondary }]}>
+            <RankEmblem tier={tier} size={48} /><Text style={[s.tierName, { color: colors.text }]}>{tier.name}</Text><Text style={[s.caption, { color: colors.textMuted }]}>{volLabel}</Text>
+          </View>;
+        })}</View>
       </View>
       <View style={[s.rules, { borderColor: colors.border }]}>
         <TouchableOpacity accessibilityRole="button" accessibilityState={{ expanded: rulesOpen }} onPress={() => setRulesOpen(value => !value)} style={s.rulesToggle}>
           <Ionicons name="information-circle-outline" size={18} color={colors.textMuted} /><Text style={[s.rulesTitle, { color: colors.text }]}>How ranks are earned</Text><Ionicons name={rulesOpen ? 'chevron-up' : 'chevron-down'} size={16} color={colors.textMuted} />
         </TouchableOpacity>
-        {rulesOpen && <Text style={[s.rulesText, { color: colors.textMuted }]}>Each body part earns one credit per calendar day with a saved workout targeting its primary muscles. More sets on the same day stay one credit. Bodyweight exercises count too. Ranks use your existing workout history and update when workouts are saved or removed. Three arm-training days earn Silver. These ranks reward training consistency.</Text>}
+        {rulesOpen && <Text style={[s.rulesText, { color: colors.textMuted }]}>Each body part earns rank progress through total weight volume lifted (sets × reps × weight in lbs). Higher tiers scale exponentially to reflect progressive overload and long-term training dedication. Bodyweight movements also contribute resistance volume. Ranks update automatically whenever workouts are saved.</Text>}
       </View>
     </>}
   </View>;
@@ -121,7 +126,7 @@ const s = StyleSheet.create({
   container: { paddingHorizontal: 16, paddingTop: 8, paddingBottom: 32, gap: 16 },
   headingRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
   eyebrow: { fontSize: 9, fontWeight: '800', letterSpacing: 1.5, marginBottom: 6 },
-  title: { fontSize: 25, fontFamily: SERIF_FONT, letterSpacing: -.7 },
+  title: { fontSize: 26, fontFamily: BRAND_ROUNDED_FONT_EXTRA, fontWeight: '800', letterSpacing: -0.5 },
   summary: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 9, paddingVertical: 7, borderRadius: 20 },
   summaryText: { fontSize: 10, fontWeight: '700' },
   intro: { fontSize: 13, lineHeight: 19, marginTop: -7 },
@@ -141,8 +146,8 @@ const s = StyleSheet.create({
   chipRank: { fontSize: 14, fontWeight: '700', marginTop: 2 },
   detail: { borderRadius: 20, padding: 16, borderWidth: 1, gap: 14 },
   detailRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  detailTitle: { fontSize: 22, fontWeight: '800', marginTop: 2 },
-  dayCount: { fontSize: 26, fontWeight: '800', fontVariant: ['tabular-nums'] },
+  detailTitle: { fontSize: 22, fontFamily: BRAND_ROUNDED_FONT_EXTRA, fontWeight: '800', marginTop: 2 },
+  dayCount: { fontSize: 26, fontFamily: BRAND_ROUNDED_FONT_EXTRA, fontWeight: '800', fontVariant: ['tabular-nums'] },
   progressTrack: { height: 5, borderRadius: 4, overflow: 'hidden' },
   progressFill: { height: '100%', borderRadius: 4 },
   progressText: { flex: 1, fontSize: 12, lineHeight: 18 },
@@ -152,7 +157,7 @@ const s = StyleSheet.create({
   partTier: { fontSize: 10, marginTop: 3 },
   emptyHint: { fontSize: 12, lineHeight: 18, textAlign: 'center', paddingHorizontal: 14 },
   ladder: { borderRadius: 20, borderWidth: 1, padding: 16, gap: 5 },
-  ladderTitle: { fontSize: 16, fontWeight: '800' },
+  ladderTitle: { fontSize: 16, fontFamily: BRAND_ROUNDED_FONT_EXTRA, fontWeight: '800' },
   tierGrid: { flexDirection: 'row', flexWrap: 'wrap', marginTop: 8 },
   tierCell: { width: '33.333%', alignItems: 'center', gap: 5, paddingVertical: 12, borderRadius: 14 },
   tierName: { fontSize: 11, fontWeight: '700' },
