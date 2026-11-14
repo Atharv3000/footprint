@@ -17,7 +17,10 @@ from .counter import RepCounter
 from .boxing import BoxingGame
 from .country_quests import CountryQuests
 
-TOKEN = os.environ.get('REP_SERVER_TOKEN', '')
+def get_token():
+    return os.environ.get('REP_SERVER_TOKEN', '').strip()
+
+TOKEN = get_token()
 battles = Battles()
 calorie_challenges = CalorieChallenges(os.environ.get('CALORIE_DB_PATH', str(Path(__file__).parent / 'data/calories.sqlite3')))
 country_quests = CountryQuests(os.environ.get('COUNTRY_QUEST_DB_PATH', str(Path(__file__).parent / 'data/country-quests.sqlite3')), Path(__file__).parent.parent / 'assets/data/countryBorders.json')
@@ -88,7 +91,9 @@ app = FastAPI(lifespan=lifespan, docs_url=None, redoc_url=None, openapi_url=None
 
 
 def auth(request):
-    if not TOKEN or not hmac.compare_digest(request.headers.get('authorization', ''), f'Bearer {TOKEN}'):
+    current_token = os.environ.get('REP_SERVER_TOKEN', '').strip() or TOKEN
+    auth_header = request.headers.get('authorization', '')
+    if not current_token or not hmac.compare_digest(auth_header, f'Bearer {current_token}'):
         raise HTTPException(401, 'Development session expired. Reload the app.')
 
 
