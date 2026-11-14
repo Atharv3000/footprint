@@ -1,5 +1,7 @@
 import { CountryQuests } from '@/components/CountryQuests';
 import { CalorieChallenges } from '@/components/CalorieChallenges';
+import { FriendBarcodeShareModal } from '@/components/FriendBarcodeShareModal';
+import * as Linking from 'expo-linking';
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   StyleSheet,
@@ -211,6 +213,9 @@ export default function CommunityScreen() {
   const [requestSending, setRequestSending] = useState<boolean>(false);
   const [requestError, setRequestError] = useState<string | null>(null);
 
+  // Barcode / Share Friend Pass Modal
+  const [showBarcodeShareModal, setShowBarcodeShareModal] = useState<boolean>(false);
+
   // Community 3-Way Tab switcher: 'friends' | 'squads' | 'quests'
   const [activeTab, setActiveTab] = useState<'friends' | 'squads' | 'quests'>('friends');
   const communityTabAnim = useRef(new Animated.Value(0)).current;
@@ -327,6 +332,36 @@ export default function CommunityScreen() {
   useEffect(() => {
     loadData();
 
+    // Check for incoming friend deep link (e.g. footprint://friend?user=alex_stride)
+    const handleIncomingUrl = async (event: { url: string }) => {
+      try {
+        const parsed = Linking.parse(event.url);
+        const incomingUser = (parsed.queryParams?.user as string)?.toLowerCase()?.trim()?.replace(/^@/, '');
+        if (incomingUser && incomingUser !== myUsername) {
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+          try {
+            await sendFriendRequest(userId, incomingUser, user?.name);
+            Alert.alert(
+              'Friend Pass Scanned!',
+              `A friend request has been sent to @${incomingUser}! Once accepted, you'll be able to walk and compete together.`,
+              [{ text: 'Great!', style: 'default' }]
+            );
+            loadData();
+          } catch (reqErr: any) {
+            Alert.alert('Friend Pass', reqErr.message || `Connected with @${incomingUser}!`);
+          }
+        }
+      } catch (e) {
+        console.warn('Friend deep link note:', e);
+      }
+    };
+
+    Linking.getInitialURL().then((url) => {
+      if (url) handleIncomingUrl({ url });
+    }).catch(() => {});
+
+    const linkingSub = Linking.addEventListener('url', handleIncomingUrl);
+
     // Supabase Realtime: subscribe to instant friend requests and profile changes
     const channel = supabase
       .channel('public:social_realtime')
@@ -347,9 +382,10 @@ export default function CommunityScreen() {
       .subscribe();
 
     return () => {
+      linkingSub.remove();
       supabase.removeChannel(channel);
     };
-  }, [loadData]);
+  }, [loadData, myUsername, userId, user?.name]);
 
   // Live countdown timer for active privacy mode
   useEffect(() => {
@@ -553,17 +589,33 @@ export default function CommunityScreen() {
               <View style={styles.retroHeaderActions}>
                 {/* Contextual Action Button based on active tab */}
                 {activeTab === 'friends' && (
-                  <TouchableOpacity
-                    style={[styles.retroActionBtn, { backgroundColor: colors.surfaceElevated }]}
-                    onPress={() => {
-                      Haptics.selectionAsync().catch(() => {});
-                      setShowSendRequestModal(true);
-                    }}
-                    activeOpacity={0.7}
-                    accessibilityLabel="Invite Friends"
-                  >
-                    <Ionicons name="person-add-outline" size={19} color={colors.text} />
-                  </TouchableOpacity>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                    {/* Share Barcode / Friend Pass Button in top right */}
+                    <TouchableOpacity
+                      style={[styles.retroActionBtn, { backgroundColor: colors.surfaceElevated }]}
+                      onPress={() => {
+                        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
+                        setShowBarcodeShareModal(true);
+                      }}
+                      activeOpacity={0.7}
+                      accessibilityLabel="Share Friend Barcode Pass"
+                    >
+                      <Ionicons name="share-outline" size={19} color={colors.text} />
+                    </TouchableOpacity>
+
+                    {/* Add Friend Manual Search Button */}
+                    <TouchableOpacity
+                      style={[styles.retroActionBtn, { backgroundColor: colors.surfaceElevated }]}
+                      onPress={() => {
+                        Haptics.selectionAsync().catch(() => {});
+                        setShowSendRequestModal(true);
+                      }}
+                      activeOpacity={0.7}
+                      accessibilityLabel="Add Friend by Username"
+                    >
+                      <Ionicons name="person-add-outline" size={19} color={colors.text} />
+                    </TouchableOpacity>
+                  </View>
                 )}
 
                 {activeTab === 'squads' && (
@@ -1901,6 +1953,16 @@ export default function CommunityScreen() {
               </TouchableOpacity>
             </View>
       </InteractiveBottomModal>
+
+      {/* ── MODAL: BARCODE / FRIEND PASS SHARE POPUP ── */}
+      <FriendBarcodeShareModal
+        visible={showBarcodeShareModal}
+        onClose={() => setShowBarcodeShareModal(false)}
+        username={myUsername || user?.name || 'user'}
+        displayName={user?.name || myUsername || 'Footprint Walker'}
+        avatarColor="#10b981"
+        isDark={isDark}
+      />
 
 
 
