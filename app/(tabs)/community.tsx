@@ -17,11 +17,12 @@ import {
   Dimensions,
   Image,
   Animated,
+  PanResponder,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { useAuth } from '@/constants/AuthContext';
-import { useTheme, SERIF_FONT } from '@/constants/ThemeContext';
+import { useTheme, SERIF_FONT, BRAND_ROUNDED_FONT, BRAND_ROUNDED_FONT_EXTRA } from '@/constants/ThemeContext';
 import { DraggableSheetHandle } from '@/components/DraggableSheetHandle';
 import { InteractiveBottomModal } from '@/components/InteractiveBottomModal';
 import { InteractiveBadge } from '@/components/InteractiveBadge';
@@ -266,8 +267,39 @@ export default function CommunityScreen() {
     expiresAt: null,
     remainingSeconds: 0,
   });
-  const [showPrivacyDurationModal, setShowPrivacyDurationModal] = useState<boolean>(false);
-  const privacySelectionMadeRef = useRef<boolean>(false);
+  const [privacyDurationSliderHours, setPrivacyDurationSliderHours] = useState<number>(4);
+  const privacySliderTrackWidthRef = useRef<number>(260);
+  const privacySliderStartXRef = useRef<number>(0);
+
+  const calculatePrivacyHoursFromX = (pageX: number) => {
+    const width = privacySliderTrackWidthRef.current || 260;
+    const startX = privacySliderStartXRef.current || 0;
+    const relX = Math.max(0, Math.min(width, pageX - startX));
+    const ratio = relX / width;
+    // Map ratio to 1 to 24 hours: 1, 2, 4, 8, 12, 16, 24 or continuous rounded
+    const rawHours = 1 + ratio * 23;
+    const rounded = Math.round(rawHours);
+    return Math.max(1, Math.min(24, rounded));
+  };
+
+  const privacySliderPanResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponder: () => true,
+      onPanResponderGrant: (evt) => {
+        Haptics.selectionAsync().catch(() => {});
+        const hours = calculatePrivacyHoursFromX(evt.nativeEvent.pageX);
+        setPrivacyDurationSliderHours(hours);
+      },
+      onPanResponderMove: (evt) => {
+        const hours = calculatePrivacyHoursFromX(evt.nativeEvent.pageX);
+        setPrivacyDurationSliderHours(hours);
+      },
+      onPanResponderRelease: () => {
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+      },
+    })
+  ).current;
 
   const userId = user?.id || 'guest_user';
 
@@ -347,18 +379,14 @@ export default function CommunityScreen() {
     setRefreshing(false);
   };
 
-  // Called when tapping the privacy switch/pill
-  const handleTogglePrivacy = async (turningOn: boolean) => {
+  // Called when tapping the privacy switch or activate button
+  const handleTogglePrivacy = async (turningOn: boolean, customHours?: number | null) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
     if (turningOn) {
-      // Immediately slide/toggle switch ON so it feels responsive and active
-      setPrivacyStatus((prev) => ({
-        ...prev,
-        isPrivate: true,
-      }));
-      // Reset selection flag and open duration dropup menu
-      privacySelectionMadeRef.current = false;
-      setShowPrivacyDurationModal(true);
+      const hours = customHours !== undefined ? customHours : privacyDurationSliderHours;
+      const res = await setLocationPrivacy(userId, true, hours);
+      setPrivacyStatus(res);
+      await syncMyProfileToSupabase(userId, { location_private: true });
     } else {
       // Turn off privacy
       const res = await setLocationPrivacy(userId, false);
@@ -367,10 +395,8 @@ export default function CommunityScreen() {
     }
   };
 
-  // Called when user selects a duration pill or indefinite
+  // Called when user selects a duration or adjusts slider
   const handleSelectPrivacyDuration = async (durationHours: number | null) => {
-    privacySelectionMadeRef.current = true;
-    setShowPrivacyDurationModal(false);
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
     const res = await setLocationPrivacy(userId, true, durationHours);
     setPrivacyStatus(res);
@@ -554,7 +580,7 @@ export default function CommunityScreen() {
                   </TouchableOpacity>
                 )}
 
-                {/* Notifications Bell Icon combining Friends & Squads Notifications with circle in bottom-right */}
+                {/* Notifications Bell Icon combining Friends & Squads Notifications with badge in top-right */}
                 <TouchableOpacity
                   style={[styles.retroActionBtn, { backgroundColor: colors.surfaceElevated }]}
                   onPress={() => {
@@ -566,7 +592,11 @@ export default function CommunityScreen() {
                 >
                   <Ionicons name="notifications-outline" size={20} color={colors.text} />
                   {pendingIncomingRequests.length > 0 && (
-                    <View style={styles.retroNotificationDotBottomRight} />
+                    <View style={styles.retroNotificationDotBadge}>
+                      <Text style={styles.retroNotificationDotText}>
+                        {pendingIncomingRequests.length > 9 ? '9+' : pendingIncomingRequests.length}
+                      </Text>
+                    </View>
                   )}
                 </TouchableOpacity>
               </View>
@@ -578,8 +608,8 @@ export default function CommunityScreen() {
                 styles.communitySubTabBar,
                 {
                   backgroundColor: isDark ? '#000000' : '#ffffff',
-                  borderBottomColor: isDark ? '#1f1f24' : '#e4e4eb',
-                  borderTopColor: isDark ? '#1f1f24' : '#e4e4eb',
+                  borderBottomColor: 'transparent',
+                  borderTopColor: 'transparent',
                 },
               ]}
             >
@@ -597,7 +627,7 @@ export default function CommunityScreen() {
                     },
                   ]}
                 >
-                  friends
+                  FRIENDS
                 </Text>
               </TouchableOpacity>
 
@@ -615,7 +645,7 @@ export default function CommunityScreen() {
                     },
                   ]}
                 >
-                  squads
+                  SQUADS
                 </Text>
               </TouchableOpacity>
 
@@ -633,7 +663,7 @@ export default function CommunityScreen() {
                     },
                   ]}
                 >
-                  quests
+                  QUESTS
                 </Text>
               </TouchableOpacity>
 
@@ -642,7 +672,7 @@ export default function CommunityScreen() {
                 style={[
                   styles.communitySubTabIndicator,
                   {
-                    backgroundColor: colors.primary,
+                    backgroundColor: isDark ? '#ffffff' : '#000000',
                     width: SCREEN_WIDTH / 3,
                     transform: [
                       {
@@ -721,9 +751,7 @@ export default function CommunityScreen() {
 
                   return (
                     <View style={styles.retroFriendsWrapper}>
-                      <FlatList
-                        data={itemPages}
-                        keyExtractor={(_, index) => `friend_page_${index}`}
+                      <ScrollView
                         horizontal
                         pagingEnabled
                         showsHorizontalScrollIndicator={false}
@@ -734,8 +762,9 @@ export default function CommunityScreen() {
                           const page = Math.round(e.nativeEvent.contentOffset.x / FRIENDS_PAGE_WIDTH);
                           setFriendsPageIndex(page);
                         }}
-                        renderItem={({ item: pageItems }) => (
-                          <View style={[styles.friendsPageContainer, { width: FRIENDS_PAGE_WIDTH }]}>
+                      >
+                        {itemPages.map((pageItems, pageIdx) => (
+                          <View key={`friend_page_${pageIdx}`} style={[styles.friendsPageContainer, { width: FRIENDS_PAGE_WIDTH }]}>
                             {pageItems.map((item) => {
                               if (item.type === 'add_friend') {
                                 return (
@@ -833,8 +862,8 @@ export default function CommunityScreen() {
                                 <View key={`spacer_${spacerIdx}`} style={styles.retroFriendItem} />
                               ))}
                           </View>
-                        )}
-                      />
+                        ))}
+                      </ScrollView>
 
                       {numDots > 1 && (
                         <View style={styles.retroDotsRow}>
@@ -856,30 +885,73 @@ export default function CommunityScreen() {
                   );
                 })()}
 
-                {/* Privacy Toggle with Countdown */}
-                <View style={[styles.privacyCompactCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                {/* Privacy Card with Integral Tactile Slider */}
+                <View
+                  style={[
+                    styles.privacyRichCard,
+                    {
+                      backgroundColor: privacyStatus.isPrivate
+                        ? (isDark ? '#064e3b' : '#ecfdf5')
+                        : colors.surfaceElevated,
+                      borderColor: privacyStatus.isPrivate ? '#10b981' : colors.border,
+                    },
+                  ]}
+                >
                   <View style={styles.privacyCompactHeader}>
-                    <View style={[styles.privacyIconWrapSmall, { backgroundColor: privacyStatus.isPrivate ? '#10b98118' : colors.surfaceElevated }]}>
+                    <View
+                      style={[
+                        styles.privacyIconWrapSmall,
+                        {
+                          backgroundColor: privacyStatus.isPrivate
+                            ? '#10b981'
+                            : (isDark ? '#27272a' : '#e4e4e7'),
+                        },
+                      ]}
+                    >
                       <Ionicons
                         name={privacyStatus.isPrivate ? 'eye-off' : 'eye'}
-                        size={18}
-                        color={privacyStatus.isPrivate ? '#10b981' : colors.textMuted}
+                        size={19}
+                        color={privacyStatus.isPrivate ? '#ffffff' : colors.textMuted}
                       />
                     </View>
 
                     <View style={{ flex: 1, marginLeft: 12 }}>
-                      <Text style={[styles.privacyCompactTitle, { color: colors.text }]}>Privacy Mode</Text>
-
-                      {privacyStatus.isPrivate && (
-                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 3 }}>
-                          <Ionicons name="timer-outline" size={13} color="#10b981" />
-                          <Text style={[styles.privacyTimerText, { color: '#10b981' }]}>
-                            {privacyStatus.expiresAt
-                              ? `${formatCountdown(privacyStatus.remainingSeconds)} left`
-                              : 'Until I turn it back on'}
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                        <Text style={[styles.privacyCompactTitle, { color: colors.text }]}>Privacy Mode</Text>
+                        <View
+                          style={[
+                            styles.privacyStatusTag,
+                            {
+                              backgroundColor: privacyStatus.isPrivate ? '#10b98124' : `${colors.textMuted}18`,
+                            },
+                          ]}
+                        >
+                          <Text
+                            style={[
+                              styles.privacyStatusTagText,
+                              { color: privacyStatus.isPrivate ? '#10b981' : colors.textMuted },
+                            ]}
+                          >
+                            {privacyStatus.isPrivate ? 'ACTIVE' : 'OFF'}
                           </Text>
                         </View>
-                      )}
+                      </View>
+
+                      <Text
+                        style={[
+                          styles.privacyTimerText,
+                          {
+                            color: privacyStatus.isPrivate ? (isDark ? '#34d399' : '#059669') : colors.textMuted,
+                            marginTop: 2,
+                          },
+                        ]}
+                      >
+                        {privacyStatus.isPrivate
+                          ? privacyStatus.expiresAt
+                            ? `${formatCountdown(privacyStatus.remainingSeconds)} remaining`
+                            : 'Active indefinitely'
+                          : `Hides your radar position for ${privacyDurationSliderHours}h`}
+                      </Text>
                     </View>
 
                     <View style={{ flexDirection: 'row', alignItems: 'center' }}>
@@ -893,15 +965,152 @@ export default function CommunityScreen() {
                           <Text style={styles.privacySolidResumeBtnText}>Resume</Text>
                         </TouchableOpacity>
                       ) : (
-                        <Switch
-                          value={false}
-                          onValueChange={handleTogglePrivacy}
-                          trackColor={{ false: colors.border, true: '#10b981' }}
-                          thumbColor={Platform.OS === 'ios' ? undefined : colors.textMuted}
-                        />
+                        <TouchableOpacity
+                          style={[styles.privacyEnableBtn, { backgroundColor: '#10b981' }]}
+                          onPress={() => handleTogglePrivacy(true, privacyDurationSliderHours)}
+                          activeOpacity={0.85}
+                        >
+                          <Ionicons name="shield-checkmark" size={13} color="#ffffff" style={{ marginRight: 4 }} />
+                          <Text style={styles.privacyEnableBtnText}>Turn On</Text>
+                        </TouchableOpacity>
                       )}
                     </View>
                   </View>
+
+                  {/* Integral Duration Slider */}
+                  <View style={styles.privacySliderSection}>
+                    <View style={styles.privacySliderLabelRow}>
+                      <Text style={[styles.privacySliderLabel, { color: colors.textSecondary }]}>
+                        {privacyStatus.isPrivate ? 'Adjust Active Duration' : 'Set Hide Duration'}
+                      </Text>
+                      <Text style={[styles.privacySliderValueText, { color: colors.primary }]}>
+                        {privacyDurationSliderHours} {privacyDurationSliderHours === 1 ? 'Hour' : 'Hours'}
+                      </Text>
+                    </View>
+
+                    <View
+                      style={styles.privacySliderTouchTrack}
+                      onLayout={(e) => {
+                        privacySliderTrackWidthRef.current = e.nativeEvent.layout.width;
+                      }}
+                      onTouchStart={(e) => {
+                        privacySliderStartXRef.current = e.nativeEvent.pageX - e.nativeEvent.locationX;
+                      }}
+                      {...privacySliderPanResponder.panHandlers}
+                    >
+                      <View
+                        style={[
+                          styles.privacySliderBackgroundTrack,
+                          { backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)' },
+                        ]}
+                      >
+                        <View
+                          style={[
+                            styles.privacySliderFillTrack,
+                            {
+                              width: `${Math.max(4, Math.min(100, ((privacyDurationSliderHours - 1) / 23) * 100))}%`,
+                              backgroundColor: privacyStatus.isPrivate ? '#10b981' : colors.primary,
+                            },
+                          ]}
+                        />
+                      </View>
+                      <View
+                        style={[
+                          styles.privacySliderThumb,
+                          {
+                            left: `${Math.max(0, Math.min(94, ((privacyDurationSliderHours - 1) / 23) * 94))}%`,
+                            borderColor: privacyStatus.isPrivate ? '#10b981' : colors.primary,
+                            backgroundColor: colors.surfaceElevated,
+                          },
+                        ]}
+                      >
+                        <View
+                          style={[
+                            styles.privacySliderThumbCore,
+                            { backgroundColor: privacyStatus.isPrivate ? '#10b981' : colors.primary },
+                          ]}
+                        />
+                      </View>
+                    </View>
+
+                    {/* Quick Stepper Markers */}
+                    <View style={styles.privacySliderTicksRow}>
+                      {[1, 4, 12, 24].map((h) => {
+                        const isSelected = privacyDurationSliderHours === h;
+                        return (
+                          <TouchableOpacity
+                            key={`tick_${h}`}
+                            onPress={() => {
+                              Haptics.selectionAsync().catch(() => {});
+                              setPrivacyDurationSliderHours(h);
+                              if (privacyStatus.isPrivate) {
+                                handleSelectPrivacyDuration(h);
+                              }
+                            }}
+                            activeOpacity={0.7}
+                            style={[
+                              styles.privacyQuickPill,
+                              {
+                                backgroundColor: isSelected
+                                  ? (privacyStatus.isPrivate ? '#10b981' : colors.primary)
+                                  : (isDark ? '#27272a' : '#f4f4f5'),
+                                borderColor: isSelected ? 'transparent' : colors.border,
+                              },
+                            ]}
+                          >
+                            <Text
+                              style={[
+                                styles.privacyQuickPillText,
+                                { color: isSelected ? '#ffffff' : colors.textSecondary },
+                              ]}
+                            >
+                              {h}h
+                            </Text>
+                          </TouchableOpacity>
+                        );
+                      })}
+                      <TouchableOpacity
+                        onPress={() => {
+                          Haptics.selectionAsync().catch(() => {});
+                          if (privacyStatus.isPrivate) {
+                            handleSelectPrivacyDuration(null);
+                          } else {
+                            handleTogglePrivacy(true, null);
+                          }
+                        }}
+                        activeOpacity={0.7}
+                        style={[
+                          styles.privacyQuickPill,
+                          {
+                            backgroundColor: (privacyStatus.isPrivate && !privacyStatus.expiresAt)
+                              ? '#10b981'
+                              : (isDark ? '#27272a' : '#f4f4f5'),
+                            borderColor: (privacyStatus.isPrivate && !privacyStatus.expiresAt)
+                              ? 'transparent'
+                              : colors.border,
+                          },
+                        ]}
+                      >
+                        <Text
+                          style={[
+                            styles.privacyQuickPillText,
+                            {
+                              color: (privacyStatus.isPrivate && !privacyStatus.expiresAt)
+                                ? '#ffffff'
+                                : colors.textSecondary,
+                            },
+                          ]}
+                        >
+                          Indefinite
+                        </Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                </View>
+
+                {/* Calorie Challenges Prompt Banner below Privacy Mode */}
+                <View style={{ marginTop: 12, marginBottom: 8 }}>
+                  <CalorieChallenges />
                 </View>
               </View>
             )}
@@ -970,70 +1179,110 @@ export default function CommunityScreen() {
                         const totalSquadSteps = Math.round(memberCount * 42500);
                         const gradeInfo = calculateSquadGrade(totalSquadSteps, memberCount);
                         const isAdminOnly = item.squadType === 'admin_only';
+                        const isSelfMember = item.memberUsernames.includes(myUsername);
 
                         return (
                           <TouchableOpacity
                             key={item.id}
-                            style={[styles.squadCardContainer, { backgroundColor: colors.surfaceElevated }]}
+                            style={[
+                              styles.squadCardContainer,
+                              {
+                                backgroundColor: colors.surfaceElevated,
+                                borderColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)',
+                              },
+                            ]}
                             onPress={() => {
                               Haptics.selectionAsync().catch(() => {});
                               setViewingSquad(item);
                             }}
                             activeOpacity={0.88}
                           >
+                            {/* Card Top: Avatar / Grade Shield + Squad Identity + Status Badge */}
                             <View style={styles.squadCardHeaderRow}>
-                              <View style={[styles.squadCardGradeBadge, { backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.05)', borderColor: gradeInfo.color }]}>
+                              <View
+                                style={[
+                                  styles.squadCardGradeBadge,
+                                  {
+                                    backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)',
+                                    borderColor: gradeInfo.color,
+                                  },
+                                ]}
+                              >
+                                <Ionicons name="shield" size={12} color={gradeInfo.color} style={{ marginBottom: 1 }} />
                                 <Text style={[styles.squadCardGradeText, { color: gradeInfo.color }]}>
                                   {gradeInfo.grade}
                                 </Text>
                               </View>
 
                               <View style={{ flex: 1, marginLeft: 12 }}>
-                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-                                  <Text style={[styles.squadCardTitle, { color: colors.text }]}>{item.name}</Text>
-                                  {isAdminOnly && (
-                                    <View
-                                      style={[
-                                        styles.squadTypeTag,
-                                        {
-                                          backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.05)',
-                                          borderWidth: 0,
-                                        },
-                                      ]}
-                                    >
-                                      <Ionicons name="lock-closed" size={10} color="#ef4444" />
-                                      <Text style={[styles.squadTypeTagText, { color: '#ef4444' }]}>
-                                        ADMIN
+                                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 6 }}>
+                                  <Text style={[styles.squadCardTitle, { color: colors.text }]} numberOfLines={1}>
+                                    {item.name}
+                                  </Text>
+                                  {isSelfMember && (
+                                    <View style={[styles.squadActiveMemberBadge, { backgroundColor: `${colors.primary}20` }]}>
+                                      <View style={[styles.squadActiveDot, { backgroundColor: colors.primary }]} />
+                                      <Text style={[styles.squadActiveMemberText, { color: colors.primary }]}>
+                                        JOINED
                                       </Text>
                                     </View>
                                   )}
                                 </View>
+
                                 <Text style={[styles.squadCardDesc, { color: colors.textMuted }]} numberOfLines={2}>
-                                  {item.description}
+                                  {item.description || 'Collaborate with squad members and climb weekly ranks together.'}
                                 </Text>
                               </View>
                             </View>
 
-                            <View style={[styles.squadCardStatsBar, { backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)', borderWidth: 0 }]}>
+                            {/* Crisp Stat Tiles Bar */}
+                            <View
+                              style={[
+                                styles.squadCardStatsBar,
+                                {
+                                  backgroundColor: isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.03)',
+                                },
+                              ]}
+                            >
                               <View style={styles.squadCardStatCol}>
-                                <Text style={[styles.squadCardStatVal, { color: colors.text }]}>{memberCount}</Text>
+                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                                  <Ionicons name="people-outline" size={13} color={colors.textMuted} />
+                                  <Text style={[styles.squadCardStatVal, { color: colors.text }]}>
+                                    {memberCount}
+                                  </Text>
+                                </View>
                                 <Text style={[styles.squadCardStatLabel, { color: colors.textMuted }]}>MEMBERS</Text>
                               </View>
+
                               <View style={[styles.squadCardStatDivider, { backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)' }]} />
+
                               <View style={styles.squadCardStatCol}>
-                                <Text style={[styles.squadCardStatVal, { color: colors.text }]}>{totalSquadSteps.toLocaleString()}</Text>
-                                <Text style={[styles.squadCardStatLabel, { color: colors.textMuted }]}>SQUAD STEPS</Text>
+                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                                  <Ionicons name="footsteps-outline" size={13} color={colors.primary} />
+                                  <Text style={[styles.squadCardStatVal, { color: colors.text }]}>
+                                    {totalSquadSteps >= 1000 ? `${(totalSquadSteps / 1000).toFixed(1)}k` : totalSquadSteps}
+                                  </Text>
+                                </View>
+                                <Text style={[styles.squadCardStatLabel, { color: colors.textMuted }]}>TOTAL STEPS</Text>
                               </View>
+
                               <View style={[styles.squadCardStatDivider, { backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)' }]} />
+
                               <View style={styles.squadCardStatCol}>
-                                <Text style={[styles.squadCardStatVal, { color: gradeInfo.color }]}>{gradeInfo.grade}</Text>
-                                <Text style={[styles.squadCardStatLabel, { color: colors.textMuted }]}>RATING</Text>
+                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                                  <Ionicons name="trophy-outline" size={13} color={gradeInfo.color} />
+                                  <Text style={[styles.squadCardStatVal, { color: gradeInfo.color }]}>
+                                    {gradeInfo.grade} TIER
+                                  </Text>
+                                </View>
+                                <Text style={[styles.squadCardStatLabel, { color: colors.textMuted }]}>RANK</Text>
                               </View>
                             </View>
 
-                            <View style={styles.squadMembersContainer}>
-                              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flex: 1, flexWrap: 'wrap' }}>
-                                {item.memberUsernames.map((u) => {
+                            {/* Card Footer: Members Avatars / Pill tags & View Chevron */}
+                            <View style={styles.squadCardFooter}>
+                              <View style={styles.squadCardMembersList}>
+                                {item.memberUsernames.slice(0, 4).map((u) => {
                                   const isSelf = u === myUsername;
                                   const isGroupAdmin = item.createdById === userId && isSelf;
                                   return (
@@ -1042,20 +1291,55 @@ export default function CommunityScreen() {
                                       style={[
                                         styles.memberBadgePill,
                                         {
-                                          backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.05)',
-                                          borderWidth: 0,
+                                          backgroundColor: isSelf
+                                            ? `${colors.primary}18`
+                                            : isDark
+                                            ? 'rgba(255,255,255,0.07)'
+                                            : 'rgba(0,0,0,0.05)',
                                         },
                                       ]}
                                     >
-                                      {isGroupAdmin && (
-                                        <Ionicons name="star" size={10} color={colors.textSecondary} style={{ marginRight: 3 }} />
+                                      {isGroupAdmin ? (
+                                        <Ionicons name="star" size={10} color="#f59e0b" style={{ marginRight: 3 }} />
+                                      ) : (
+                                        <View
+                                          style={[
+                                            styles.memberTinyDot,
+                                            { backgroundColor: isSelf ? colors.primary : colors.textMuted },
+                                          ]}
+                                        />
                                       )}
-                                      <Text style={[styles.memberBadgeText, { color: isSelf ? colors.text : colors.textMuted }]}>
-                                        @{u} {isSelf && '(You)'}
+                                      <Text
+                                        style={[
+                                          styles.memberBadgeText,
+                                          {
+                                            color: isSelf ? colors.primary : colors.textSecondary,
+                                            fontWeight: isSelf ? '800' : '600',
+                                          },
+                                        ]}
+                                      >
+                                        @{u}{isSelf ? ' (You)' : ''}
                                       </Text>
                                     </View>
                                   );
                                 })}
+
+                                {item.memberUsernames.length > 4 && (
+                                  <View
+                                    style={[
+                                      styles.memberBadgePill,
+                                      { backgroundColor: isDark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.05)' },
+                                    ]}
+                                  >
+                                    <Text style={[styles.memberBadgeText, { color: colors.textMuted }]}>
+                                      +{item.memberUsernames.length - 4} more
+                                    </Text>
+                                  </View>
+                                )}
+                              </View>
+
+                              <View style={styles.squadCardActionChevron}>
+                                <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
                               </View>
                             </View>
                           </TouchableOpacity>
@@ -1070,7 +1354,7 @@ export default function CommunityScreen() {
             {/* ── TAB 3: QUESTS ── */}
             {activeTab === 'quests' && (
               <View style={{ paddingBottom: 24 }}>
-                <View style={{ paddingHorizontal: 20, paddingTop: 12 }}><CalorieChallenges /><CountryQuests /></View>
+                <View style={{ paddingTop: 4, marginBottom: 8 }}><CountryQuests /></View>
                 {(() => {
                   const filteredQuests = quests.filter((q) => {
                     if (!searchQuery.trim()) return true;
@@ -1202,7 +1486,7 @@ export default function CommunityScreen() {
         handleColor={colors.border}
         cardStyle={[
           styles.modalSheetCard,
-          { backgroundColor: colors.surface, borderColor: colors.border, height: '82%', maxHeight: '90%' },
+          { backgroundColor: colors.surface, borderColor: colors.border, height: '80%', maxHeight: '82%' },
         ]}
       >
         {selectedFriendForDetail && (
@@ -1297,7 +1581,7 @@ export default function CommunityScreen() {
                       },
                     ]}
                   >
-                    activity
+                    ACTIVITY
                   </Text>
                 </TouchableOpacity>
 
@@ -1315,7 +1599,7 @@ export default function CommunityScreen() {
                       },
                     ]}
                   >
-                    badges
+                    BADGES
                   </Text>
                 </TouchableOpacity>
 
@@ -1333,7 +1617,7 @@ export default function CommunityScreen() {
                       },
                     ]}
                   >
-                    cursor
+                    CURSOR
                   </Text>
                 </TouchableOpacity>
 
@@ -1618,206 +1902,143 @@ export default function CommunityScreen() {
             </View>
       </InteractiveBottomModal>
 
-      {/* MODAL: PRIVACY DURATION SELECTION DROPUP */}
-      <InteractiveBottomModal
-        visible={showPrivacyDurationModal}
-        onDismiss={() => {
-          setShowPrivacyDurationModal(false);
-          // If dismissed without choosing an amount, automatically turn back off privacy mode
-          if (!privacySelectionMadeRef.current) {
-            setLocationPrivacy(userId, false).then((res) => {
-              setPrivacyStatus(res);
-              syncMyProfileToSupabase(userId, { location_private: false });
-            });
-          }
-        }}
-        handleColor={colors.border}
-        cardStyle={[styles.modalSheetCard, { backgroundColor: colors.surface, borderColor: colors.border }]}
-      >
-        <View style={{ marginBottom: 4 }}>
-          <Text style={[styles.modalSheetHeading, { color: colors.text }]}>Privacy Duration</Text>
-        </View>
-        <Text style={[styles.modalSheetSubtext, { color: colors.textMuted, marginBottom: 16 }]}>
-          Select how long your live walking position and activity will be hidden.
-        </Text>
 
-        {/* Duration Pills Grid (2h, 4h, 12h, 24h) */}
-        <View style={styles.privacyDurationGrid}>
-          {[
-            { label: '2 Hours', hours: 2 },
-            { label: '4 Hours', hours: 4 },
-            { label: '12 Hours', hours: 12 },
-            { label: '24 Hours', hours: 24 },
-          ].map((pill) => (
-            <TouchableOpacity
-              key={pill.label}
-              style={[
-                styles.privacyDurationPill,
-                { backgroundColor: colors.surfaceElevated, borderColor: colors.border },
-              ]}
-              onPress={() => handleSelectPrivacyDuration(pill.hours)}
-              activeOpacity={0.7}
-            >
-              <Ionicons name="time-outline" size={15} color={colors.primary} />
-              <Text style={[styles.privacyDurationPillText, { color: colors.text }]}>{pill.label}</Text>
-            </TouchableOpacity>
-          ))}
-        </View>
 
-        {/* Until I turn it back on Option Across the Bottom */}
-        <TouchableOpacity
-          style={[styles.privacyIndefiniteBtn, { backgroundColor: `${colors.textMuted}14`, borderColor: colors.border }]}
-          onPress={() => handleSelectPrivacyDuration(null)}
-          activeOpacity={0.7}
-        >
-          <Ionicons name="infinite-outline" size={18} color={colors.text} />
-          <Text style={[styles.privacyIndefiniteBtnText, { color: colors.text }]}>Until I turn it back on</Text>
-        </TouchableOpacity>
-      </InteractiveBottomModal>
-
-      {/* ── MODAL: COMBINED NOTIFICATIONS (FRIENDS & GROUPS/SQUADS) ── */}
-      <InteractiveBottomModal
+      {/* ── MODAL: NOTIFICATIONS FULL SCREEN MODAL ── */}
+      <Modal
         visible={showNotificationsModal}
-        onDismiss={() => setShowNotificationsModal(false)}
-        handleColor={colors.border}
-        cardStyle={[styles.modalSheetCard, { backgroundColor: colors.surface, borderColor: colors.border, maxHeight: '88%' }]}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={() => setShowNotificationsModal(false)}
       >
-        <View style={styles.notifHeaderRow}>
-          <View>
-            <Text style={[styles.modalSheetHeading, { color: colors.text }]}>Notifications</Text>
-            <Text style={[styles.modalSheetSubtext, { color: colors.textMuted }]}>
-              Pending requests, invites & group activity updates
-            </Text>
-          </View>
-          <TouchableOpacity
-            style={[styles.notifCloseIconBtn, { backgroundColor: colors.surfaceElevated }]}
-            onPress={() => setShowNotificationsModal(false)}
-            activeOpacity={0.7}
-          >
-            <Ionicons name="close" size={18} color={colors.text} />
-          </TouchableOpacity>
-        </View>
-
-        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 24 }}>
-          {/* Section 1: Pending Friend Requests */}
-          <View style={{ marginBottom: 18 }}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
-              <Text style={[styles.notifSectionTitle, { color: colors.text }]}>
-                Friend Requests ({pendingIncomingRequests.length})
-              </Text>
+        <View style={[styles.notifModalFullContainer, { backgroundColor: colors.background }]}>
+          {/* Top Bar with Title, Counter, and Close Button */}
+          <View style={[styles.notifModalHeaderBar, { borderBottomColor: colors.border }]}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+              <Text style={[styles.notifModalTitle, { color: colors.text }]}>Notifications</Text>
               {pendingIncomingRequests.length > 0 && (
-                <View style={styles.notifBadgeCount}>
-                  <Text style={styles.notifBadgeCountText}>{pendingIncomingRequests.length} new</Text>
+                <View style={styles.notifHeaderBadge}>
+                  <Text style={styles.notifHeaderBadgeText}>{pendingIncomingRequests.length}</Text>
                 </View>
               )}
             </View>
+            <TouchableOpacity
+              style={[styles.notifModalCloseCircle, { backgroundColor: colors.surfaceElevated }]}
+              onPress={() => setShowNotificationsModal(false)}
+              activeOpacity={0.7}
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            >
+              <Ionicons name="close" size={20} color={colors.text} />
+            </TouchableOpacity>
+          </View>
 
-            {pendingIncomingRequests.length === 0 ? (
-              <View style={[styles.notifEmptyBox, { backgroundColor: colors.surfaceElevated, borderColor: colors.border }]}>
-                <Ionicons name="checkmark-done-circle-outline" size={24} color={colors.textMuted} />
-                <Text style={[styles.notifEmptyText, { color: colors.textMuted }]}>
-                  No pending friend requests
-                </Text>
-              </View>
-            ) : (
-              pendingIncomingRequests.map((req) => (
-                <View
-                  key={req.id}
-                  style={[styles.retroRequestCard, { backgroundColor: colors.card, borderColor: colors.border, marginBottom: 10 }]}
-                >
-                  <View style={styles.retroRequestTopRow}>
-                    <View style={[styles.retroRequestAvatar, { backgroundColor: req.fromAvatarColor || colors.primary }]}>
-                      <Text style={styles.retroRequestAvatarLetter}>
-                        {req.fromDisplayName.charAt(0).toUpperCase()}
-                      </Text>
-                    </View>
-                    <View style={styles.retroRequestInfo}>
-                      <Text style={[styles.retroRequestName, { color: colors.text }]}>
-                        {req.fromDisplayName.toLowerCase()}
-                      </Text>
-                      <Text style={[styles.retroRequestHandle, { color: colors.textMuted }]}>
-                        @{req.fromUsername}
-                      </Text>
-                    </View>
-                    <View style={styles.retroRequestTimeWrap}>
-                      <View style={styles.retroRedDot} />
-                    </View>
-                  </View>
-
-                  <View style={styles.retroRequestButtonsRow}>
-                    <TouchableOpacity
-                      style={[styles.retroAcceptBtn, { backgroundColor: colors.primary }]}
-                      onPress={async () => {
-                        await handleAcceptRequest(req);
-                      }}
-                      activeOpacity={0.85}
-                    >
-                      <Text style={[styles.retroAcceptBtnText, { color: isDark ? '#09090b' : '#ffffff' }]}>Accept</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      style={[styles.retroDecideLaterBtn, { borderColor: colors.border }]}
-                      onPress={async () => {
-                        await handleDeclineRequest(req);
-                      }}
-                      activeOpacity={0.7}
-                    >
-                      <Text style={[styles.retroDecideLaterBtnText, { color: colors.text }]}>Decide Later</Text>
-                    </TouchableOpacity>
-                  </View>
+          {/* Unified Notification List with Defined Horizontal Separator Lines */}
+          <ScrollView
+            showsVerticalScrollIndicator={false}
+            contentContainerStyle={styles.notifScrollViewContent}
+          >
+            {pendingIncomingRequests.length === 0 && groups.length === 0 ? (
+              <View style={styles.notifEmptyFullContainer}>
+                <View style={[styles.notifEmptyIconCircle, { backgroundColor: `${colors.primary}14` }]}>
+                  <Ionicons name="notifications-off-outline" size={32} color={colors.primary} />
                 </View>
-              ))
-            )}
-          </View>
-
-          {/* Section 2: Squad / Group Activity Alerts */}
-          <View>
-            <Text style={[styles.notifSectionTitle, { color: colors.text, marginBottom: 10 }]}>
-              Squad & Group Updates
-            </Text>
-
-            {groups.length === 0 ? (
-              <View style={[styles.notifEmptyBox, { backgroundColor: colors.surfaceElevated, borderColor: colors.border }]}>
-                <Ionicons name="shield-outline" size={24} color={colors.textMuted} />
-                <Text style={[styles.notifEmptyText, { color: colors.textMuted }]}>
-                  No squad activity yet. Join or start a squad to get group alerts.
+                <Text style={[styles.notifEmptyFullTitle, { color: colors.text }]}>All Caught Up</Text>
+                <Text style={[styles.notifEmptyFullDesc, { color: colors.textMuted }]}>
+                  You have no pending friend requests or new notifications right now.
                 </Text>
               </View>
             ) : (
-              groups.map((group) => {
-                const memberCount = Math.max(1, group.memberUsernames.length);
-                const totalSquadSteps = Math.round(memberCount * 42500);
-                const gradeInfo = calculateSquadGrade(totalSquadSteps, memberCount);
-                return (
-                  <TouchableOpacity
-                    key={`alert_${group.id}`}
-                    style={[styles.squadAlertCard, { backgroundColor: colors.card, borderColor: colors.border }]}
-                    onPress={() => {
-                      setShowNotificationsModal(false);
-                      setViewingSquad(group);
-                    }}
-                    activeOpacity={0.8}
+              <View style={[styles.notifFeedContainer, { borderTopColor: colors.border }]}>
+                {/* 1. Pending Friend Requests as Clean Defined Row Lines */}
+                {pendingIncomingRequests.map((req) => (
+                  <View
+                    key={req.id}
+                    style={[styles.notifRowItem, { borderBottomColor: colors.border }]}
                   >
-                    <View style={[styles.squadAlertIconWrap, { backgroundColor: `${gradeInfo.color}18` }]}>
-                      <Text style={[styles.squadAlertGradeText, { color: gradeInfo.color }]}>
-                        {gradeInfo.grade}
-                      </Text>
+                    <View style={styles.notifRowLeft}>
+                      <View style={[styles.notifAvatarBox, { backgroundColor: req.fromAvatarColor || colors.primary }]}>
+                        <Text style={styles.notifAvatarLetter}>
+                          {req.fromDisplayName.charAt(0).toUpperCase()}
+                        </Text>
+                      </View>
+                      <View style={{ flex: 1, marginRight: 10 }}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                          <Text style={[styles.notifRowMainTitle, { color: colors.text }]}>
+                            {req.fromDisplayName}
+                          </Text>
+                          <View style={styles.notifPendingDot} />
+                        </View>
+                        <Text style={[styles.notifRowSub, { color: colors.textMuted }]}>
+                          @{req.fromUsername} · Sent friend request
+                        </Text>
+                        <View style={styles.notifRowActionButtons}>
+                          <TouchableOpacity
+                            style={[styles.notifAcceptBtn, { backgroundColor: colors.primary }]}
+                            onPress={async () => {
+                              await handleAcceptRequest(req);
+                            }}
+                            activeOpacity={0.85}
+                          >
+                            <Text style={[styles.notifAcceptBtnText, { color: isDark ? '#09090b' : '#ffffff' }]}>
+                              Accept
+                            </Text>
+                          </TouchableOpacity>
+                          <TouchableOpacity
+                            style={[styles.notifDeclineBtn, { borderColor: colors.border }]}
+                            onPress={async () => {
+                              await handleDeclineRequest(req);
+                            }}
+                            activeOpacity={0.7}
+                          >
+                            <Text style={[styles.notifDeclineBtnText, { color: colors.textSecondary }]}>
+                              Decline
+                            </Text>
+                          </TouchableOpacity>
+                        </View>
+                      </View>
                     </View>
-                    <View style={{ flex: 1, marginLeft: 12 }}>
-                      <Text style={[styles.squadAlertTitle, { color: colors.text }]}>
-                        {group.name}
-                      </Text>
-                      <Text style={[styles.squadAlertDesc, { color: colors.textMuted }]} numberOfLines={1}>
-                        Squad reached {gradeInfo.label} rating • {memberCount} active members
-                      </Text>
-                    </View>
-                    <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
-                  </TouchableOpacity>
-                );
-              })
+                  </View>
+                ))}
+
+                {/* 2. Squad / Group Updates as Clean Defined Row Lines */}
+                {groups.map((group) => {
+                  const memberCount = Math.max(1, group.memberUsernames.length);
+                  const totalSquadSteps = Math.round(memberCount * 42500);
+                  const gradeInfo = calculateSquadGrade(totalSquadSteps, memberCount);
+                  return (
+                    <TouchableOpacity
+                      key={`alert_${group.id}`}
+                      style={[styles.notifRowItem, { borderBottomColor: colors.border }]}
+                      onPress={() => {
+                        setShowNotificationsModal(false);
+                        setViewingSquad(group);
+                      }}
+                      activeOpacity={0.75}
+                    >
+                      <View style={styles.notifRowLeft}>
+                        <View style={[styles.notifSquadGradeBox, { backgroundColor: `${gradeInfo.color}18`, borderColor: `${gradeInfo.color}35` }]}>
+                          <Text style={[styles.notifSquadGradeLetter, { color: gradeInfo.color }]}>
+                            {gradeInfo.grade}
+                          </Text>
+                        </View>
+                        <View style={{ flex: 1, marginRight: 10 }}>
+                          <Text style={[styles.notifRowMainTitle, { color: colors.text }]}>
+                            {group.name}
+                          </Text>
+                          <Text style={[styles.notifRowSub, { color: colors.textMuted }]} numberOfLines={2}>
+                            Squad achieved {gradeInfo.label} rating · {memberCount} active member{memberCount === 1 ? '' : 's'}
+                          </Text>
+                        </View>
+                        <Ionicons name="chevron-forward" size={17} color={colors.textMuted} />
+                      </View>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
             )}
-          </View>
-        </ScrollView>
-      </InteractiveBottomModal>
+          </ScrollView>
+        </View>
+      </Modal>
 
       {/* ── MODAL: CREATE SQUAD ── */}
       <InteractiveBottomModal
@@ -2870,10 +3091,10 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   retroScreenTitle: {
-    fontFamily: SERIF_FONT,
-    fontSize: 32,
-    fontWeight: '700',
-    letterSpacing: -0.8,
+    fontFamily: BRAND_ROUNDED_FONT_EXTRA,
+    fontSize: 30,
+    fontWeight: '800',
+    letterSpacing: -0.6,
   },
   retroHeaderActions: {
     flexDirection: 'row',
@@ -2907,6 +3128,32 @@ const styles = StyleSheet.create({
     backgroundColor: '#ef4444',
     borderWidth: 1.5,
     borderColor: '#ffffff',
+  },
+  retroNotificationDotBadge: {
+    position: 'absolute',
+    top: -3,
+    right: -3,
+    minWidth: 18,
+    height: 18,
+    paddingHorizontal: 4,
+    borderRadius: 9,
+    backgroundColor: '#ef4444',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: '#ffffff',
+    shadowColor: '#ef4444',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.35,
+    shadowRadius: 2,
+    elevation: 3,
+  },
+  retroNotificationDotText: {
+    color: '#ffffff',
+    fontSize: 10,
+    fontWeight: '900',
+    letterSpacing: -0.2,
+    textAlign: 'center',
   },
   retroSearchContainer: {
     flexDirection: 'row',
@@ -3130,13 +3377,26 @@ const styles = StyleSheet.create({
     letterSpacing: -0.1,
   },
 
-  /* ── Compact Privacy UI ── */
+  /* ── Compact & Rich Privacy UI ── */
+  privacyRichCard: {
+    marginHorizontal: 0,
+    marginTop: 14,
+    marginBottom: 24,
+    borderRadius: 22,
+    borderWidth: 1.5,
+    padding: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    elevation: 3,
+  },
   privacyCompactCard: {
     marginHorizontal: 0,
     marginTop: 14,
     marginBottom: 24,
     borderRadius: 20,
-    borderWidth: 1,
+    borderWidth: 0,
     paddingHorizontal: 16,
     paddingVertical: 16,
     minHeight: 68,
@@ -3147,20 +3407,30 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   privacyIconWrapSmall: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 42,
+    height: 42,
+    borderRadius: 21,
     alignItems: 'center',
     justifyContent: 'center',
   },
   privacyCompactTitle: {
-    fontSize: 15,
-    fontWeight: '700',
+    fontSize: 16,
+    fontWeight: '800',
     letterSpacing: -0.2,
+  },
+  privacyStatusTag: {
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  privacyStatusTagText: {
+    fontSize: 9.5,
+    fontWeight: '900',
+    letterSpacing: 0.6,
   },
   privacyTimerText: {
     fontSize: 12.5,
-    fontWeight: '700',
+    fontWeight: '600',
     letterSpacing: -0.1,
   },
   privacySubSmall: {
@@ -3187,6 +3457,98 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '700',
     letterSpacing: -0.1,
+  },
+  privacyEnableBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 14,
+    paddingVertical: 9,
+    borderRadius: 18,
+    shadowColor: '#10b981',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 3,
+    elevation: 2,
+  },
+  privacyEnableBtnText: {
+    color: '#ffffff',
+    fontSize: 13,
+    fontWeight: '800',
+    letterSpacing: -0.1,
+  },
+  privacySliderSection: {
+    marginTop: 16,
+    paddingTop: 14,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: 'rgba(128,128,128,0.2)',
+  },
+  privacySliderLabelRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  privacySliderLabel: {
+    fontSize: 12,
+    fontWeight: '700',
+    letterSpacing: -0.1,
+  },
+  privacySliderValueText: {
+    fontSize: 13.5,
+    fontWeight: '800',
+  },
+  privacySliderTouchTrack: {
+    height: 38,
+    justifyContent: 'center',
+    position: 'relative',
+    marginVertical: 4,
+  },
+  privacySliderBackgroundTrack: {
+    height: 8,
+    borderRadius: 4,
+    overflow: 'hidden',
+    width: '100%',
+  },
+  privacySliderFillTrack: {
+    height: '100%',
+    borderRadius: 4,
+  },
+  privacySliderThumb: {
+    position: 'absolute',
+    top: 6,
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    borderWidth: 2.5,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 3,
+    elevation: 3,
+  },
+  privacySliderThumbCore: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+  },
+  privacySliderTicksRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 10,
+  },
+  privacyQuickPill: {
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 10,
+    borderWidth: 1,
+  },
+  privacyQuickPillText: {
+    fontSize: 11,
+    fontWeight: '700',
   },
 
   /* ── Privacy Duration Bottom Sheet Dropup ── */
@@ -3316,7 +3678,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
     justifyContent: 'space-between',
-    gap: 12,
+    gap: 8,
   },
   profilePaletteTitle: {
     fontSize: 14,
@@ -3435,8 +3797,8 @@ const styles = StyleSheet.create({
     height: 46,
     marginHorizontal: -16,
     position: 'relative',
-    borderTopWidth: 1,
-    borderBottomWidth: 1,
+    borderTopWidth: 0,
+    borderBottomWidth: 0,
     marginBottom: 16,
   },
   communitySubTabBtn: {
@@ -3447,7 +3809,8 @@ const styles = StyleSheet.create({
     zIndex: 2,
   },
   communitySubTabText: {
-    fontSize: 14,
+    fontFamily: BRAND_ROUNDED_FONT_EXTRA,
+    fontSize: 14.5,
     letterSpacing: -0.2,
     textTransform: 'lowercase',
   },
@@ -3468,7 +3831,155 @@ const styles = StyleSheet.create({
     fontWeight: '800',
   },
 
-  /* ── Notifications Modal Styles ── */
+  /* ── Notifications Full-Screen Modal Styles ── */
+  notifModalFullContainer: {
+    flex: 1,
+    paddingTop: Platform.OS === 'ios' ? 16 : 20,
+  },
+  notifModalHeaderBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    paddingBottom: 16,
+    borderBottomWidth: 1,
+  },
+  notifModalTitle: {
+    fontFamily: BRAND_ROUNDED_FONT_EXTRA,
+    fontSize: 26,
+    fontWeight: '800',
+    letterSpacing: -0.4,
+  },
+  notifHeaderBadge: {
+    paddingHorizontal: 9,
+    paddingVertical: 3,
+    borderRadius: 12,
+    backgroundColor: '#ef4444',
+  },
+  notifHeaderBadgeText: {
+    color: '#ffffff',
+    fontSize: 12,
+    fontWeight: '900',
+  },
+  notifModalCloseCircle: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  notifScrollViewContent: {
+    flexGrow: 1,
+    paddingBottom: 40,
+  },
+  notifFeedContainer: {
+    borderTopWidth: StyleSheet.hairlineWidth,
+  },
+  notifRowItem: {
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    paddingVertical: 16,
+    paddingHorizontal: 20,
+  },
+  notifRowLeft: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+  },
+  notifAvatarBox: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 14,
+  },
+  notifAvatarLetter: {
+    color: '#ffffff',
+    fontSize: 18,
+    fontWeight: '800',
+  },
+  notifSquadGradeBox: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    borderWidth: 1.5,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 14,
+  },
+  notifSquadGradeLetter: {
+    fontFamily: BRAND_ROUNDED_FONT_EXTRA,
+    fontSize: 18,
+    fontWeight: '900',
+  },
+  notifPendingDot: {
+    width: 7,
+    height: 7,
+    borderRadius: 3.5,
+    backgroundColor: '#ef4444',
+  },
+  notifRowMainTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    letterSpacing: -0.2,
+  },
+  notifRowSub: {
+    fontSize: 13,
+    marginTop: 3,
+    lineHeight: 18,
+  },
+  notifRowActionButtons: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 12,
+  },
+  notifAcceptBtn: {
+    paddingHorizontal: 18,
+    paddingVertical: 8,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  notifAcceptBtnText: {
+    fontSize: 13,
+    fontWeight: '800',
+  },
+  notifDeclineBtn: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 14,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  notifDeclineBtnText: {
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  notifEmptyFullContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 80,
+    paddingHorizontal: 32,
+    gap: 10,
+  },
+  notifEmptyIconCircle: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 8,
+  },
+  notifEmptyFullTitle: {
+    fontSize: 18,
+    fontWeight: '800',
+    letterSpacing: -0.2,
+  },
+  notifEmptyFullDesc: {
+    fontSize: 13.5,
+    textAlign: 'center',
+    lineHeight: 20,
+  },
   notifHeaderRow: {
     flexDirection: 'row',
     alignItems: 'flex-start',
@@ -3543,41 +4054,64 @@ const styles = StyleSheet.create({
 
   /* ── Squad Cards Styles ── */
   squadCardContainer: {
-    borderRadius: 18,
+    borderRadius: 22,
+    borderWidth: 1,
     padding: 16,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 5,
-    elevation: 2,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.12,
+    shadowRadius: 10,
+    elevation: 3,
   },
   squadCardHeaderRow: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',
   },
   squadCardGradeBadge: {
     width: 44,
-    height: 44,
+    height: 48,
     borderRadius: 14,
     borderWidth: 1.5,
     alignItems: 'center',
     justifyContent: 'center',
   },
   squadCardGradeText: {
-    fontFamily: SERIF_FONT,
-    fontSize: 20,
-    fontWeight: '800',
-    letterSpacing: -0.5,
+    fontFamily: BRAND_ROUNDED_FONT_EXTRA,
+    fontSize: 18,
+    fontWeight: '900',
+    letterSpacing: -0.3,
   },
   squadCardTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-    letterSpacing: -0.2,
+    fontFamily: BRAND_ROUNDED_FONT_EXTRA,
+    fontSize: 16.5,
+    fontWeight: '800',
+    letterSpacing: -0.3,
+    flex: 1,
+  },
+  squadActiveMemberBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 10,
+  },
+  squadActiveDot: {
+    width: 5,
+    height: 5,
+    borderRadius: 2.5,
+  },
+  squadActiveMemberText: {
+    fontSize: 9.5,
+    fontWeight: '900',
+    letterSpacing: 0.5,
   },
   squadCardDesc: {
-    fontSize: 12,
-    marginTop: 2,
-    lineHeight: 16,
+    fontFamily: BRAND_ROUNDED_FONT,
+    fontSize: 12.5,
+    fontWeight: '500',
+    marginTop: 3,
+    lineHeight: 17,
   },
   squadCardStatsBar: {
     flexDirection: 'row',
@@ -3586,42 +4120,55 @@ const styles = StyleSheet.create({
     marginTop: 14,
     paddingVertical: 10,
     paddingHorizontal: 12,
-    borderRadius: 12,
+    borderRadius: 14,
   },
   squadCardStatCol: {
     alignItems: 'center',
+    gap: 2,
   },
   squadCardStatVal: {
-    fontSize: 15,
+    fontFamily: BRAND_ROUNDED_FONT_EXTRA,
+    fontSize: 14.5,
     fontWeight: '800',
   },
   squadCardStatLabel: {
-    fontSize: 9.5,
-    fontWeight: '700',
-    marginTop: 2,
-    letterSpacing: 0.5,
+    fontSize: 9,
+    fontWeight: '800',
+    letterSpacing: 0.7,
   },
   squadCardStatDivider: {
     width: 1,
-    height: 20,
+    height: 22,
   },
-  squadMembersContainer: {
+  squadCardFooter: {
     marginTop: 12,
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingTop: 10,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: 'rgba(255,255,255,0.06)',
   },
-  squadTypeTag: {
+  squadCardMembersList: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 3,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 6,
+    gap: 5,
+    flex: 1,
+    flexWrap: 'wrap',
   },
-  squadTypeTagText: {
-    fontSize: 9.5,
-    fontWeight: '800',
-    letterSpacing: 0.3,
+  memberTinyDot: {
+    width: 4,
+    height: 4,
+    borderRadius: 2,
+    marginRight: 2,
+  },
+  squadCardActionChevron: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginLeft: 6,
   },
   /* ── Squad Modal Form & Options ── */
   fieldLabel: {
