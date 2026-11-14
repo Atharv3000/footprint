@@ -1,0 +1,19 @@
+services:
+  - type: web
+    name: stridetrack-backend
+    env: docker
+    dockerfilePath: Dockerfile
+    plan: free
+    region: oregon
+    healthCheckPath: /rep-api/health
+    disk:
+      name: stridetrack-data
+      mountPath: /data
+      sizeGB: 1
+    envVars:
+      - key: REP_SERVER_TOKEN
+        generateValue: true
+      - key: CALORIE_DB_PATH
+        value: /data/calories.sqlite3
+      - key: COUNTRY_QUEST_DB_PATH
+        value: /data/country-quests.sqlite3

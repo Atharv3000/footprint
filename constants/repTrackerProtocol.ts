@@ -19,9 +19,11 @@ export type PoseFrame = { type: 'pose'; rep_count: number; state: string; valid:
 
 export function repServerUrl(): string {
   const override = process.env.EXPO_PUBLIC_REP_SERVER_URL;
-  if (override) return override;
+  if (override) {
+    return override.endsWith('/rep-api') ? override : `${override.replace(/\/+$/, '')}/rep-api`;
+  }
   const host = Constants.expoConfig?.hostUri;
-  if (!host) throw new Error('Start the app with npm run start:reps to connect the rep tracker.');
+  if (!host) throw new Error('Start the app with npm run start:reps to connect the rep tracker or set EXPO_PUBLIC_REP_SERVER_URL in your cloud deployment.');
   const local = /^(localhost|127\.|10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.)/.test(host);
   return `${local ? 'http' : 'https'}://${host}/rep-api`;
 }
