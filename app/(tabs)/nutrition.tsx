@@ -654,6 +654,7 @@ export default function NutritionScreen() {
               id: 'protein',
               name: 'Protein',
               icon: 'barbell' as const,
+              symbol: undefined,
               current: totalProteinConsumed,
               target: targets.proteinGrams,
               pct: rawProtPct,
@@ -665,7 +666,8 @@ export default function NutritionScreen() {
             {
               id: 'carbs',
               name: 'Carbs',
-              icon: 'leaf' as const,
+              icon: undefined,
+              symbol: 'C',
               current: totalCarbsConsumed,
               target: targets.carbsGrams,
               pct: rawCarbPct,
@@ -677,7 +679,8 @@ export default function NutritionScreen() {
             {
               id: 'fat',
               name: 'Fat',
-              icon: 'water' as const,
+              icon: undefined,
+              symbol: 'F',
               current: totalFatConsumed,
               target: targets.fatGrams,
               pct: rawFatPct,
@@ -761,9 +764,23 @@ export default function NutritionScreen() {
                         )}
                       </Svg>
 
-                      {/* Filled, thicker icon in the center */}
+                      {/* Filled, thicker symbol in the center */}
                       <View style={styles.macroSymbolInCircle}>
-                        <Ionicons name={m.icon} size={23} color={m.color} />
+                        {m.icon ? (
+                          <Ionicons name={m.icon} size={23} color={m.color} />
+                        ) : (
+                          <Text
+                            style={{
+                              fontFamily: BRAND_ROUNDED_FONT_EXTRA,
+                              fontSize: 20,
+                              fontWeight: '900',
+                              color: m.color,
+                              includeFontPadding: false,
+                            }}
+                          >
+                            {m.symbol}
+                          </Text>
+                        )}
                       </View>
                     </View>
                   </View>
