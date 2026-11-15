@@ -38,41 +38,36 @@ interface FriendQrShareModalProps {
 
 const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
 
-// Generate 4 high-density grey static frames (grain specks + horizontal static scanlines)
-const PARTICLE_COUNT_PER_FRAME = 900;
-const SCANLINE_COUNT_PER_FRAME = 18;
+// Precompute 1 lightweight high-contrast grey static field (~150 nodes, mounts in <2ms)
+// Dynamic flicker is achieved by flipping/jittering the layer across 4 states without remounting nodes
+const SPECK_COUNT = 140;
+const SCANLINE_COUNT = 12;
 const GREY_SHADES = ['#52525b', '#71717a', '#a1a1aa', '#d4d4d8', '#3f3f46'] as const;
 
-const generateStaticFrames = () => {
-  return Array.from({ length: 4 }, (_, frameIdx) => {
-    const specks = Array.from({ length: PARTICLE_COUNT_PER_FRAME }, (_, i) => {
-      const s1 = Math.sin(frameIdx * 997 + i * 31.7) * 10000;
-      const s2 = Math.cos(frameIdx * 823 + i * 47.3) * 10000;
-      const s3 = Math.sin(frameIdx * 641 + i * 19.1) * 10000;
-      const x = Math.abs(s1 - Math.floor(s1)) * SCREEN_W;
-      const y = Math.abs(s2 - Math.floor(s2)) * SCREEN_H;
-      const w = 1.6 + Math.abs(s3 - Math.floor(s3)) * 2.8;
-      const h = 1.4 + ((i % 3) * 0.6);
-      const opacity = 0.28 + (i % 5) * 0.14;
-      const fill = GREY_SHADES[i % GREY_SHADES.length];
-      return { x, y, w, h, opacity, fill };
-    });
-    const scanlines = Array.from({ length: SCANLINE_COUNT_PER_FRAME }, (_, i) => {
-      const s1 = Math.sin(frameIdx * 1301 + i * 73.1) * 10000;
-      const s2 = Math.cos(frameIdx * 719 + i * 53.7) * 10000;
-      const s3 = Math.sin(frameIdx * 409 + i * 29.3) * 10000;
-      const y = Math.abs(s1 - Math.floor(s1)) * SCREEN_H;
-      const x = Math.abs(s2 - Math.floor(s2)) * (SCREEN_W * 0.45);
-      const w = SCREEN_W * (0.25 + Math.abs(s3 - Math.floor(s3)) * 0.65);
-      const opacity = 0.14 + (i % 4) * 0.08;
-      const fill = i % 2 === 0 ? '#a1a1aa' : '#52525b';
-      return { x, y, w, h: 1.5, opacity, fill };
-    });
-    return { specks, scanlines };
-  });
-};
+const STATIC_SPECKS = Array.from({ length: SPECK_COUNT }, (_, i) => {
+  const s1 = Math.sin(997 + i * 31.7) * 10000;
+  const s2 = Math.cos(823 + i * 47.3) * 10000;
+  const s3 = Math.sin(641 + i * 19.1) * 10000;
+  const left = Math.abs(s1 - Math.floor(s1)) * SCREEN_W;
+  const top = Math.abs(s2 - Math.floor(s2)) * SCREEN_H;
+  const width = 2 + Math.abs(s3 - Math.floor(s3)) * 3;
+  const height = 1.5 + (i % 3) * 0.7;
+  const opacity = 0.35 + (i % 5) * 0.12;
+  const backgroundColor = GREY_SHADES[i % GREY_SHADES.length];
+  return { left, top, width, height, opacity, backgroundColor };
+});
 
-const STATIC_FRAMES = generateStaticFrames();
+const STATIC_SCANLINES = Array.from({ length: SCANLINE_COUNT }, (_, i) => {
+  const s1 = Math.sin(1301 + i * 73.1) * 10000;
+  const s2 = Math.cos(719 + i * 53.7) * 10000;
+  const s3 = Math.sin(409 + i * 29.3) * 10000;
+  const top = Math.abs(s1 - Math.floor(s1)) * SCREEN_H;
+  const left = Math.abs(s2 - Math.floor(s2)) * (SCREEN_W * 0.4);
+  const width = SCREEN_W * (0.28 + Math.abs(s3 - Math.floor(s3)) * 0.65);
+  const opacity = 0.18 + (i % 4) * 0.08;
+  const backgroundColor = i % 2 === 0 ? '#a1a1aa' : '#52525b';
+  return { left, top, width, height: 1.5, opacity, backgroundColor };
+});
 
 export function FriendQrShareModal({
   visible,
@@ -247,41 +242,48 @@ export function FriendQrShareModal({
         >
           <TouchableOpacity style={StyleSheet.absoluteFill} activeOpacity={1} onPress={handleClose} />
 
-          {/* Pre-mounted 4-Frame Dynamic Grey Static Field */}
-          <View style={styles.particlesContainer} pointerEvents="none">
-            {STATIC_FRAMES.map((frameData, frameIdx) => (
+          {/* Instant Lightweight Dynamic Grey Static Field */}
+          <View
+            style={[
+              styles.particlesContainer,
+              {
+                transform: [
+                  { scaleX: activeFrameIndex % 2 === 0 ? 1 : -1 },
+                  { scaleY: activeFrameIndex < 2 ? 1 : -1 },
+                  { translateX: ((activeFrameIndex * 7) % 11) - 5 },
+                  { translateY: ((activeFrameIndex * 5) % 9) - 4 },
+                ],
+              },
+            ]}
+            pointerEvents="none"
+          >
+            {STATIC_SPECKS.map((pt, i) => (
               <View
-                key={frameIdx}
-                style={[
-                  StyleSheet.absoluteFill,
-                  { opacity: activeFrameIndex === frameIdx ? 1 : 0 },
-                ]}
-              >
-                <Svg width={SCREEN_W} height={SCREEN_H} style={StyleSheet.absoluteFill}>
-                  {frameData.specks.map((pt, i) => (
-                    <Rect
-                      key={`s-${i}`}
-                      x={pt.x}
-                      y={pt.y}
-                      width={pt.w}
-                      height={pt.h}
-                      fill={pt.fill}
-                      opacity={pt.opacity}
-                    />
-                  ))}
-                  {frameData.scanlines.map((line, i) => (
-                    <Rect
-                      key={`l-${i}`}
-                      x={line.x}
-                      y={line.y}
-                      width={line.w}
-                      height={line.h}
-                      fill={line.fill}
-                      opacity={line.opacity}
-                    />
-                  ))}
-                </Svg>
-              </View>
+                key={`s-${i}`}
+                style={{
+                  position: 'absolute',
+                  left: pt.left,
+                  top: pt.top,
+                  width: pt.width,
+                  height: pt.height,
+                  backgroundColor: pt.backgroundColor,
+                  opacity: pt.opacity,
+                }}
+              />
+            ))}
+            {STATIC_SCANLINES.map((line, i) => (
+              <View
+                key={`l-${i}`}
+                style={{
+                  position: 'absolute',
+                  left: line.left,
+                  top: line.top,
+                  width: line.width,
+                  height: line.height,
+                  backgroundColor: line.backgroundColor,
+                  opacity: line.opacity,
+                }}
+              />
             ))}
           </View>
         </Animated.View>
