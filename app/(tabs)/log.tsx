@@ -1,6 +1,7 @@
 import { ExerciseDemo, ExerciseDemoProvider } from '@/components/ExerciseDemo';
 import { useScreenInsets } from '@/constants/useScreenInsets';
 import { AppModal as Modal } from '@/components/AppModal';
+import { InteractiveBottomModal } from '@/components/InteractiveBottomModal';
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
   StyleSheet,
@@ -146,6 +147,327 @@ const ExerciseRowItem = React.memo(function ExerciseRowItem({
   );
 });
 
+const MODAL_EX_ROW_HEIGHT = 60;
+
+interface ModalExerciseCheckItemProps {
+  ex: ExerciseDefinition;
+  isSelected: boolean;
+  accentColor: string;
+  isDark: boolean;
+  cardColor: string;
+  borderColor: string;
+  textColor: string;
+  textMutedColor: string;
+  onToggle: (ex: ExerciseDefinition) => void;
+}
+
+const ModalExerciseCheckItem = React.memo(function ModalExerciseCheckItem({
+  ex,
+  isSelected,
+  accentColor,
+  isDark,
+  cardColor,
+  borderColor,
+  textColor,
+  textMutedColor,
+  onToggle,
+}: ModalExerciseCheckItemProps) {
+  return (
+    <TouchableOpacity
+      style={[
+        styles.modalExerciseItem,
+        {
+          backgroundColor: isSelected
+            ? isDark
+              ? 'rgba(59,130,246,0.15)'
+              : 'rgba(59,130,246,0.1)'
+            : cardColor,
+          borderColor: isSelected ? accentColor : borderColor,
+        },
+      ]}
+      onPress={() => onToggle(ex)}
+      activeOpacity={0.75}
+    >
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 }}>
+        <Ionicons
+          name="barbell-outline"
+          size={18}
+          color={isSelected ? accentColor : textMutedColor}
+        />
+        <View style={{ flex: 1 }}>
+          <Text
+            numberOfLines={1}
+            style={[styles.modalExName, { color: isSelected ? textColor : textMutedColor }]}
+          >
+            {ex.name}
+          </Text>
+          <Text numberOfLines={1} style={[styles.modalExMeta, { color: textMutedColor }]}>
+            {ex.category.toUpperCase()}
+            {ex.primaryMuscles ? ` · ${ex.primaryMuscles.join(', ')}` : ''}
+          </Text>
+        </View>
+      </View>
+      <Ionicons
+        name={isSelected ? 'checkbox' : 'square-outline'}
+        size={20}
+        color={isSelected ? accentColor : textMutedColor}
+      />
+    </TouchableOpacity>
+  );
+});
+
+interface RoutineBuilderModalProps {
+  visible: boolean;
+  editingRoutine: CustomRoutine | null;
+  isDark: boolean;
+  colors: any;
+  onClose: () => void;
+  onSave: (data: {
+    title: string;
+    color: string;
+    category: CustomRoutine['category'];
+    selectedIds: string[];
+  }) => void;
+  onDelete: (id: string) => void;
+}
+
+const RoutineBuilderModal = React.memo(function RoutineBuilderModal({
+  visible,
+  editingRoutine,
+  isDark,
+  colors,
+  onClose,
+  onSave,
+  onDelete,
+}: RoutineBuilderModalProps) {
+  const [title, setTitle] = useState('');
+  const [color, setColor] = useState('#3b82f6');
+  const [category, setCategory] = useState<CustomRoutine['category']>('chest');
+  const [selectedIds, setSelectedIds] = useState<string[]>([
+    'bench_press',
+    'incline_dumbbell_press',
+  ]);
+  const [searchQuery, setSearchQuery] = useState('');
+
+  useEffect(() => {
+    if (!visible) return;
+    setSearchQuery('');
+    if (editingRoutine) {
+      setTitle(editingRoutine.title);
+      setColor(editingRoutine.color || '#3b82f6');
+      setCategory(editingRoutine.category || 'chest');
+      setSelectedIds((editingRoutine.exercises || []).map((e) => e.exerciseId));
+    } else {
+      setTitle('');
+      setColor('#3b82f6');
+      setCategory('chest');
+      setSelectedIds(['bench_press', 'incline_dumbbell_press']);
+    }
+  }, [visible, editingRoutine]);
+
+  const selectedSet = useMemo(() => new Set(selectedIds), [selectedIds]);
+
+  const filteredModalExercises = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return DEFAULT_EXERCISES;
+    return DEFAULT_EXERCISES.filter(
+      (e) =>
+        e.name.toLowerCase().includes(q) ||
+        e.category.toLowerCase().includes(q) ||
+        (e.primaryMuscles || []).some((m) => m.toLowerCase().includes(q))
+    );
+  }, [searchQuery]);
+
+  const handleToggleExercise = useCallback((ex: ExerciseDefinition) => {
+    Haptics.selectionAsync().catch(() => {});
+    setSelectedIds((prev) => {
+      if (prev.includes(ex.id)) {
+        return prev.filter((id) => id !== ex.id);
+      }
+      setCategory(ex.category);
+      return [...prev, ex.id];
+    });
+  }, []);
+
+  const renderExerciseItem = useCallback(
+    ({ item }: { item: ExerciseDefinition }) => (
+      <ModalExerciseCheckItem
+        ex={item}
+        isSelected={selectedSet.has(item.id)}
+        accentColor={color}
+        isDark={isDark}
+        cardColor={colors.card}
+        borderColor={colors.border}
+        textColor={colors.text}
+        textMutedColor={colors.textMuted}
+        onToggle={handleToggleExercise}
+      />
+    ),
+    [selectedSet, color, isDark, colors.card, colors.border, colors.text, colors.textMuted, handleToggleExercise]
+  );
+
+  const keyExtractor = useCallback((item: ExerciseDefinition) => item.id, []);
+  const getItemLayout = useCallback(
+    (_: any, index: number) => ({
+      length: MODAL_EX_ROW_HEIGHT,
+      offset: MODAL_EX_ROW_HEIGHT * index,
+      index,
+    }),
+    []
+  );
+
+  return (
+    <InteractiveBottomModal
+      visible={visible}
+      onDismiss={onClose}
+      handleColor={colors.border}
+      cardStyle={[
+        styles.modalSheet,
+        { backgroundColor: colors.surfaceElevated, borderColor: colors.border },
+      ]}
+    >
+      <View style={styles.modalHeader}>
+        <View>
+          <Text style={[styles.modalTitle, { color: colors.text }]}>
+            {editingRoutine ? 'Edit Workout Day' : 'New Workout Day'}
+          </Text>
+          <Text style={[styles.modalSub, { color: colors.textMuted }]}>
+            Create a preset with exercises that logs in one tap
+          </Text>
+        </View>
+        <TouchableOpacity
+          onPress={onClose}
+          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+        >
+          <Ionicons name="close-circle" size={26} color={colors.textMuted} />
+        </TouchableOpacity>
+      </View>
+
+      {/* Routine Title Input */}
+      <View
+        style={[
+          styles.routineInputWrap,
+          { backgroundColor: colors.card, borderColor: colors.border },
+        ]}
+      >
+        <TextInput
+          style={[styles.routineTextInput, { color: colors.text }]}
+          placeholder="Day Name (e.g. Chest, Legs, Push, Upper)"
+          placeholderTextColor={colors.textMuted}
+          value={title}
+          onChangeText={setTitle}
+        />
+      </View>
+
+      {/* Color Accent Picker */}
+      <Text style={[styles.modalSectionLabel, { color: colors.textMuted }]}>
+        ACCENT COLOR:
+      </Text>
+      <View style={styles.colorPickerRow}>
+        {[
+          '#3b82f6',
+          '#10b981',
+          '#8b5cf6',
+          '#f59e0b',
+          '#ec4899',
+          '#06b6d4',
+          '#ef4444',
+        ].map((c) => (
+          <TouchableOpacity
+            key={c}
+            style={[
+              styles.colorCircle,
+              { backgroundColor: c },
+              color === c && styles.colorCircleSelected,
+            ]}
+            onPress={() => setColor(c)}
+          >
+            {color === c && (
+              <Ionicons name="checkmark" size={14} color="#ffffff" />
+            )}
+          </TouchableOpacity>
+        ))}
+      </View>
+
+      {/* Exercises Selector for this routine */}
+      <Text style={[styles.modalSectionLabel, { color: colors.textMuted }]}>
+        CHOOSE EXERCISES FOR THIS DAY ({selectedIds.length} SELECTED):
+      </Text>
+
+      {/* Quick Filter Input for Modal Exercise List */}
+      <View
+        style={[
+          styles.routineInputWrap,
+          {
+            backgroundColor: colors.card,
+            borderColor: colors.border,
+            height: 40,
+            marginBottom: 10,
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: 8,
+          },
+        ]}
+      >
+        <Ionicons name="search-outline" size={16} color={colors.textMuted} />
+        <TextInput
+          style={[styles.routineTextInput, { color: colors.text, flex: 1, fontSize: 13 }]}
+          placeholder="Filter exercises..."
+          placeholderTextColor={colors.textMuted}
+          value={searchQuery}
+          onChangeText={setSearchQuery}
+          autoCapitalize="none"
+          autoCorrect={false}
+        />
+        {searchQuery.length > 0 && (
+          <TouchableOpacity onPress={() => setSearchQuery('')}>
+            <Ionicons name="close-circle" size={16} color={colors.textMuted} />
+          </TouchableOpacity>
+        )}
+      </View>
+
+      <FlatList
+        data={filteredModalExercises}
+        keyExtractor={keyExtractor}
+        renderItem={renderExerciseItem}
+        getItemLayout={getItemLayout}
+        style={styles.modalExerciseList}
+        showsVerticalScrollIndicator={false}
+        initialNumToRender={8}
+        maxToRenderPerBatch={8}
+        windowSize={3}
+        removeClippedSubviews={true}
+        keyboardShouldPersistTaps="handled"
+      />
+
+      {/* Action Buttons: Save & Optional Delete */}
+      <View style={styles.modalActionsRow}>
+        {editingRoutine && (
+          <TouchableOpacity
+            style={[styles.deleteRoutineBtn, { borderColor: '#ef4444' }]}
+            onPress={() => onDelete(editingRoutine.id)}
+          >
+            <Ionicons name="trash-outline" size={16} color="#ef4444" />
+          </TouchableOpacity>
+        )}
+        <TouchableOpacity
+          style={[styles.saveRoutineBtn, { backgroundColor: color }]}
+          onPress={() =>
+            onSave({
+              title,
+              color,
+              category,
+              selectedIds,
+            })
+          }
+        >
+          <Text style={styles.saveRoutineBtnText}>Save Workout Day</Text>
+        </TouchableOpacity>
+      </View>
+    </InteractiveBottomModal>
+  );
+});
+
 export default function LogScreen() {
   const screenInsets = useScreenInsets();
 
@@ -216,7 +538,6 @@ export default function LogScreen() {
   const [selectedExIdsForRoutine, setSelectedExIdsForRoutine] = useState<string[]>([]);
   const [batchSuccessMsg, setBatchSuccessMsg] = useState<string | null>(null);
   const [showCameraTracker, setShowCameraTracker] = useState<boolean>(false);
-  const [activeFitnessTool, setActiveFitnessTool] = useState<'soreness' | 'bodyFat' | 'aiForm'>('soreness');
 
   // Undo support state: stores IDs of the most recently logged entry/entries
   const [lastLoggedIds, setLastLoggedIds] = useState<string[]>([]);
@@ -411,52 +732,64 @@ export default function LogScreen() {
     setSubsetSelectedExIds((routine.exercises || []).map((e) => e.exerciseId));
   };
 
-  const handleSaveCustomRoutine = async () => {
-    if (!newRoutineTitle.trim()) {
-      Alert.alert('Title Required', 'Please enter a name for your workout day (e.g. "Chest", "Legs").');
-      return;
-    }
-    if (selectedExIdsForRoutine.length === 0) {
-      Alert.alert('Exercises Required', 'Please choose at least 1 exercise for this routine.');
-      return;
-    }
+  const handleSaveCustomRoutine = useCallback(
+    async (params?: {
+      title?: string;
+      color?: string;
+      category?: CustomRoutine['category'];
+      selectedIds?: string[];
+    }) => {
+      const title = typeof params?.title === 'string' ? params.title : newRoutineTitle;
+      const color = typeof params?.color === 'string' ? params.color : newRoutineColor;
+      const category = params?.category ?? newRoutineCategory;
+      const selectedIds = Array.isArray(params?.selectedIds) ? params.selectedIds : selectedExIdsForRoutine;
 
-    const newExList: RoutineExercise[] = selectedExIdsForRoutine.map((id) => {
-      const def = DEFAULT_EXERCISES.find((e) => e.id === id);
-      return {
-        exerciseId: id,
-        reps: def?.defaultReps || 10,
-        weight: def?.defaultWeight || 50,
+      if (!title.trim()) {
+        Alert.alert('Title Required', 'Please enter a name for your workout day (e.g. "Chest", "Legs").');
+        return;
+      }
+      if (selectedIds.length === 0) {
+        Alert.alert('Exercises Required', 'Please choose at least 1 exercise for this routine.');
+        return;
+      }
+
+      const newExList: RoutineExercise[] = selectedIds.map((id) => {
+        const def = DEFAULT_EXERCISES.find((e) => e.id === id);
+        return {
+          exerciseId: id,
+          reps: def?.defaultReps || 10,
+          weight: def?.defaultWeight || 50,
+        };
+      });
+
+      const newRoutine: CustomRoutine = {
+        id: editingRoutine ? editingRoutine.id : `routine_${Date.now()}`,
+        title: title.trim(),
+        color,
+        category,
+        exercises: newExList,
       };
-    });
 
-    const newRoutine: CustomRoutine = {
-      id: editingRoutine ? editingRoutine.id : `routine_${Date.now()}`,
-      title: newRoutineTitle.trim(),
-      color: newRoutineColor,
-      category: newRoutineCategory,
-      exercises: newExList,
-    };
+      const updated = editingRoutine
+        ? routines.map((r) => (r.id === editingRoutine.id ? newRoutine : r))
+        : [...routines, newRoutine];
 
-    let updated: CustomRoutine[];
-    if (editingRoutine) {
-      updated = routines.map((r) => (r.id === editingRoutine.id ? newRoutine : r));
-    } else {
-      updated = [...routines, newRoutine];
-    }
-
-    setRoutines(updated);
-    await saveCustomRoutines(userId, updated);
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
-    setRoutineModalVisible(false);
-  };
-
-  const handleDeleteRoutine = async (routineId: string) => {
-    const updated = routines.filter((r) => r.id !== routineId);
-    setRoutines(updated);
-    await saveCustomRoutines(userId, updated);
-    setRoutineModalVisible(false);
-  };
+      setRoutines(updated);
+      await saveCustomRoutines(userId, updated);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+      setRoutineModalVisible(false);
+    },
+    [editingRoutine, newRoutineCategory, newRoutineColor, newRoutineTitle, routines, selectedExIdsForRoutine, userId]
+  );
+  const handleDeleteRoutine = useCallback(
+    async (routineId: string) => {
+      const updated = routines.filter((r) => r.id !== routineId);
+      setRoutines(updated);
+      await saveCustomRoutines(userId, updated);
+      setRoutineModalVisible(false);
+    },
+    [routines, userId]
+  );
 
 
 
@@ -746,21 +1079,29 @@ export default function LogScreen() {
           <Text style={[styles.screenTitle, { color: colors.text }]}>Fitness Log</Text>
         </View>
 
-        {/* ── FITNESS TOOLS ── */}
-        <View accessibilityLabel="Fitness tools" style={[styles.quickActionButtonsRow, { backgroundColor: colors.surfaceElevated }]}>
+        {/* ── 3 PROMINENT QUICK ACTION TILES ── */}
+        <View accessibilityLabel="Fitness tools" style={styles.quickActionButtonsRow}>
           {([
-            { id: 'aiForm', color: '#10b981', label: 'AI Form', icon: 'videocam-outline', open: () => setShowCameraTracker(true) },
+            { id: 'soreness', color: '#f97316', label: 'Soreness', icon: 'fitness', open: () => setShowMuscleRecoveryModal(true) },
             { id: 'bodyFat', color: '#a855f7', label: 'Body Fat', icon: 'scan-circle-outline', open: () => setShowBodyFatModal(true) },
-            { id: 'soreness', color: '#f97316', label: 'Soreness', icon: 'fitness-outline', open: () => setShowMuscleRecoveryModal(true) },
-          ] as const).map(tool => {
-            const selected = activeFitnessTool === tool.id;
-            return <TouchableOpacity key={tool.id} accessibilityRole="button" accessibilityState={{ selected }}
-              style={[styles.quickActionTile, { backgroundColor: selected ? tool.color + '18' : 'transparent' }]}
-              onPress={() => { Haptics.selectionAsync().catch(() => {}); setActiveFitnessTool(tool.id); tool.open(); }} activeOpacity={0.8}>
-              <Ionicons name={tool.icon} size={18} color={tool.color} />
-              <Text style={[styles.quickActionTitle, { color: tool.color }]} numberOfLines={1}>{tool.label}</Text>
-            </TouchableOpacity>;
-          })}
+            { id: 'aiForm', color: '#10b981', label: 'AI Form', icon: 'videocam-outline', open: () => setShowCameraTracker(true) },
+          ] as const).map(tool => (
+            <TouchableOpacity
+              key={tool.id}
+              accessibilityRole="button"
+              style={[styles.quickActionTile, { backgroundColor: colors.surfaceElevated }]}
+              onPress={() => {
+                Haptics.selectionAsync().catch(() => {});
+                tool.open();
+              }}
+              activeOpacity={0.8}
+            >
+              <Ionicons name={tool.icon} size={19} color={tool.color} />
+              <Text style={[styles.quickActionTitle, { color: colors.text }]} numberOfLines={1}>
+                {tool.label}
+              </Text>
+            </TouchableOpacity>
+          ))}
         </View>
 
         {/* ── SECTION 0: CUSTOM WORKOUT DAY PRESETS / ROUTINES (SLIDER: 3 VISIBLE AT ONCE, SNAPPY) ── */}
@@ -2012,279 +2353,151 @@ export default function LogScreen() {
       </ScrollView>
 
       {/* Custom Routine / Workout Day Creation Modal */}
-      <Modal
+      <RoutineBuilderModal
         visible={routineModalVisible}
-        animationType="slide"
-        transparent
-        onRequestClose={() => setRoutineModalVisible(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={[styles.modalSheet, { backgroundColor: colors.surfaceElevated, borderColor: colors.border }]}>
-            <View style={styles.modalHeader}>
-              <View>
-                <Text style={[styles.modalTitle, { color: colors.text }]}>
-                  {editingRoutine ? 'Edit Workout Day' : 'New Workout Day'}
-                </Text>
-                <Text style={[styles.modalSub, { color: colors.textMuted }]}>
-                  Create a preset with exercises that logs in one tap
-                </Text>
-              </View>
-              <TouchableOpacity
-                onPress={() => setRoutineModalVisible(false)}
-                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-              >
-                <Ionicons name="close-circle" size={26} color={colors.textMuted} />
-              </TouchableOpacity>
-            </View>
-
-            {/* Routine Title Input */}
-            <View style={[styles.routineInputWrap, { backgroundColor: colors.card, borderColor: colors.border }]}>
-              <TextInput
-                style={[styles.routineTextInput, { color: colors.text }]}
-                placeholder="Day Name (e.g. Chest, Legs, Push, Upper)"
-                placeholderTextColor={colors.textMuted}
-                value={newRoutineTitle}
-                onChangeText={setNewRoutineTitle}
-              />
-            </View>
-
-            {/* Color Accent Picker */}
-            <Text style={[styles.modalSectionLabel, { color: colors.textMuted }]}>
-              ACCENT COLOR:
-            </Text>
-            <View style={styles.colorPickerRow}>
-              {['#3b82f6', '#10b981', '#8b5cf6', '#f59e0b', '#ec4899', '#06b6d4', '#ef4444'].map((c) => (
-                <TouchableOpacity
-                  key={c}
-                  style={[
-                    styles.colorCircle,
-                    { backgroundColor: c },
-                    newRoutineColor === c && styles.colorCircleSelected,
-                  ]}
-                  onPress={() => setNewRoutineColor(c)}
-                >
-                  {newRoutineColor === c && (
-                    <Ionicons name="checkmark" size={14} color="#ffffff" />
-                  )}
-                </TouchableOpacity>
-              ))}
-            </View>
-
-            {/* Exercises Selector for this routine */}
-            <Text style={[styles.modalSectionLabel, { color: colors.textMuted }]}>
-              CHOOSE EXERCISES FOR THIS DAY ({selectedExIdsForRoutine.length} SELECTED):
-            </Text>
-
-            <ScrollView style={styles.modalExerciseList} showsVerticalScrollIndicator={false}>
-              {DEFAULT_EXERCISES.map((ex) => {
-                const isSelected = selectedExIdsForRoutine.includes(ex.id);
-                return (
-                  <TouchableOpacity
-                    key={ex.id}
-                    style={[
-                      styles.modalExerciseItem,
-                      {
-                        backgroundColor: isSelected ? (isDark ? 'rgba(59,130,246,0.15)' : 'rgba(59,130,246,0.1)') : colors.card,
-                        borderColor: isSelected ? newRoutineColor : colors.border,
-                      },
-                    ]}
-                    onPress={() => {
-                      Haptics.selectionAsync().catch(() => {});
-                      if (isSelected) {
-                        setSelectedExIdsForRoutine((prev) => prev.filter((id) => id !== ex.id));
-                      } else {
-                        setSelectedExIdsForRoutine((prev) => [...prev, ex.id]);
-                        setNewRoutineCategory(ex.category);
-                      }
-                    }}
-                  >
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 }}>
-                      {ex.imageUrl ? (
-                        <ExerciseDemo imageUrl={ex.imageUrl} name={ex.name} size={26} radius={6} active={isSelected} />
-                      ) : (
-                        <Ionicons name="barbell-outline" size={18} color={isSelected ? newRoutineColor : colors.textMuted} />
-                      )}
-                      <View style={{ flex: 1 }}>
-                        <Text style={[styles.modalExName, { color: isSelected ? colors.text : colors.textMuted }]}>
-                          {ex.name}
-                        </Text>
-                        <Text style={[styles.modalExMeta, { color: colors.textMuted }]}>
-                          {ex.category.toUpperCase()}{ex.primaryMuscles ? ` · ${ex.primaryMuscles.join(', ')}` : ''}
-                        </Text>
-                      </View>
-                    </View>
-                    <Ionicons
-                      name={isSelected ? 'checkbox' : 'square-outline'}
-                      size={20}
-                      color={isSelected ? newRoutineColor : colors.textMuted}
-                    />
-                  </TouchableOpacity>
-                );
-              })}
-            </ScrollView>
-
-            {/* Action Buttons: Save & Optional Delete */}
-            {/* Action Buttons: Save & Optional Delete */}
-            <View style={styles.modalActionsRow}>
-              {editingRoutine && (
-                <TouchableOpacity
-                  style={[styles.deleteRoutineBtn, { borderColor: '#ef4444' }]}
-                  onPress={() => handleDeleteRoutine(editingRoutine.id)}
-                >
-                  <Ionicons name="trash-outline" size={16} color="#ef4444" />
-                </TouchableOpacity>
-              )}
-              <TouchableOpacity
-                style={[styles.saveRoutineBtn, { backgroundColor: newRoutineColor }]}
-                onPress={handleSaveCustomRoutine}
-              >
-                <Text style={styles.saveRoutineBtnText}>
-                  Save Workout Day
-                </Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
+        editingRoutine={editingRoutine}
+        isDark={isDark}
+        colors={colors}
+        onClose={() => setRoutineModalVisible(false)}
+        onSave={handleSaveCustomRoutine}
+        onDelete={handleDeleteRoutine}
+      />
 
       {/* Routine 3-Dots Options Modal: Edit exercises of day or select subset to log */}
-      <Modal
+      <InteractiveBottomModal
         visible={!!selectedRoutineForOptions}
-        animationType="fade"
-        transparent
-        onRequestClose={() => setSelectedRoutineForOptions(null)}
+        onDismiss={() => setSelectedRoutineForOptions(null)}
+        handleColor={colors.border}
+        cardStyle={[styles.modalSheet, { backgroundColor: colors.surfaceElevated, borderColor: colors.border, maxHeight: '82%' }]}
       >
-        <View style={styles.modalOverlay}>
-          <View style={[styles.modalSheet, { backgroundColor: colors.surfaceElevated, borderColor: colors.border, maxHeight: '82%' }]}>
-            <View style={styles.modalHeader}>
-              <View>
-                <Text style={[styles.modalTitle, { color: colors.text }]}>
-                  {selectedRoutineForOptions?.title}
-                </Text>
-                <Text style={[styles.modalSub, { color: colors.textMuted }]}>
-                  Edit routine exercises or select specific ones to log
-                </Text>
-              </View>
-              <TouchableOpacity
-                onPress={() => setSelectedRoutineForOptions(null)}
-                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-              >
-                <Ionicons name="close-circle" size={26} color={colors.textMuted} />
-              </TouchableOpacity>
-            </View>
+        <View style={styles.modalHeader}>
+          <View>
+            <Text style={[styles.modalTitle, { color: colors.text }]}>
+              {selectedRoutineForOptions?.title}
+            </Text>
+            <Text style={[styles.modalSub, { color: colors.textMuted }]}>
+              Edit routine exercises or select specific ones to log
+            </Text>
+          </View>
+          <TouchableOpacity
+            onPress={() => setSelectedRoutineForOptions(null)}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          >
+            <Ionicons name="close-circle" size={26} color={colors.textMuted} />
+          </TouchableOpacity>
+        </View>
 
-            {/* Quick Actions Row */}
-            <View style={{ flexDirection: 'row', gap: 10, marginVertical: 12 }}>
-              <TouchableOpacity
-                style={[
-                  styles.optionActionBtn,
-                  { backgroundColor: colors.card, borderColor: colors.border, flex: 1 },
-                ]}
-                onPress={() => {
-                  if (selectedRoutineForOptions) openEditRoutineModal(selectedRoutineForOptions);
-                }}
-              >
-                <Ionicons name="pencil" size={15} color={colors.primary} />
-                <Text style={[styles.optionActionBtnText, { color: colors.text }]}>Edit Day Exercises</Text>
-              </TouchableOpacity>
+        {/* Quick Actions Row */}
+        <View style={{ flexDirection: 'row', gap: 10, marginVertical: 12 }}>
+          <TouchableOpacity
+            style={[
+              styles.optionActionBtn,
+              { backgroundColor: colors.card, borderColor: colors.border, flex: 1 },
+            ]}
+            onPress={() => {
+              if (selectedRoutineForOptions) openEditRoutineModal(selectedRoutineForOptions);
+            }}
+          >
+            <Ionicons name="pencil" size={15} color={colors.primary} />
+            <Text style={[styles.optionActionBtnText, { color: colors.text }]}>Edit Day Exercises</Text>
+          </TouchableOpacity>
 
+          <TouchableOpacity
+            style={[
+              styles.optionActionBtn,
+              {
+                backgroundColor: subsetSelectedExIds.length === selectedRoutineForOptions?.exercises.length
+                  ? colors.card
+                  : colors.primary + '18',
+                borderColor: colors.border,
+              },
+            ]}
+            onPress={() => {
+              if (!selectedRoutineForOptions) return;
+              if (subsetSelectedExIds.length === selectedRoutineForOptions.exercises.length) {
+                setSubsetSelectedExIds([]);
+              } else {
+                setSubsetSelectedExIds(selectedRoutineForOptions.exercises.map((e) => e.exerciseId));
+              }
+            }}
+          >
+            <Text style={[styles.optionActionBtnText, { color: colors.primary }]}>
+              {subsetSelectedExIds.length === selectedRoutineForOptions?.exercises.length ? 'Deselect All' : 'Select All'}
+            </Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* Subset selection checklist */}
+        <Text style={[styles.modalSectionLabel, { color: colors.textMuted }]}>
+          CHOOSE EXERCISES TO LOG ({subsetSelectedExIds.length}/{selectedRoutineForOptions?.exercises.length || 0}):
+        </Text>
+
+        <ScrollView style={{ maxHeight: 220, marginBottom: 16 }} showsVerticalScrollIndicator={false}>
+          {selectedRoutineForOptions?.exercises.map((item) => {
+            const exDef = DEFAULT_EXERCISES.find((e) => e.id === item.exerciseId);
+            const isSelected = subsetSelectedExIds.includes(item.exerciseId);
+            return (
               <TouchableOpacity
+                key={item.exerciseId}
                 style={[
-                  styles.optionActionBtn,
+                  styles.modalExerciseItem,
                   {
-                    backgroundColor: subsetSelectedExIds.length === selectedRoutineForOptions?.exercises.length
-                      ? colors.card
-                      : colors.primary + '18',
-                    borderColor: colors.border,
+                    backgroundColor: isSelected
+                      ? (isDark ? 'rgba(59,130,246,0.15)' : 'rgba(59,130,246,0.1)')
+                      : colors.card,
+                    borderColor: isSelected ? (selectedRoutineForOptions.color || colors.primary) : colors.border,
                   },
                 ]}
                 onPress={() => {
-                  if (!selectedRoutineForOptions) return;
-                  if (subsetSelectedExIds.length === selectedRoutineForOptions.exercises.length) {
-                    setSubsetSelectedExIds([]);
+                  Haptics.selectionAsync().catch(() => {});
+                  if (isSelected) {
+                    setSubsetSelectedExIds((prev) => prev.filter((id) => id !== item.exerciseId));
                   } else {
-                    setSubsetSelectedExIds(selectedRoutineForOptions.exercises.map((e) => e.exerciseId));
+                    setSubsetSelectedExIds((prev) => [...prev, item.exerciseId]);
                   }
                 }}
               >
-                <Text style={[styles.optionActionBtnText, { color: colors.primary }]}>
-                  {subsetSelectedExIds.length === selectedRoutineForOptions?.exercises.length ? 'Deselect All' : 'Select All'}
-                </Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 }}>
+                  {exDef?.imageUrl ? (
+                    <ExerciseDemo imageUrl={exDef.imageUrl} name={exDef.name} size={22} radius={5} active={isSelected} />
+                  ) : (
+                    <Ionicons name="barbell-outline" size={16} color={isSelected ? selectedRoutineForOptions.color : colors.textMuted} />
+                  )}
+                  <Ionicons name="barbell-outline" size={16} color={isSelected ? selectedRoutineForOptions.color : colors.textMuted} />
+                  <View style={{ flex: 1 }}>
+                    <Text style={[styles.modalExName, { color: isSelected ? colors.text : colors.textMuted }]}>
+                      {exDef?.name || item.exerciseId}
+                    </Text>
+                    <Text style={[styles.modalExMeta, { color: colors.textMuted }]}>
+                      {item.reps} reps @ {item.weight} lbs
+                    </Text>
+                  </View>
+                </View>
+                <Ionicons
+                  name={isSelected ? 'checkbox' : 'square-outline'}
+                  size={20}
+                  color={isSelected ? selectedRoutineForOptions.color : colors.textMuted}
+                />
               </TouchableOpacity>
-            </View>
+            );
+          })}
+        </ScrollView>
 
-            {/* Subset selection checklist */}
-            <Text style={[styles.modalSectionLabel, { color: colors.textMuted }]}>
-              CHOOSE EXERCISES TO LOG ({subsetSelectedExIds.length}/{selectedRoutineForOptions?.exercises.length || 0}):
-            </Text>
-
-            <ScrollView style={{ maxHeight: 220, marginBottom: 16 }} showsVerticalScrollIndicator={false}>
-              {selectedRoutineForOptions?.exercises.map((item) => {
-                const exDef = DEFAULT_EXERCISES.find((e) => e.id === item.exerciseId);
-                const isSelected = subsetSelectedExIds.includes(item.exerciseId);
-                return (
-                  <TouchableOpacity
-                    key={item.exerciseId}
-                    style={[
-                      styles.modalExerciseItem,
-                      {
-                        backgroundColor: isSelected
-                          ? (isDark ? 'rgba(59,130,246,0.15)' : 'rgba(59,130,246,0.1)')
-                          : colors.card,
-                        borderColor: isSelected ? (selectedRoutineForOptions.color || colors.primary) : colors.border,
-                      },
-                    ]}
-                    onPress={() => {
-                      Haptics.selectionAsync().catch(() => {});
-                      if (isSelected) {
-                        setSubsetSelectedExIds((prev) => prev.filter((id) => id !== item.exerciseId));
-                      } else {
-                        setSubsetSelectedExIds((prev) => [...prev, item.exerciseId]);
-                      }
-                    }}
-                  >
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 }}>
-                      {exDef?.imageUrl ? (
-                        <ExerciseDemo imageUrl={exDef.imageUrl} name={exDef.name} size={22} radius={5} active={isSelected} />
-                      ) : (
-                        <Ionicons name="barbell-outline" size={16} color={isSelected ? selectedRoutineForOptions.color : colors.textMuted} />
-                      )}
-                      <View style={{ flex: 1 }}>
-                        <Text style={[styles.modalExName, { color: isSelected ? colors.text : colors.textMuted }]}>
-                          {exDef?.name || item.exerciseId}
-                        </Text>
-                        <Text style={[styles.modalExMeta, { color: colors.textMuted }]}>
-                          {item.reps} reps @ {item.weight} lbs
-                        </Text>
-                      </View>
-                    </View>
-                    <Ionicons
-                      name={isSelected ? 'checkbox' : 'square-outline'}
-                      size={20}
-                      color={isSelected ? selectedRoutineForOptions.color : colors.textMuted}
-                    />
-                  </TouchableOpacity>
-                );
-              })}
-            </ScrollView>
-
-            {/* Log chosen subset button */}
-            <TouchableOpacity
-              style={[
-                styles.saveRoutineBtn,
-                { backgroundColor: selectedRoutineForOptions?.color || colors.primary },
-              ]}
-              onPress={handleLogSubsetRoutine}
-              activeOpacity={0.85}
-            >
-              <Ionicons name="checkmark-done" size={17} color="#ffffff" />
-              <Text style={styles.saveRoutineBtnText}>
-                Log Selected ({subsetSelectedExIds.length}) Exercises
-              </Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </Modal>
+        {/* Log chosen subset button */}
+        <TouchableOpacity
+          style={[
+            styles.saveRoutineBtn,
+            { backgroundColor: selectedRoutineForOptions?.color || colors.primary },
+          ]}
+          onPress={handleLogSubsetRoutine}
+          activeOpacity={0.85}
+        >
+          <Ionicons name="checkmark-done" size={17} color="#ffffff" />
+          <Text style={styles.saveRoutineBtnText}>
+            Log Selected ({subsetSelectedExIds.length}) Exercises
+          </Text>
+        </TouchableOpacity>
+      </InteractiveBottomModal>
 
       {/* AI Camera Form Tracker Modal (in Fitness / Workouts Tab) */}
       <CameraFormTrackerModal
@@ -2423,9 +2636,7 @@ const styles = StyleSheet.create({
   },
   quickActionButtonsRow: {
     flexDirection: 'row',
-    padding: 4,
-    borderRadius: 18,
-    gap: 4,
+    gap: ROUTINE_CARD_GAP,
     marginBottom: 10,
   },
   quickActionTile: {
@@ -2433,14 +2644,16 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 11,
-    borderRadius: 14,
+    paddingHorizontal: 8,
+    borderRadius: 16,
     gap: 7,
-    minHeight: 42,
+    height: 52,
   },
   quickActionTitle: {
     fontFamily: BRAND_ROUNDED_FONT_EXTRA,
-    fontSize: 13,
+    fontSize: 12.5,
+    fontWeight: '800',
+    letterSpacing: -0.2,
     flexShrink: 1,
   },
   quickActionIndividualBtn: {

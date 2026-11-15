@@ -57,6 +57,10 @@ export const InteractiveBottomModal: React.FC<InteractiveBottomModalProps> = ({
 }) => {
   const [modalVisible, setModalVisible] = React.useState(visible);
 
+  if (visible && !modalVisible) {
+    setModalVisible(true);
+  }
+
   // translateY for the sliding card: 0 is open, SCREEN_HEIGHT is fully off-screen
   const translateY = useRef(new Animated.Value(SCREEN_HEIGHT)).current;
   // backdropOpacity for gradual fade in of backdrop (prevents harsh lines)
@@ -72,12 +76,12 @@ export const InteractiveBottomModal: React.FC<InteractiveBottomModalProps> = ({
     Animated.parallel([
       Animated.timing(translateY, {
         toValue: SCREEN_HEIGHT,
-        duration: 220,
+        duration: 150,
         useNativeDriver: true,
       }),
       Animated.timing(backdropOpacity, {
         toValue: 0,
-        duration: 200,
+        duration: 140,
         useNativeDriver: true,
       }),
     ]).start(() => {
@@ -100,12 +104,12 @@ export const InteractiveBottomModal: React.FC<InteractiveBottomModalProps> = ({
       Animated.parallel([
         Animated.timing(translateY, {
           toValue: 0,
-          duration: 280,
+          duration: 160,
           useNativeDriver: true,
         }),
         Animated.timing(backdropOpacity, {
           toValue: 1,
-          duration: 260,
+          duration: 140,
           useNativeDriver: true,
         }),
       ]).start();

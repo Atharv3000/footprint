@@ -26,7 +26,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '@/constants/AuthContext';
 import { useTheme, BRAND_ROUNDED_FONT, BRAND_ROUNDED_FONT_EXTRA } from '@/constants/ThemeContext';
 import { saveWalk, loadWalks, WalkRecord } from '@/constants/walkStorage';
-import { loadFriends, FriendUser } from '@/constants/socialEngine';
+import { loadFriends, loadGroups, FriendUser, SocialGroup } from '@/constants/socialEngine';
 import {
   UserProfile,
   DEFAULT_PROFILE,
@@ -709,10 +709,13 @@ export default function TrackScreen() {
   const [pastWalks, setPastWalks] = useState<WalkRecord[]>([]);
   const [showPastWalks, setShowPastWalks] = useState<boolean>(true);
 
-  // Live Friends on Map Overlay
+  // Live Friends & Squads on Map Overlay
   const [friendsOnMap, setFriendsOnMap] = useState<FriendUser[]>([]);
   const [showFriendsOnMap, setShowFriendsOnMap] = useState<boolean>(true);
   const [selectedFriend, setSelectedFriend] = useState<FriendUser | null>(null);
+  const [squadsOnMap, setSquadsOnMap] = useState<SocialGroup[]>([]);
+  const [showSquadsOnMap, setShowSquadsOnMap] = useState<boolean>(true);
+  const [selectedSquadId, setSelectedSquadId] = useState<string | null>(null);
 
   // Walk Recording State
   const [isRecording, setIsRecording] = useState<boolean>(false);
@@ -944,14 +947,15 @@ export default function TrackScreen() {
     fetchPastWalks();
   }, [fetchPastWalks]);
 
-  // Load friends and their live cursors/trails for map display
+  // Load friends, squads, and their live cursors/trails for map display
   const fetchFriendsForMap = useCallback(async () => {
     const uid = user?.id || 'guest_user';
     try {
-      const f = await loadFriends(uid);
+      const [f, g] = await Promise.all([loadFriends(uid), loadGroups(uid)]);
       setFriendsOnMap(f || []);
+      setSquadsOnMap(g || []);
     } catch (e) {
-      console.warn('Failed to load friends for map:', e);
+      console.warn('Failed to load friends/squads for map:', e);
     }
   }, [user]);
 
@@ -1930,7 +1934,7 @@ export default function TrackScreen() {
         })}
 
         {/* Live Friends Trails on Map */}
-        {friendsOnMap && friendsOnMap.length > 0 && friendsOnMap.map((fr) => {
+        {showFriendsOnMap && friendsOnMap && friendsOnMap.length > 0 && friendsOnMap.map((fr) => {
           if (!fr.recentTrail || fr.recentTrail.length < 2) return null;
           const frColor = fr.avatarColor || '#a855f7';
           return (
@@ -1947,7 +1951,7 @@ export default function TrackScreen() {
         })}
 
         {/* Live Friends Directional Cursors on Map */}
-        {friendsOnMap && friendsOnMap.length > 0 && friendsOnMap.map((fr) => {
+        {showFriendsOnMap && friendsOnMap && friendsOnMap.length > 0 && friendsOnMap.map((fr) => {
           if (!fr.currentLocation) return null;
           const frColor = fr.avatarColor || '#a855f7';
           const isSelected = selectedFriend?.id === fr.id;
@@ -1983,6 +1987,71 @@ export default function TrackScreen() {
             </Marker>
           );
         })}
+
+        {/* Squads on Map (Hub Markers positioned at active members' centroid) */}
+        {showSquadsOnMap && squadsOnMap.length > 0 && squadsOnMap
+          .filter((sq) => !selectedSquadId || sq.id === selectedSquadId)
+          .map((sq, sqIdx) => {
+            const memberLocs = friendsOnMap
+              .filter((fr) => fr.currentLocation && sq.memberUsernames.includes(fr.username))
+              .map((fr) => fr.currentLocation!);
+            const baseCoord = memberLocs.length > 0
+              ? {
+                  latitude: memberLocs.reduce((s, c) => s + c.latitude, 0) / memberLocs.length,
+                  longitude: memberLocs.reduce((s, c) => s + c.longitude, 0) / memberLocs.length,
+                }
+              : location?.coords
+                ? {
+                    latitude: location.coords.latitude + 0.0012 * (sqIdx + 1),
+                    longitude: location.coords.longitude - 0.0012 * (sqIdx + 1),
+                  }
+                : null;
+            if (!baseCoord) return null;
+            const isSelected = selectedSquadId === sq.id;
+            return (
+              <Marker
+                key={`squad_marker_${sq.id}`}
+                coordinate={baseCoord}
+                anchor={{ x: 0.5, y: 0.5 }}
+                zIndex={isSelected ? 32 : 22}
+                onPress={() => {
+                  Haptics.selectionAsync().catch(() => {});
+                  setSelectedSquadId(isSelected ? null : sq.id);
+                }}
+              >
+                <View
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    gap: 5,
+                    paddingHorizontal: 9,
+                    paddingVertical: 5,
+                    borderRadius: 14,
+                    backgroundColor: isSelected ? '#6366f1' : (themeColors.isDark ? 'rgba(20,20,23,0.92)' : 'rgba(255,255,255,0.95)'),
+                    borderWidth: 1.5,
+                    borderColor: '#6366f1',
+                    shadowColor: '#000',
+                    shadowOffset: { width: 0, height: 2 },
+                    shadowOpacity: 0.2,
+                    shadowRadius: 4,
+                  }}
+                >
+                  <Text style={{ fontSize: 13 }}>{sq.badgeEmoji || '⚡'}</Text>
+                  <Text
+                    style={{
+                      fontSize: 11,
+                      fontWeight: '800',
+                      color: isSelected ? '#ffffff' : themeColors.text,
+                      maxWidth: 110,
+                    }}
+                    numberOfLines={1}
+                  >
+                    {sq.name}
+                  </Text>
+                </View>
+              </Marker>
+            );
+          })}
 
         {/* Suggested Route Paths Overlay (when Route Explorer sheet is open and no route is active yet) */}
         {showRouteModal && !selectedRoute && routeSuggestions.map((route, idx) => {
@@ -4317,6 +4386,104 @@ showFriendsOnMap ? { color: '#ffffff' } : { color: themeColors.textMuted },
 </Text>
 </TouchableOpacity>
 </View>
+</View>
+
+{/* Squads on Map Overlay Toggle & Filter (Below Friends) */}
+<View style={styles.sheetSection}>
+<Text style={[styles.sheetSectionTitle, { color: themeColors.textMuted }]}>SQUADS ON MAP</Text>
+<View style={[styles.buildingsToggleCard, { backgroundColor: themeColors.surfaceElevated, borderColor: themeColors.border }]}>
+<View style={{ flex: 1, paddingRight: 8 }}>
+<View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+<Ionicons name="shield-half" size={16} color={showSquadsOnMap ? '#6366f1' : themeColors.textMuted} />
+<Text style={[styles.buildingsToggleTitle, { color: themeColors.text }]}>
+Squads on Map
+</Text>
+</View>
+<Text style={[styles.buildingsToggleSubtitle, { color: themeColors.textMuted }]}>
+{showSquadsOnMap
+? `${squadsOnMap.length} squad${squadsOnMap.length === 1 ? '' : 's'} pinned on map`
+: 'Squad map pins hidden'}
+</Text>
+</View>
+
+<TouchableOpacity
+style={[
+styles.buildingsSwitchBtn,
+showSquadsOnMap
+? { backgroundColor: '#6366f1' }
+: { backgroundColor: themeColors.surface, borderColor: themeColors.border, borderWidth: 1 },
+]}
+onPress={() => {
+Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+setShowSquadsOnMap(!showSquadsOnMap);
+}}
+activeOpacity={0.8}
+>
+<Text
+style={[
+styles.buildingsSwitchText,
+showSquadsOnMap ? { color: '#ffffff' } : { color: themeColors.textMuted },
+]}
+>
+{showSquadsOnMap ? 'ON' : 'OFF'}
+</Text>
+</TouchableOpacity>
+</View>
+
+{showSquadsOnMap && squadsOnMap.length > 0 && (
+<ScrollView
+horizontal
+showsHorizontalScrollIndicator={false}
+contentContainerStyle={{ gap: 8, paddingTop: 8 }}
+>
+<TouchableOpacity
+onPress={() => {
+Haptics.selectionAsync().catch(() => {});
+setSelectedSquadId(null);
+}}
+style={{
+paddingHorizontal: 12,
+paddingVertical: 7,
+borderRadius: 12,
+backgroundColor: selectedSquadId === null ? '#6366f1' : themeColors.surfaceElevated,
+borderWidth: 1,
+borderColor: selectedSquadId === null ? '#6366f1' : themeColors.border,
+}}
+>
+<Text style={{ fontSize: 12, fontWeight: '700', color: selectedSquadId === null ? '#ffffff' : themeColors.text }}>
+All Squads
+</Text>
+</TouchableOpacity>
+{squadsOnMap.map((sq) => {
+const active = selectedSquadId === sq.id;
+return (
+<TouchableOpacity
+key={`sheet_squad_${sq.id}`}
+onPress={() => {
+Haptics.selectionAsync().catch(() => {});
+setSelectedSquadId(active ? null : sq.id);
+}}
+style={{
+flexDirection: 'row',
+alignItems: 'center',
+gap: 5,
+paddingHorizontal: 12,
+paddingVertical: 7,
+borderRadius: 12,
+backgroundColor: active ? '#6366f1' : themeColors.surfaceElevated,
+borderWidth: 1,
+borderColor: active ? '#6366f1' : themeColors.border,
+}}
+>
+<Text style={{ fontSize: 12 }}>{sq.badgeEmoji || '⚡'}</Text>
+<Text style={{ fontSize: 12, fontWeight: '700', color: active ? '#ffffff' : themeColors.text }}>
+{sq.name}
+</Text>
+</TouchableOpacity>
+);
+})}
+</ScrollView>
+)}
 </View>
 
 {/* Map Appearance: Dark vs Light */}

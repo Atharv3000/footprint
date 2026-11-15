@@ -132,7 +132,7 @@ const FRIENDS_PAGE_WIDTH = SCREEN_WIDTH - 32;
 export default function CommunityScreen() {
   const screenInsets = useScreenInsets();
   const safeStyles = React.useMemo(() => ({ ...styles,
-    notifModalFullContainer: { ...styles.notifModalFullContainer, paddingTop: screenInsets.top + 12 },
+    notifModalFullContainer: { ...styles.notifModalFullContainer, paddingTop: 10 },
   }), [screenInsets.top, screenInsets.left, screenInsets.right]);
 
   const { user } = useAuth();
@@ -3166,14 +3166,14 @@ const styles = StyleSheet.create({
   /* ── Notifications Full-Screen Modal Styles ── */
   notifModalFullContainer: {
     flex: 1,
-    paddingTop: Platform.OS === 'ios' ? 16 : 20,
+    paddingTop: 10,
   },
   notifModalHeaderBar: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 20,
-    paddingBottom: 16,
+    paddingBottom: 12,
     borderBottomWidth: 1,
   },
   notifModalTitle: {
