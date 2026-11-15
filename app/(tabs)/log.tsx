@@ -1083,8 +1083,8 @@ export default function LogScreen() {
         <View accessibilityLabel="Fitness tools" style={styles.quickActionButtonsRow}>
           {([
             { id: 'soreness', color: '#f97316', label: 'Soreness', icon: 'fitness', open: () => setShowMuscleRecoveryModal(true) },
-            { id: 'bodyFat', color: '#a855f7', label: 'Body Fat', icon: 'scan-circle-outline', open: () => setShowBodyFatModal(true) },
-            { id: 'aiForm', color: '#10b981', label: 'AI Form', icon: 'videocam-outline', open: () => setShowCameraTracker(true) },
+            { id: 'bodyFat', color: '#a855f7', label: 'Body Fat', icon: 'scan-circle', open: () => setShowBodyFatModal(true) },
+            { id: 'aiForm', color: '#10b981', label: 'AI Form', icon: 'videocam', open: () => setShowCameraTracker(true) },
           ] as const).map(tool => (
             <TouchableOpacity
               key={tool.id}

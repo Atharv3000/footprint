@@ -573,7 +573,7 @@ export default function CommunityScreen() {
                 >
                   <Ionicons name="notifications-outline" size={20} color={colors.text} />
                   {pendingIncomingRequests.length > 0 && (
-                    <View style={styles.retroNotificationDotBadge}>
+                    <View style={[styles.retroNotificationDotBadge, { borderColor: colors.background }]}>
                       <Text style={styles.retroNotificationDotText}>
                         {pendingIncomingRequests.length > 9 ? '9+' : pendingIncomingRequests.length}
                       </Text>
@@ -725,7 +725,7 @@ export default function CommunityScreen() {
                                       </Text>
                                     )}
                                     {friend.isWalkingNow && (
-                                      <View style={[styles.retroPinBadge, { borderColor: colors.background }]}>
+                                      <View style={[styles.retroPinBadge, { borderColor: isDark ? '#000000' : '#ffffff' }]}>
                                         {!!friend.currentActivity && (
                                           <Ionicons
                                             name="footsteps"
@@ -1895,11 +1895,6 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     padding: 16,
     marginBottom: 14,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 5,
-    elevation: 2,
   },
   cardHeaderRow: {
     flexDirection: 'row',
@@ -2680,11 +2675,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     position: 'relative',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 4,
-    elevation: 2,
   },
   friendAvatarImage: {
     width: '100%',
@@ -2712,11 +2702,6 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-    elevation: 2,
   },
   retroFriendName: {
     fontSize: 12.5,
@@ -2775,11 +2760,6 @@ const styles = StyleSheet.create({
     borderRadius: 18,
     borderWidth: 1,
     padding: 14,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.04,
-    shadowRadius: 6,
-    elevation: 1,
   },
   retroRequestTopRow: {
     flexDirection: 'row',

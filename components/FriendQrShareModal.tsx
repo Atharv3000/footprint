@@ -7,11 +7,18 @@ import {
   StyleSheet,
   TouchableOpacity,
   Share,
-  Animated,
-  Easing,
   Dimensions,
   Platform,
 } from 'react-native';
+import Animated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withTiming,
+  withSequence,
+  Easing as ReanimatedEasing,
+  interpolate,
+  runOnJS,
+} from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
@@ -31,26 +38,41 @@ interface FriendQrShareModalProps {
 
 const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
 
-// Generate 4 randomized grain frames with high-density realistic micro-particles
-const PARTICLE_COUNT_PER_FRAME = 340;
-const generateStaticParticles = () => {
+// Generate 4 high-density grey static frames (grain specks + horizontal static scanlines)
+const PARTICLE_COUNT_PER_FRAME = 900;
+const SCANLINE_COUNT_PER_FRAME = 18;
+const GREY_SHADES = ['#52525b', '#71717a', '#a1a1aa', '#d4d4d8', '#3f3f46'] as const;
+
+const generateStaticFrames = () => {
   return Array.from({ length: 4 }, (_, frameIdx) => {
-    return Array.from({ length: PARTICLE_COUNT_PER_FRAME }, (_, i) => {
-      // Deterministic pseudorandom spread covering full screen
+    const specks = Array.from({ length: PARTICLE_COUNT_PER_FRAME }, (_, i) => {
       const s1 = Math.sin(frameIdx * 997 + i * 31.7) * 10000;
       const s2 = Math.cos(frameIdx * 823 + i * 47.3) * 10000;
       const s3 = Math.sin(frameIdx * 641 + i * 19.1) * 10000;
       const x = Math.abs(s1 - Math.floor(s1)) * SCREEN_W;
       const y = Math.abs(s2 - Math.floor(s2)) * SCREEN_H;
-      const radius = 0.6 + Math.abs(s3 - Math.floor(s3)) * 1.5; // micro speckles 0.6 to 2.1px
-      const opacity = 0.18 + (i % 5) * 0.16; // variable depth grain opacities
-      const shade = (i % 3 === 0) ? '#e4e4e7' : (i % 3 === 1) ? '#ffffff' : '#a1a1aa';
-      return { x, y, r: radius, opacity, fill: shade };
+      const w = 1.6 + Math.abs(s3 - Math.floor(s3)) * 2.8;
+      const h = 1.4 + ((i % 3) * 0.6);
+      const opacity = 0.28 + (i % 5) * 0.14;
+      const fill = GREY_SHADES[i % GREY_SHADES.length];
+      return { x, y, w, h, opacity, fill };
     });
+    const scanlines = Array.from({ length: SCANLINE_COUNT_PER_FRAME }, (_, i) => {
+      const s1 = Math.sin(frameIdx * 1301 + i * 73.1) * 10000;
+      const s2 = Math.cos(frameIdx * 719 + i * 53.7) * 10000;
+      const s3 = Math.sin(frameIdx * 409 + i * 29.3) * 10000;
+      const y = Math.abs(s1 - Math.floor(s1)) * SCREEN_H;
+      const x = Math.abs(s2 - Math.floor(s2)) * (SCREEN_W * 0.45);
+      const w = SCREEN_W * (0.25 + Math.abs(s3 - Math.floor(s3)) * 0.65);
+      const opacity = 0.14 + (i % 4) * 0.08;
+      const fill = i % 2 === 0 ? '#a1a1aa' : '#52525b';
+      return { x, y, w, h: 1.5, opacity, fill };
+    });
+    return { specks, scanlines };
   });
 };
 
-const STATIC_FRAMES = generateStaticParticles();
+const STATIC_FRAMES = generateStaticFrames();
 
 export function FriendQrShareModal({
   visible,
@@ -68,14 +90,15 @@ export function FriendQrShareModal({
   const cleanUsername = (username || 'user').toLowerCase().replace(/^@/, '');
   const shareUrl = Linking.createURL(`friend?user=${cleanUsername}`);
 
-  // Animations
-  const backdropOpacity = useRef(new Animated.Value(0)).current;
-  const meltProgress = useRef(new Animated.Value(0)).current; // 0 = bright liquid white, 1 = transparent clear
-  const colorPhase = useRef(new Animated.Value(0)).current; // 0 -> 1 -> 0 prismatic shimmer phase
-  const sheenSweep = useRef(new Animated.Value(-1)).current; // diagonal Apple glass specular sweep
-  const cardScale = useRef(new Animated.Value(0.88)).current;
-  const cardSlideDown = useRef(new Animated.Value(-120)).current;
+  // Reanimated shared values for fast tissue-warp pull + full-white-to-solid transition
+  const backdropOpacity = useSharedValue(0);
+  const pullProgress = useSharedValue(0); // 0 = tucked above top edge, 1 = landed
+  const whiteOverlay = useSharedValue(0); // turns full white as it comes down, then snaps to solid
+  const sheenProgress = useSharedValue(-1);
+  const isClosingRef = useRef(false);
   const [activeFrameIndex, setActiveFrameIndex] = useState(0);
+
+  const offscreenTopY = -(screenInsets.top + 380);
 
   // Compute standard 2D QR matrix
   const matrix = useMemo(() => {
@@ -84,65 +107,28 @@ export function FriendQrShareModal({
 
   useEffect(() => {
     if (visible) {
-      meltProgress.setValue(0);
-      cardSlideDown.setValue(-120);
-      cardScale.setValue(0.88);
-      sheenSweep.setValue(-1);
-      colorPhase.setValue(0);
+      isClosingRef.current = false;
+      pullProgress.value = 0;
+      whiteOverlay.value = 1;
+      sheenProgress.value = -1;
+      backdropOpacity.value = 0;
 
-      // 1. Entrance: top-docked slide down with Apple Liquid Glass white flash + prismatic color phase
-      Animated.parallel([
-        Animated.timing(backdropOpacity, {
-          toValue: 1,
-          duration: 240,
-          useNativeDriver: true,
-        }),
-        Animated.timing(meltProgress, {
-          toValue: 1,
-          duration: 560,
-          easing: Easing.bezier(0.16, 1, 0.3, 1),
-          useNativeDriver: true,
-        }),
-        Animated.timing(sheenSweep, {
-          toValue: 1,
-          duration: 720,
-          easing: Easing.bezier(0.22, 1, 0.36, 1),
-          useNativeDriver: true,
-        }),
-        Animated.spring(cardScale, {
-          toValue: 1,
-          friction: 7,
-          tension: 80,
-          useNativeDriver: true,
-        }),
-        Animated.spring(cardSlideDown, {
-          toValue: 0,
-          friction: 8,
-          tension: 78,
-          useNativeDriver: true,
-        }),
-      ]).start();
+      // Smooth 520ms warped pull-down; starts white at top and becomes solid BEFORE settling
+      backdropOpacity.value = withTiming(1, { duration: 240 });
+      pullProgress.value = withTiming(1, {
+        duration: 520,
+        easing: ReanimatedEasing.bezier(0.25, 0.9, 0.3, 1),
+      });
+      whiteOverlay.value = withTiming(0, {
+        duration: 380,
+        easing: ReanimatedEasing.bezier(0.35, 0, 0.65, 1),
+      });
+      sheenProgress.value = withTiming(1, {
+        duration: 500,
+        easing: ReanimatedEasing.bezier(0.22, 1, 0.36, 1),
+      });
 
-      // Continuous subtle glass color-phase shimmer while open
-      const phaseLoop = Animated.loop(
-        Animated.sequence([
-          Animated.timing(colorPhase, {
-            toValue: 1,
-            duration: 2600,
-            easing: Easing.inOut(Easing.sin),
-            useNativeDriver: true,
-          }),
-          Animated.timing(colorPhase, {
-            toValue: 0,
-            duration: 2600,
-            easing: Easing.inOut(Easing.sin),
-            useNativeDriver: true,
-          }),
-        ])
-      );
-      phaseLoop.start();
-
-      // 2. High-speed 30 FPS particle static grain flicker
+      // High-speed particle static grain flicker
       let frame = 0;
       const interval = setInterval(() => {
         frame = (frame + 1) % 4;
@@ -151,26 +137,39 @@ export function FriendQrShareModal({
 
       return () => {
         clearInterval(interval);
-        phaseLoop.stop();
       };
     } else {
-      Animated.parallel([
-        Animated.timing(backdropOpacity, { toValue: 0, duration: 180, useNativeDriver: true }),
-        Animated.timing(cardScale, { toValue: 0.88, duration: 180, useNativeDriver: true }),
-        Animated.timing(meltProgress, { toValue: 0, duration: 150, useNativeDriver: true }),
-      ]).start();
+      pullProgress.value = 0;
+      whiteOverlay.value = 0;
+      backdropOpacity.value = 0;
+      sheenProgress.value = -1;
     }
   }, [visible]);
 
+  const finishClose = () => {
+    isClosingRef.current = false;
+    onClose();
+  };
+
   const handleClose = () => {
+    if (isClosingRef.current) return;
+    isClosingRef.current = true;
     Haptics.selectionAsync().catch(() => {});
-    Animated.parallel([
-      Animated.timing(backdropOpacity, { toValue: 0, duration: 180, useNativeDriver: true }),
-      Animated.timing(cardScale, { toValue: 0.92, duration: 180, useNativeDriver: true }),
-      Animated.timing(cardSlideDown, { toValue: -30, duration: 180, useNativeDriver: true }),
-    ]).start(() => {
-      onClose();
-    });
+
+    backdropOpacity.value = withTiming(0, { duration: 300 });
+    whiteOverlay.value = 0;
+    pullProgress.value = withTiming(
+      0,
+      {
+        duration: 360,
+        easing: ReanimatedEasing.bezier(0.5, 0, 0.8, 0.3),
+      },
+      (finished) => {
+        if (finished) {
+          runOnJS(finishClose)();
+        }
+      }
+    );
   };
 
   const handleNativeShare = async () => {
@@ -191,92 +190,121 @@ export function FriendQrShareModal({
   const matrixDimension = matrix.length;
   const cellSize = qrBoxSize / matrixDimension;
 
-  // Melting white flash + prismatic color phase interpolations
-  const meltWhiteFlashOpacity = meltProgress.interpolate({
-    inputRange: [0, 0.32, 0.68, 1],
-    outputRange: [1, 0.72, 0.16, 0],
+  const backdropStyle = useAnimatedStyle(() => ({
+    opacity: backdropOpacity.value,
+  }));
+
+  // Pulled-sheet warp style: symmetrical curved bottom, gentle side-to-side shift + tilt (no sideways fold)
+  const cardWarpStyle = useAnimatedStyle(() => {
+    const p = pullProgress.value;
+    return {
+      borderTopLeftRadius: interpolate(p, [0, 0.5, 1], [10, 18, 22]),
+      borderTopRightRadius: interpolate(p, [0, 0.5, 1], [10, 18, 22]),
+      borderBottomLeftRadius: interpolate(p, [0, 0.45, 0.85, 1], [68, 42, 25, 22]),
+      borderBottomRightRadius: interpolate(p, [0, 0.45, 0.85, 1], [68, 42, 25, 22]),
+      transform: [
+        { perspective: 750 },
+        { translateY: interpolate(p, [0, 0.5, 0.86, 1], [offscreenTopY, -34, 4, 0]) },
+        { translateX: interpolate(p, [0, 0.25, 0.55, 0.82, 1], [0, -10, 7, -3, 0]) },
+        { scaleX: interpolate(p, [0, 0.45, 0.82, 1], [0.8, 0.94, 1.02, 1]) },
+        { scaleY: interpolate(p, [0, 0.45, 0.82, 1], [1.22, 1.08, 0.97, 1]) },
+        { rotateX: `${interpolate(p, [0, 0.45, 0.82, 1], [28, 11, -3, 0])}deg` },
+        { skewX: `${interpolate(p, [0, 0.25, 0.55, 0.82, 1], [0, 5.5, -3.5, 1.5, 0])}deg` },
+      ],
+    };
   });
-  const prismFlashOpacity = meltProgress.interpolate({
-    inputRange: [0, 0.25, 0.65, 1],
-    outputRange: [0.9, 0.75, 0.28, 0.16],
-  });
-  const phaseAuraOpacity = colorPhase.interpolate({
-    inputRange: [0, 1],
-    outputRange: [0.18, 0.42],
-  });
-  const sheenTranslateX = sheenSweep.interpolate({
-    inputRange: [-1, 1],
-    outputRange: [-280, 280],
-  });
-  const sheenOpacity = sheenSweep.interpolate({
-    inputRange: [-1, -0.2, 0.4, 1],
-    outputRange: [0, 0.65, 0.4, 0],
-  });
+
+  const whiteFlashStyle = useAnimatedStyle(() => ({
+    opacity: whiteOverlay.value,
+  }));
+
+  const prismStyle = useAnimatedStyle(() => ({
+    opacity: interpolate(whiteOverlay.value, [0, 0.45, 1], [0, 0.48, 0.62]),
+  }));
+
+  const sheenStyle = useAnimatedStyle(() => ({
+    opacity: interpolate(sheenProgress.value, [-1, -0.2, 0.4, 1], [0, 0.8, 0.45, 0]),
+    transform: [
+      { translateX: interpolate(sheenProgress.value, [-1, 1], [-280, 280]) },
+      { rotate: '22deg' },
+    ],
+  }));
 
   if (!visible) return null;
-
-  const currentParticles = STATIC_FRAMES[activeFrameIndex];
 
   return (
     <Modal visible={visible} transparent animationType="none" onRequestClose={handleClose} edgeToEdge>
       <View style={safeStyles.modalViewport}>
-        {/* Backdrop Tint */}
+        {/* Grey Static Backdrop */}
         <Animated.View
           style={[
             styles.backdropLayer,
             {
-              opacity: backdropOpacity,
-              backgroundColor: isDark ? 'rgba(9, 9, 11, 0.82)' : 'rgba(15, 15, 18, 0.56)',
+              backgroundColor: isDark ? 'rgba(39, 39, 42, 0.78)' : 'rgba(63, 63, 70, 0.74)',
             },
+            backdropStyle,
           ]}
         >
           <TouchableOpacity style={StyleSheet.absoluteFill} activeOpacity={1} onPress={handleClose} />
 
-          {/* Full Screen High-Density Real Static Particle Noise Field */}
+          {/* Pre-mounted 4-Frame Dynamic Grey Static Field */}
           <View style={styles.particlesContainer} pointerEvents="none">
-            <Svg width={SCREEN_W} height={SCREEN_H} style={StyleSheet.absoluteFill}>
-              {currentParticles.map((pt, i) => (
-                <Circle
-                  key={i}
-                  cx={pt.x}
-                  cy={pt.y}
-                  r={pt.r}
-                  fill={isDark ? pt.fill : (pt.fill === '#ffffff' ? '#e2e8f0' : '#475569')}
-                  opacity={pt.opacity}
-                />
-              ))}
-            </Svg>
+            {STATIC_FRAMES.map((frameData, frameIdx) => (
+              <View
+                key={frameIdx}
+                style={[
+                  StyleSheet.absoluteFill,
+                  { opacity: activeFrameIndex === frameIdx ? 1 : 0 },
+                ]}
+              >
+                <Svg width={SCREEN_W} height={SCREEN_H} style={StyleSheet.absoluteFill}>
+                  {frameData.specks.map((pt, i) => (
+                    <Rect
+                      key={`s-${i}`}
+                      x={pt.x}
+                      y={pt.y}
+                      width={pt.w}
+                      height={pt.h}
+                      fill={pt.fill}
+                      opacity={pt.opacity}
+                    />
+                  ))}
+                  {frameData.scanlines.map((line, i) => (
+                    <Rect
+                      key={`l-${i}`}
+                      x={line.x}
+                      y={line.y}
+                      width={line.w}
+                      height={line.h}
+                      fill={line.fill}
+                      opacity={line.opacity}
+                    />
+                  ))}
+                </Svg>
+              </View>
+            ))}
           </View>
         </Animated.View>
 
-        {/* Top-Docked Apple Liquid Glass QR Card */}
+        {/* Top-Docked Warped Tissue -> Solid QR Card */}
         <Animated.View
           style={[
             styles.topQrCard,
             {
-              backgroundColor: isDark ? 'rgba(22, 22, 28, 0.78)' : 'rgba(255, 255, 255, 0.84)',
-              borderColor: isDark ? 'rgba(255, 255, 255, 0.24)' : 'rgba(255, 255, 255, 0.95)',
+              backgroundColor: isDark ? '#18181b' : '#ffffff',
+              borderColor: isDark ? 'rgba(255, 255, 255, 0.16)' : 'rgba(255, 255, 255, 0.95)',
               shadowColor: avatarColor || '#a855f7',
-              transform: [{ scale: cardScale }, { translateY: cardSlideDown }],
+              transformOrigin: 'top center',
             },
+            cardWarpStyle,
           ]}
         >
-          {/* Prismatic Iridescent Color Gradient Layer */}
-          <Animated.View style={[StyleSheet.absoluteFill, { opacity: prismFlashOpacity }]} pointerEvents="none">
+          {/* Luminous Liquid Glass Color Layer (vibrant while moving, fades out as card becomes solid) */}
+          <Animated.View style={[StyleSheet.absoluteFill, prismStyle]} pointerEvents="none">
             <LinearGradient
-              colors={['rgba(56, 189, 248, 0.55)', 'rgba(168, 85, 247, 0.55)', 'rgba(236, 72, 153, 0.5)', 'rgba(163, 230, 53, 0.45)']}
+              colors={['rgba(56, 189, 248, 0.48)', 'rgba(168, 85, 247, 0.48)', 'rgba(236, 72, 153, 0.44)', 'rgba(99, 102, 241, 0.4)']}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 1 }}
-              style={StyleSheet.absoluteFill}
-            />
-          </Animated.View>
-
-          {/* Breathing Glass Color Phase Rim */}
-          <Animated.View style={[StyleSheet.absoluteFill, { opacity: phaseAuraOpacity }]} pointerEvents="none">
-            <LinearGradient
-              colors={['rgba(255, 255, 255, 0.45)', 'rgba(99, 102, 241, 0.22)', 'rgba(56, 189, 248, 0.28)', 'rgba(255, 255, 255, 0.15)']}
-              start={{ x: 1, y: 0 }}
-              end={{ x: 0, y: 1 }}
               style={StyleSheet.absoluteFill}
             />
           </Animated.View>
@@ -284,17 +312,18 @@ export function FriendQrShareModal({
           {/* Diagonal Specular Glass Sheen Sweep */}
           <Animated.View
             pointerEvents="none"
-            style={{
-              position: 'absolute',
-              top: -40,
-              bottom: -40,
-              width: 90,
-              opacity: sheenOpacity,
-              transform: [{ translateX: sheenTranslateX }, { rotate: '22deg' }],
-            }}
+            style={[
+              {
+                position: 'absolute',
+                top: -40,
+                bottom: -40,
+                width: 90,
+              },
+              sheenStyle,
+            ]}
           >
             <LinearGradient
-              colors={['transparent', 'rgba(255, 255, 255, 0.75)', 'transparent']}
+              colors={['transparent', 'rgba(255, 255, 255, 0.85)', 'transparent']}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 0 }}
               style={StyleSheet.absoluteFill}
@@ -311,18 +340,18 @@ export function FriendQrShareModal({
               right: 14,
               height: 1.5,
               borderRadius: 1,
-              backgroundColor: 'rgba(255, 255, 255, 0.75)',
+              backgroundColor: isDark ? 'rgba(255, 255, 255, 0.28)' : 'rgba(255, 255, 255, 0.85)',
             }}
           />
 
-          {/* Liquid Pure White Melt-in Flash Overlay */}
+          {/* Full Solid White Form Overlay (turns white as it comes down, then snaps off) */}
           <Animated.View
             style={[
               styles.meltFlashOverlay,
               {
-                opacity: meltWhiteFlashOpacity,
                 backgroundColor: '#ffffff',
               },
+              whiteFlashStyle,
             ]}
             pointerEvents="none"
           />
