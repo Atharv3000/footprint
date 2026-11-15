@@ -17,6 +17,7 @@ import {
   TouchableWithoutFeedback,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import * as ImagePicker from 'expo-image-picker';
 import * as Haptics from 'expo-haptics';
@@ -45,6 +46,7 @@ export function FoodLoggingModal({
   onMealSaved,
 }: FoodLoggingModalProps) {
   const { colors } = useTheme();
+  const insets = useSafeAreaInsets();
 
   const [mealType, setMealType] = useState<MealType>(initialMealType);
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
@@ -380,21 +382,18 @@ export function FoodLoggingModal({
     return matchesCat && matchesQuery;
   });
 
-  // Mode button press handler: toggle mode & trigger scan immediately if tapped
+  // Mode button press handler: switch scan mode without interrupting the live camera
   const handleModePress = (mode: FoodScanMode) => {
     Haptics.selectionAsync().catch(() => {});
     setScanMode(mode);
-    if (!selectedImage && !isAnalyzing) {
-      handleCaptureFromCamera(mode);
-    }
   };
 
   return (
-    <Modal visible={visible} animationType="slide" presentationStyle="fullScreen" onRequestClose={handleResetAndClose}>
-      <View style={[styles.safeArea, { backgroundColor: '#09090b' }]}>
+    <Modal visible={visible} animationType="slide" presentationStyle="fullScreen" edgeToEdge onRequestClose={handleResetAndClose}>
+      <View style={[styles.safeArea, { backgroundColor: colors.background }]}>
         <View style={styles.fullPageContainer}>
           {/* Top Bar Floating Controls */}
-          <View style={styles.topBar}>
+          <View style={[styles.topBar, { top: insets.top + 6 }]}>
             <TouchableOpacity onPress={handleResetAndClose} style={styles.topIconBtn} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
               <Ionicons name="close" size={22} color="#ffffff" />
             </TouchableOpacity>
@@ -422,14 +421,14 @@ export function FoodLoggingModal({
           </View>
 
           {/* MAIN CAMERA VIEWER */}
-          <View style={styles.cameraViewportWrap}>
+          <View style={[styles.cameraViewportWrap, { height: Math.min(460, SCREEN_HEIGHT * 0.48) }]}>
             {selectedImage ? (
               <View style={styles.previewContainer}>
                 <Image source={{ uri: selectedImage }} style={styles.cameraFill} resizeMode="cover" />
                 {/* Viewfinder crosshairs overlaid on captured photo */}
                 <View style={styles.viewfinderOverlay}>
-                  <View style={styles.cornerTL} />
-                  <View style={styles.cornerTR} />
+                  <View style={[styles.cornerTL, { top: insets.top + 68 }]} />
+                  <View style={[styles.cornerTR, { top: insets.top + 68 }]} />
                   <View style={styles.cornerBL} />
                   <View style={styles.cornerBR} />
 
@@ -458,13 +457,13 @@ export function FoodLoggingModal({
                 <CameraView ref={cameraRef} style={styles.cameraFill} facing="back">
                   {/* Viewfinder target bounds */}
                   <View style={styles.viewfinderOverlay}>
-                    <View style={styles.cornerTL} />
-                    <View style={styles.cornerTR} />
+                    <View style={[styles.cornerTL, { top: insets.top + 68 }]} />
+                    <View style={[styles.cornerTR, { top: insets.top + 68 }]} />
                     <View style={styles.cornerBL} />
                     <View style={styles.cornerBR} />
 
                     {/* Mode tag indicator inside the viewfinder */}
-                    <View style={styles.cameraModeIndicator}>
+                    <View style={[styles.cameraModeIndicator, { marginTop: insets.top + 62 }]}>
                       <Text style={styles.cameraModeIndicatorText}>
                         {scanMode === 'food' ? 'FOOD SCAN' : scanMode === 'label' ? 'NUTRITION LABEL' : 'RECEIPT'}
                       </Text>
@@ -487,6 +486,20 @@ export function FoodLoggingModal({
                 </TouchableOpacity>
               </View>
             )}
+
+            {/* Translucent greyed-out top band so camera/photo remains visible underneath while framing the middle */}
+            <View
+              pointerEvents="none"
+              style={{
+                position: 'absolute',
+                top: 0,
+                left: 0,
+                right: 0,
+                height: insets.top + 58,
+                backgroundColor: 'rgba(18, 18, 22, 0.45)',
+                zIndex: 10,
+              }}
+            />
 
             {/* Shutter Capture Button (Clean normal camera shutter: white circle with inner disc) */}
             {!selectedImage && !isAnalyzing && (
@@ -662,7 +675,7 @@ export function FoodLoggingModal({
           {/* LOWER CONTROLS & RESULTS AREA */}
           <ScrollView
             style={[styles.lowerSection, { backgroundColor: colors.background }]}
-            contentContainerStyle={styles.lowerScrollContent}
+            contentContainerStyle={[styles.lowerScrollContent, { paddingBottom: Math.max(40, insets.bottom + 20) }]}
             keyboardShouldPersistTaps="handled"
             showsVerticalScrollIndicator={false}
           >
