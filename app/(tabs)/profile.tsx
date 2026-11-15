@@ -774,7 +774,6 @@ export default function ProfileScreen() {
               style={styles.subTabBtn} onPress={() => switchTab(tab)} activeOpacity={0.75}>
               <Text style={[styles.subTabText, {
                 color: activeSubTab === tab ? (isDark ? '#ffffff' : '#000000') : (isDark ? '#71717a' : '#9ca3af'),
-                fontWeight: '800',
               }]}>{tab.toUpperCase()}</Text>
             </TouchableOpacity>
           ))}
@@ -1800,6 +1799,12 @@ const styles = StyleSheet.create({
     zIndex: 2,
   },
   subTabText: {
+    fontFamily: Platform.select({
+      ios: 'PlusJakartaSans_600SemiBold',
+      android: 'PlusJakartaSans_600SemiBold',
+      web: 'PlusJakartaSans_600SemiBold, "Plus Jakarta Sans", -apple-system, BlinkMacSystemFont, sans-serif',
+      default: 'PlusJakartaSans_600SemiBold',
+    }),
     fontSize: 14.5,
     letterSpacing: -0.2,
     textTransform: 'lowercase',
