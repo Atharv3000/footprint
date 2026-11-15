@@ -13,6 +13,7 @@ import {
   Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
 import * as Linking from 'expo-linking';
 import Svg, { Rect, Circle, Defs, Pattern } from 'react-native-svg';
@@ -61,7 +62,7 @@ export function FriendQrShareModal({
 }: FriendQrShareModalProps) {
   const screenInsets = useScreenInsets();
   const safeStyles = React.useMemo(() => ({ ...styles,
-    modalViewport: { ...styles.modalViewport, paddingTop: screenInsets.top + 16 , paddingLeft: screenInsets.left + 20, paddingRight: screenInsets.right + 20 },
+    modalViewport: { ...styles.modalViewport, paddingTop: Math.max(12, screenInsets.top + 2), paddingLeft: screenInsets.left + 20, paddingRight: screenInsets.right + 20 },
   }), [screenInsets.top, screenInsets.left, screenInsets.right]);
 
   const cleanUsername = (username || 'user').toLowerCase().replace(/^@/, '');
@@ -70,8 +71,10 @@ export function FriendQrShareModal({
   // Animations
   const backdropOpacity = useRef(new Animated.Value(0)).current;
   const meltProgress = useRef(new Animated.Value(0)).current; // 0 = bright liquid white, 1 = transparent clear
-  const cardScale = useRef(new Animated.Value(0.92)).current;
-  const cardSlideDown = useRef(new Animated.Value(-40)).current;
+  const colorPhase = useRef(new Animated.Value(0)).current; // 0 -> 1 -> 0 prismatic shimmer phase
+  const sheenSweep = useRef(new Animated.Value(-1)).current; // diagonal Apple glass specular sweep
+  const cardScale = useRef(new Animated.Value(0.88)).current;
+  const cardSlideDown = useRef(new Animated.Value(-120)).current;
   const [activeFrameIndex, setActiveFrameIndex] = useState(0);
 
   // Compute standard 2D QR matrix
@@ -81,32 +84,63 @@ export function FriendQrShareModal({
 
   useEffect(() => {
     if (visible) {
-      // 1. Entrance: top-docked slide down with pure white liquid melting in
+      meltProgress.setValue(0);
+      cardSlideDown.setValue(-120);
+      cardScale.setValue(0.88);
+      sheenSweep.setValue(-1);
+      colorPhase.setValue(0);
+
+      // 1. Entrance: top-docked slide down with Apple Liquid Glass white flash + prismatic color phase
       Animated.parallel([
         Animated.timing(backdropOpacity, {
           toValue: 1,
-          duration: 250,
+          duration: 240,
           useNativeDriver: true,
         }),
         Animated.timing(meltProgress, {
           toValue: 1,
-          duration: 480,
+          duration: 560,
           easing: Easing.bezier(0.16, 1, 0.3, 1),
+          useNativeDriver: true,
+        }),
+        Animated.timing(sheenSweep, {
+          toValue: 1,
+          duration: 720,
+          easing: Easing.bezier(0.22, 1, 0.36, 1),
           useNativeDriver: true,
         }),
         Animated.spring(cardScale, {
           toValue: 1,
-          friction: 8,
-          tension: 75,
+          friction: 7,
+          tension: 80,
           useNativeDriver: true,
         }),
         Animated.spring(cardSlideDown, {
           toValue: 0,
           friction: 8,
-          tension: 75,
+          tension: 78,
           useNativeDriver: true,
         }),
       ]).start();
+
+      // Continuous subtle glass color-phase shimmer while open
+      const phaseLoop = Animated.loop(
+        Animated.sequence([
+          Animated.timing(colorPhase, {
+            toValue: 1,
+            duration: 2600,
+            easing: Easing.inOut(Easing.sin),
+            useNativeDriver: true,
+          }),
+          Animated.timing(colorPhase, {
+            toValue: 0,
+            duration: 2600,
+            easing: Easing.inOut(Easing.sin),
+            useNativeDriver: true,
+          }),
+        ])
+      );
+      phaseLoop.start();
 
       // 2. High-speed 30 FPS particle static grain flicker
       let frame = 0;
@@ -117,11 +151,12 @@ export function FriendQrShareModal({
 
       return () => {
         clearInterval(interval);
+        phaseLoop.stop();
       };
     } else {
       Animated.parallel([
         Animated.timing(backdropOpacity, { toValue: 0, duration: 180, useNativeDriver: true }),
-        Animated.timing(cardScale, { toValue: 0.92, duration: 180, useNativeDriver: true }),
+        Animated.timing(cardScale, { toValue: 0.88, duration: 180, useNativeDriver: true }),
         Animated.timing(meltProgress, { toValue: 0, duration: 150, useNativeDriver: true }),
       ]).start();
     }
@@ -156,10 +191,26 @@ export function FriendQrShareModal({
   const matrixDimension = matrix.length;
   const cellSize = qrBoxSize / matrixDimension;
 
-  // Melting white flash overlay interpolation
+  // Melting white flash + prismatic color phase interpolations
   const meltWhiteFlashOpacity = meltProgress.interpolate({
-    inputRange: [0, 0.45, 1],
-    outputRange: [0.98, 0.45, 0],
+    inputRange: [0, 0.32, 0.68, 1],
+    outputRange: [1, 0.72, 0.16, 0],
+  });
+  const prismFlashOpacity = meltProgress.interpolate({
+    inputRange: [0, 0.25, 0.65, 1],
+    outputRange: [0.9, 0.75, 0.28, 0.16],
+  });
+  const phaseAuraOpacity = colorPhase.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0.18, 0.42],
+  });
+  const sheenTranslateX = sheenSweep.interpolate({
+    inputRange: [-1, 1],
+    outputRange: [-280, 280],
+  });
+  const sheenOpacity = sheenSweep.interpolate({
+    inputRange: [-1, -0.2, 0.4, 1],
+    outputRange: [0, 0.65, 0.4, 0],
   });
 
   if (!visible) return null;
@@ -175,7 +226,7 @@ export function FriendQrShareModal({
             styles.backdropLayer,
             {
               opacity: backdropOpacity,
-              backgroundColor: isDark ? 'rgba(9, 9, 11, 0.88)' : 'rgba(15, 15, 18, 0.68)',
+              backgroundColor: isDark ? 'rgba(9, 9, 11, 0.82)' : 'rgba(15, 15, 18, 0.56)',
             },
           ]}
         >
@@ -198,18 +249,73 @@ export function FriendQrShareModal({
           </View>
         </Animated.View>
 
-        {/* Top-Docked QR Card (Clean & Compact) */}
+        {/* Top-Docked Apple Liquid Glass QR Card */}
         <Animated.View
           style={[
             styles.topQrCard,
             {
-              backgroundColor: isDark ? '#18181b' : '#ffffff',
-              borderColor: isDark ? '#27272a' : '#e4e4e7',
+              backgroundColor: isDark ? 'rgba(22, 22, 28, 0.78)' : 'rgba(255, 255, 255, 0.84)',
+              borderColor: isDark ? 'rgba(255, 255, 255, 0.24)' : 'rgba(255, 255, 255, 0.95)',
+              shadowColor: avatarColor || '#a855f7',
               transform: [{ scale: cardScale }, { translateY: cardSlideDown }],
             },
           ]}
         >
-          {/* Liquid Pure White Melt-in Overlay */}
+          {/* Prismatic Iridescent Color Gradient Layer */}
+          <Animated.View style={[StyleSheet.absoluteFill, { opacity: prismFlashOpacity }]} pointerEvents="none">
+            <LinearGradient
+              colors={['rgba(56, 189, 248, 0.55)', 'rgba(168, 85, 247, 0.55)', 'rgba(236, 72, 153, 0.5)', 'rgba(163, 230, 53, 0.45)']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={StyleSheet.absoluteFill}
+            />
+          </Animated.View>
+
+          {/* Breathing Glass Color Phase Rim */}
+          <Animated.View style={[StyleSheet.absoluteFill, { opacity: phaseAuraOpacity }]} pointerEvents="none">
+            <LinearGradient
+              colors={['rgba(255, 255, 255, 0.45)', 'rgba(99, 102, 241, 0.22)', 'rgba(56, 189, 248, 0.28)', 'rgba(255, 255, 255, 0.15)']}
+              start={{ x: 1, y: 0 }}
+              end={{ x: 0, y: 1 }}
+              style={StyleSheet.absoluteFill}
+            />
+          </Animated.View>
+
+          {/* Diagonal Specular Glass Sheen Sweep */}
+          <Animated.View
+            pointerEvents="none"
+            style={{
+              position: 'absolute',
+              top: -40,
+              bottom: -40,
+              width: 90,
+              opacity: sheenOpacity,
+              transform: [{ translateX: sheenTranslateX }, { rotate: '22deg' }],
+            }}
+          >
+            <LinearGradient
+              colors={['transparent', 'rgba(255, 255, 255, 0.75)', 'transparent']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+              style={StyleSheet.absoluteFill}
+            />
+          </Animated.View>
+
+          {/* Top Inner Specular Glass Rim */}
+          <View
+            pointerEvents="none"
+            style={{
+              position: 'absolute',
+              top: 0,
+              left: 14,
+              right: 14,
+              height: 1.5,
+              borderRadius: 1,
+              backgroundColor: 'rgba(255, 255, 255, 0.75)',
+            }}
+          />
+
+          {/* Liquid Pure White Melt-in Flash Overlay */}
           <Animated.View
             style={[
               styles.meltFlashOverlay,
