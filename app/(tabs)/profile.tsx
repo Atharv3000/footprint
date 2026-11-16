@@ -364,12 +364,24 @@ export default function ProfileScreen() {
 
   return (
     <ScrollView
-      style={[styles.container, { backgroundColor: colors.background }]}
+      style={[styles.container, { backgroundColor: isDark ? '#000000' : '#ffffff' }]}
       contentContainerStyle={safeStyles.scrollContent}
       scrollEnabled={scrollEnabled}
     >
       {/* ── Retro Profile Header ── */}
-      <View style={styles.retroProfileHeader}>
+      <View
+        style={[
+          styles.retroProfileHeader,
+          {
+            backgroundColor: colors.background,
+            marginHorizontal: -16,
+            marginTop: -(screenInsets.top + 16),
+            paddingTop: screenInsets.top + 16,
+            paddingHorizontal: 16,
+            paddingBottom: 14,
+          },
+        ]}
+      >
         <View style={styles.retroProfileMainRow}>
           {/* Round Circular Avatar on Left - tap to upload photo from camera roll */}
           <TouchableOpacity
@@ -774,7 +786,8 @@ export default function ProfileScreen() {
               style={styles.subTabBtn} onPress={() => switchTab(tab)} activeOpacity={0.75}>
               <Text style={[styles.subTabText, {
                 color: activeSubTab === tab ? (isDark ? '#ffffff' : '#000000') : (isDark ? '#71717a' : '#9ca3af'),
-              }]}>{tab.toUpperCase()}</Text>
+                fontWeight: activeSubTab === tab ? '800' : '600',
+              }]}>{tab}</Text>
             </TouchableOpacity>
           ))}
 
@@ -1159,7 +1172,7 @@ export default function ProfileScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#09090b' },
-  scrollContent: { padding: 16, paddingBottom: 40, gap: 14, paddingTop: Platform.OS === 'ios' ? 76 : 48 },
+  scrollContent: { padding: 16, paddingBottom: 0, gap: 0, flexGrow: 1, paddingTop: Platform.OS === 'ios' ? 76 : 48 },
   screenHeader: {
     marginBottom: 6,
     paddingHorizontal: 4,
@@ -1768,26 +1781,27 @@ const styles = StyleSheet.create({
 
   /* ── Lower Screen Container (Full width below profile header) ── */
   lowerScreenSection: {
+    flex: 1,
     marginHorizontal: -16,
     paddingTop: 0,
-    paddingBottom: 60,
+    paddingBottom: 80,
     minHeight: 600,
     borderTopWidth: 1,
   },
-  /* ── Sub-tab bar (Activity vs Progress vs Insights vs Badges) with animated highlight underline ── */
+  /* ── Sub-tab bar (Activity vs Progress vs Insights vs Badges) matching NutritionHistoryModal ── */
   subTabBarContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    height: 48,
+    height: 44,
     position: 'relative',
     borderBottomWidth: 1,
-    marginBottom: 16,
+    marginBottom: 6,
   },
   subTabHighlightLine: {
     position: 'absolute',
     bottom: -1,
     width: '25%',
-    height: 3,
+    height: 2.5,
     borderRadius: 1.5,
     zIndex: 5,
   },
@@ -1799,13 +1813,8 @@ const styles = StyleSheet.create({
     zIndex: 2,
   },
   subTabText: {
-    fontFamily: Platform.select({
-      ios: 'PlusJakartaSans_600SemiBold',
-      android: 'PlusJakartaSans_600SemiBold',
-      web: 'PlusJakartaSans_600SemiBold, "Plus Jakarta Sans", -apple-system, BlinkMacSystemFont, sans-serif',
-      default: 'PlusJakartaSans_600SemiBold',
-    }),
-    fontSize: 14.5,
+    fontFamily: BRAND_ROUNDED_FONT_EXTRA,
+    fontSize: 14,
     letterSpacing: -0.2,
     textTransform: 'lowercase',
   },

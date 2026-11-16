@@ -38,35 +38,21 @@ interface FriendQrShareModalProps {
 
 const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
 
-// Precompute 1 lightweight high-contrast grey static field (~150 nodes, mounts in <2ms)
-// Dynamic flicker is achieved by flipping/jittering the layer across 4 states without remounting nodes
-const SPECK_COUNT = 140;
-const SCANLINE_COUNT = 12;
-const GREY_SHADES = ['#52525b', '#71717a', '#a1a1aa', '#d4d4d8', '#3f3f46'] as const;
+// Apple Invisible Ink-style shimmering micro-dot particle field (lightweight native Views, mounts in ~3ms)
+const DOT_COUNT = 260;
+const INK_SHADES = ['#ffffff', '#e4e4e7', '#a1a1aa', '#71717a', '#d4d4d8'] as const;
 
-const STATIC_SPECKS = Array.from({ length: SPECK_COUNT }, (_, i) => {
+const INVISIBLE_INK_DOTS = Array.from({ length: DOT_COUNT }, (_, i) => {
   const s1 = Math.sin(997 + i * 31.7) * 10000;
   const s2 = Math.cos(823 + i * 47.3) * 10000;
   const s3 = Math.sin(641 + i * 19.1) * 10000;
   const left = Math.abs(s1 - Math.floor(s1)) * SCREEN_W;
   const top = Math.abs(s2 - Math.floor(s2)) * SCREEN_H;
-  const width = 2 + Math.abs(s3 - Math.floor(s3)) * 3;
-  const height = 1.5 + (i % 3) * 0.7;
-  const opacity = 0.35 + (i % 5) * 0.12;
-  const backgroundColor = GREY_SHADES[i % GREY_SHADES.length];
-  return { left, top, width, height, opacity, backgroundColor };
-});
-
-const STATIC_SCANLINES = Array.from({ length: SCANLINE_COUNT }, (_, i) => {
-  const s1 = Math.sin(1301 + i * 73.1) * 10000;
-  const s2 = Math.cos(719 + i * 53.7) * 10000;
-  const s3 = Math.sin(409 + i * 29.3) * 10000;
-  const top = Math.abs(s1 - Math.floor(s1)) * SCREEN_H;
-  const left = Math.abs(s2 - Math.floor(s2)) * (SCREEN_W * 0.4);
-  const width = SCREEN_W * (0.28 + Math.abs(s3 - Math.floor(s3)) * 0.65);
-  const opacity = 0.18 + (i % 4) * 0.08;
-  const backgroundColor = i % 2 === 0 ? '#a1a1aa' : '#52525b';
-  return { left, top, width, height: 1.5, opacity, backgroundColor };
+  const size = 1.6 + Math.abs(s3 - Math.floor(s3)) * 2.0; // 1.6px to 3.6px round sparkles
+  const opacity = 0.25 + (i % 5) * 0.13;
+  const backgroundColor = INK_SHADES[i % INK_SHADES.length];
+  const group = i % 2; // split into 2 twinkling layers
+  return { left, top, size, opacity, backgroundColor, group };
 });
 
 export function FriendQrShareModal({
@@ -108,18 +94,18 @@ export function FriendQrShareModal({
       sheenProgress.value = -1;
       backdropOpacity.value = 0;
 
-      // Smooth 520ms warped pull-down; starts white at top and becomes solid BEFORE settling
-      backdropOpacity.value = withTiming(1, { duration: 240 });
+      // Slower 680ms warped pull-down with no bounce; fast 200ms white-to-solid transition
+      backdropOpacity.value = withTiming(1, { duration: 260 });
       pullProgress.value = withTiming(1, {
-        duration: 520,
-        easing: ReanimatedEasing.bezier(0.25, 0.9, 0.3, 1),
+        duration: 680,
+        easing: ReanimatedEasing.out(ReanimatedEasing.cubic),
       });
       whiteOverlay.value = withTiming(0, {
-        duration: 380,
-        easing: ReanimatedEasing.bezier(0.35, 0, 0.65, 1),
+        duration: 200,
+        easing: ReanimatedEasing.out(ReanimatedEasing.quad),
       });
       sheenProgress.value = withTiming(1, {
-        duration: 500,
+        duration: 560,
         easing: ReanimatedEasing.bezier(0.22, 1, 0.36, 1),
       });
 
@@ -151,12 +137,12 @@ export function FriendQrShareModal({
     isClosingRef.current = true;
     Haptics.selectionAsync().catch(() => {});
 
-    backdropOpacity.value = withTiming(0, { duration: 300 });
+    backdropOpacity.value = withTiming(0, { duration: 340 });
     whiteOverlay.value = 0;
     pullProgress.value = withTiming(
       0,
       {
-        duration: 360,
+        duration: 420,
         easing: ReanimatedEasing.bezier(0.5, 0, 0.8, 0.3),
       },
       (finished) => {
@@ -189,22 +175,22 @@ export function FriendQrShareModal({
     opacity: backdropOpacity.value,
   }));
 
-  // Pulled-sheet warp style: symmetrical curved bottom, gentle side-to-side shift + tilt (no sideways fold)
+  // Pulled-sheet warp style: symmetrical curved bottom, gentle side-to-side shift + tilt, no bottom bounce
   const cardWarpStyle = useAnimatedStyle(() => {
     const p = pullProgress.value;
     return {
       borderTopLeftRadius: interpolate(p, [0, 0.5, 1], [10, 18, 22]),
       borderTopRightRadius: interpolate(p, [0, 0.5, 1], [10, 18, 22]),
-      borderBottomLeftRadius: interpolate(p, [0, 0.45, 0.85, 1], [68, 42, 25, 22]),
-      borderBottomRightRadius: interpolate(p, [0, 0.45, 0.85, 1], [68, 42, 25, 22]),
+      borderBottomLeftRadius: interpolate(p, [0, 0.5, 1], [68, 38, 22]),
+      borderBottomRightRadius: interpolate(p, [0, 0.5, 1], [68, 38, 22]),
       transform: [
         { perspective: 750 },
-        { translateY: interpolate(p, [0, 0.5, 0.86, 1], [offscreenTopY, -34, 4, 0]) },
-        { translateX: interpolate(p, [0, 0.25, 0.55, 0.82, 1], [0, -10, 7, -3, 0]) },
-        { scaleX: interpolate(p, [0, 0.45, 0.82, 1], [0.8, 0.94, 1.02, 1]) },
-        { scaleY: interpolate(p, [0, 0.45, 0.82, 1], [1.22, 1.08, 0.97, 1]) },
-        { rotateX: `${interpolate(p, [0, 0.45, 0.82, 1], [28, 11, -3, 0])}deg` },
-        { skewX: `${interpolate(p, [0, 0.25, 0.55, 0.82, 1], [0, 5.5, -3.5, 1.5, 0])}deg` },
+        { translateY: interpolate(p, [0, 0.55, 1], [offscreenTopY, -28, 0]) },
+        { translateX: interpolate(p, [0, 0.35, 0.7, 1], [0, -8, 4, 0]) },
+        { scaleX: interpolate(p, [0, 0.5, 1], [0.8, 0.94, 1]) },
+        { scaleY: interpolate(p, [0, 0.5, 1], [1.22, 1.07, 1]) },
+        { rotateX: `${interpolate(p, [0, 0.5, 1], [26, 9, 0])}deg` },
+        { skewX: `${interpolate(p, [0, 0.35, 0.7, 1], [0, 4.5, -2, 0])}deg` },
       ],
     };
   });
@@ -230,58 +216,77 @@ export function FriendQrShareModal({
   return (
     <Modal visible={visible} transparent animationType="none" onRequestClose={handleClose} edgeToEdge>
       <View style={safeStyles.modalViewport}>
-        {/* Grey Static Backdrop */}
+        {/* More Transparent Backdrop + Apple Invisible Ink Shimmering Particles */}
         <Animated.View
           style={[
             styles.backdropLayer,
             {
-              backgroundColor: isDark ? 'rgba(39, 39, 42, 0.78)' : 'rgba(63, 63, 70, 0.74)',
+              backgroundColor: isDark ? 'rgba(18, 18, 22, 0.44)' : 'rgba(24, 24, 28, 0.32)',
             },
             backdropStyle,
           ]}
         >
           <TouchableOpacity style={StyleSheet.absoluteFill} activeOpacity={1} onPress={handleClose} />
 
-          {/* Instant Lightweight Dynamic Grey Static Field */}
+          {/* Layer A: Shimmering Invisible Ink Micro-Dots */}
           <View
             style={[
               styles.particlesContainer,
               {
+                opacity: activeFrameIndex % 2 === 0 ? 0.92 : 0.48,
                 transform: [
                   { scaleX: activeFrameIndex % 2 === 0 ? 1 : -1 },
-                  { scaleY: activeFrameIndex < 2 ? 1 : -1 },
-                  { translateX: ((activeFrameIndex * 7) % 11) - 5 },
-                  { translateY: ((activeFrameIndex * 5) % 9) - 4 },
+                  { translateX: activeFrameIndex === 0 ? 0 : activeFrameIndex === 1 ? 3 : activeFrameIndex === 2 ? -2 : 1 },
+                  { translateY: activeFrameIndex === 0 ? 0 : activeFrameIndex === 1 ? -2 : activeFrameIndex === 2 ? 2 : -1 },
                 ],
               },
             ]}
             pointerEvents="none"
           >
-            {STATIC_SPECKS.map((pt, i) => (
+            {INVISIBLE_INK_DOTS.filter((d) => d.group === 0).map((pt, i) => (
               <View
-                key={`s-${i}`}
+                key={`ink-a-${i}`}
                 style={{
                   position: 'absolute',
                   left: pt.left,
                   top: pt.top,
-                  width: pt.width,
-                  height: pt.height,
+                  width: pt.size,
+                  height: pt.size,
+                  borderRadius: pt.size / 2,
                   backgroundColor: pt.backgroundColor,
                   opacity: pt.opacity,
                 }}
               />
             ))}
-            {STATIC_SCANLINES.map((line, i) => (
+          </View>
+
+          {/* Layer B: Staggered Counter-Twinkling Invisible Ink Micro-Dots */}
+          <View
+            style={[
+              styles.particlesContainer,
+              {
+                opacity: activeFrameIndex % 2 === 1 ? 0.92 : 0.48,
+                transform: [
+                  { scaleY: activeFrameIndex < 2 ? 1 : -1 },
+                  { translateX: activeFrameIndex === 0 ? -2 : activeFrameIndex === 1 ? 1 : activeFrameIndex === 2 ? 3 : -1 },
+                  { translateY: activeFrameIndex === 0 ? 2 : activeFrameIndex === 1 ? -1 : activeFrameIndex === 2 ? -2 : 2 },
+                ],
+              },
+            ]}
+            pointerEvents="none"
+          >
+            {INVISIBLE_INK_DOTS.filter((d) => d.group === 1).map((pt, i) => (
               <View
-                key={`l-${i}`}
+                key={`ink-b-${i}`}
                 style={{
                   position: 'absolute',
-                  left: line.left,
-                  top: line.top,
-                  width: line.width,
-                  height: line.height,
-                  backgroundColor: line.backgroundColor,
-                  opacity: line.opacity,
+                  left: pt.left,
+                  top: pt.top,
+                  width: pt.size,
+                  height: pt.size,
+                  borderRadius: pt.size / 2,
+                  backgroundColor: pt.backgroundColor,
+                  opacity: pt.opacity,
                 }}
               />
             ))}
