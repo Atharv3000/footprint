@@ -372,35 +372,23 @@ export default function NutritionScreen() {
             </Text>
           </View>
 
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-            <TouchableOpacity
-              accessibilityRole="button"
-              accessibilityLabel={activeTab === 'pet' ? 'Back to Calorie Tracker' : 'Open Pet Companion'}
-              style={[
-                styles.iconButton,
-                { backgroundColor: activeTab === 'pet' ? colors.primaryBg : colors.surfaceElevated },
-              ]}
-              onPress={() => {
-                Haptics.selectionAsync().catch(() => {});
-                setActiveTab((prev) => (prev === 'pet' ? 'tracker' : 'pet'));
-                mainScroll.current?.scrollTo({ y: 0, animated: false });
-              }}
-            >
-              <Ionicons name={activeTab === 'pet' ? 'paw' : 'paw-outline'} size={20} color={colors.primary} />
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={[styles.iconButton, { backgroundColor: colors.surfaceElevated }]}
-              onPress={() => {
-                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
-                setShowCustomizerModal(true);
-              }}
-            >
-              <Ionicons name="options-outline" size={20} color={colors.primary} />
-            </TouchableOpacity>
-          </View>
+          <TouchableOpacity
+            style={[styles.iconButton, { backgroundColor: colors.surfaceElevated }]}
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+              setShowCustomizerModal(true);
+            }}
+          >
+            <Ionicons name="options-outline" size={20} color={colors.primary} />
+          </TouchableOpacity>
         </View>
 
+        <View accessibilityRole="tablist" style={{ flexDirection: 'row', overflow: 'hidden', marginHorizontal: -16, paddingVertical: 0, paddingHorizontal: 0, borderRadius: 18, backgroundColor: colors.surfaceElevated, gap: 4 }}>
+          {(['tracker', 'pet'] as const).map(tab => <TouchableOpacity key={tab} accessibilityRole="tab" accessibilityState={{ selected: activeTab === tab }} onPress={() => { setActiveTab(tab); mainScroll.current?.scrollTo({ y: 0, animated: false }); Haptics.selectionAsync().catch(() => {}); }} style={{ flex: 1, paddingVertical: 11, borderRadius: 18, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7, backgroundColor: activeTab === tab ? colors.primaryBg : 'transparent' }}>
+            <Ionicons name={tab === 'tracker' ? 'stats-chart-outline' : 'paw-outline'} size={18} color={activeTab === tab ? colors.primary : colors.textMuted} />
+            <Text style={{ fontFamily: BRAND_ROUNDED_FONT_EXTRA, fontSize: 13, color: activeTab === tab ? colors.primary : colors.textMuted }}>{tab === 'tracker' ? 'Tracker' : 'Pet'}</Text>
+          </TouchableOpacity>)}
+        </View>
         <View style={{ gap: 14, display: activeTab === 'tracker' ? 'flex' : 'none' }}>
         {/* INTEGRATED DATE SELECTOR BAR: Isolated directly on the background (no bubble container around row) */}
         <View style={styles.dateBarRow}>
@@ -654,7 +642,6 @@ export default function NutritionScreen() {
               id: 'protein',
               name: 'Protein',
               icon: 'barbell' as const,
-              symbol: undefined,
               current: totalProteinConsumed,
               target: targets.proteinGrams,
               pct: rawProtPct,
@@ -666,8 +653,7 @@ export default function NutritionScreen() {
             {
               id: 'carbs',
               name: 'Carbs',
-              icon: undefined,
-              symbol: 'C',
+              icon: 'flash' as const,
               current: totalCarbsConsumed,
               target: targets.carbsGrams,
               pct: rawCarbPct,
@@ -679,8 +665,7 @@ export default function NutritionScreen() {
             {
               id: 'fat',
               name: 'Fat',
-              icon: undefined,
-              symbol: 'F',
+              icon: 'flame' as const,
               current: totalFatConsumed,
               target: targets.fatGrams,
               pct: rawFatPct,
@@ -764,23 +749,9 @@ export default function NutritionScreen() {
                         )}
                       </Svg>
 
-                      {/* Filled, thicker symbol in the center */}
+                      {/* Filled, thicker icon in the center */}
                       <View style={styles.macroSymbolInCircle}>
-                        {m.icon ? (
-                          <Ionicons name={m.icon} size={23} color={m.color} />
-                        ) : (
-                          <Text
-                            style={{
-                              fontFamily: BRAND_ROUNDED_FONT_EXTRA,
-                              fontSize: 20,
-                              fontWeight: '900',
-                              color: m.color,
-                              includeFontPadding: false,
-                            }}
-                          >
-                            {m.symbol}
-                          </Text>
-                        )}
+                        <Ionicons name={m.icon} size={23} color={m.color} />
                       </View>
                     </View>
                   </View>

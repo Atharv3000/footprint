@@ -1,3 +1,4 @@
+import { FullWidthBar } from '@/components/FullWidthBar';
 import React, { useState, useCallback, useMemo } from 'react';
 import {
   StyleSheet,
@@ -294,11 +295,11 @@ export const ProfileActivitySection: React.FC<ProfileActivitySectionProps> = ({
             <Ionicons name={expandedSections.steps ? 'chevron-up' : 'chevron-down'} size={18} color={colors.textMuted} />
           </TouchableOpacity>
           {expandedSections.steps && <View style={[styles.expandedContentWrap, { backgroundColor: isDark ? '#0d0d10' : '#f8f8fb' }]}>
-            <View accessibilityRole="tablist" style={{ flexDirection: 'row', padding: 4, borderRadius: 18, backgroundColor: colors.surfaceElevated, gap: 4, marginBottom: 12 }}>
-              {(['steps','distance'] as const).map(metric => <TouchableOpacity key={metric} accessibilityRole="tab" accessibilityState={{ selected: movementMetric === metric }} onPress={() => { setMovementMetric(metric); Haptics.selectionAsync().catch(() => {}); }} style={{ flex: 1, paddingVertical: 10, borderRadius: 14, alignItems: 'center', backgroundColor: movementMetric === metric ? colors.primaryBg : 'transparent' }}>
+            <FullWidthBar><View accessibilityRole="tablist" style={{ flexDirection: 'row', overflow: 'hidden', padding: 0, borderRadius: 18, backgroundColor: colors.surfaceElevated, gap: 4, marginBottom: 12 }}>
+              {(['steps','distance'] as const).map(metric => <TouchableOpacity key={metric} accessibilityRole="tab" accessibilityState={{ selected: movementMetric === metric }} onPress={() => { setMovementMetric(metric); Haptics.selectionAsync().catch(() => {}); }} style={{ flex: 1, paddingVertical: 10, borderRadius: 18, alignItems: 'center', backgroundColor: movementMetric === metric ? colors.primaryBg : 'transparent' }}>
                 <Text style={{ fontSize: 12, fontWeight: '700', color: movementMetric === metric ? colors.primary : colors.textMuted }}>{metric === 'steps' ? 'Steps' : 'Distance'}</Text>
               </TouchableOpacity>)}
-            </View>
+            </View></FullWidthBar>
             <Text style={[styles.stripSubtitle, { color: colors.textMuted, marginBottom: 12 }]}>{movementMetric === 'steps' ? stepsSummary.weekChangePct : distanceSummary.weekChangePct}% vs last week</Text>
               <WeeklyBarChart
                 userId={userId}
@@ -758,7 +759,7 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderBottomWidth: 1,
     borderRadius: 18,
-    overflow: 'hidden',
+    overflow: 'visible',
   },
   stripRowWrapper: {
     borderBottomWidth: 1,

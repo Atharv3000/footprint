@@ -7,20 +7,12 @@ import {
   StyleSheet,
   TouchableOpacity,
   Share,
+  Animated,
+  Easing,
   Dimensions,
   Platform,
 } from 'react-native';
-import Animated, {
-  useSharedValue,
-  useAnimatedStyle,
-  withTiming,
-  withSequence,
-  Easing as ReanimatedEasing,
-  interpolate,
-  runOnJS,
-} from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
 import * as Linking from 'expo-linking';
 import Svg, { Rect, Circle, Defs, Pattern } from 'react-native-svg';
@@ -38,22 +30,26 @@ interface FriendQrShareModalProps {
 
 const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
 
-// Apple Invisible Ink-style shimmering micro-dot particle field (lightweight native Views, mounts in ~3ms)
-const DOT_COUNT = 260;
-const INK_SHADES = ['#ffffff', '#e4e4e7', '#a1a1aa', '#71717a', '#d4d4d8'] as const;
+// Generate 4 randomized grain frames with high-density realistic micro-particles
+const PARTICLE_COUNT_PER_FRAME = 340;
+const generateStaticParticles = () => {
+  return Array.from({ length: 4 }, (_, frameIdx) => {
+    return Array.from({ length: PARTICLE_COUNT_PER_FRAME }, (_, i) => {
+      // Deterministic pseudorandom spread covering full screen
+      const s1 = Math.sin(frameIdx * 997 + i * 31.7) * 10000;
+      const s2 = Math.cos(frameIdx * 823 + i * 47.3) * 10000;
+      const s3 = Math.sin(frameIdx * 641 + i * 19.1) * 10000;
+      const x = Math.abs(s1 - Math.floor(s1)) * SCREEN_W;
+      const y = Math.abs(s2 - Math.floor(s2)) * SCREEN_H;
+      const radius = 0.6 + Math.abs(s3 - Math.floor(s3)) * 1.5; // micro speckles 0.6 to 2.1px
+      const opacity = 0.18 + (i % 5) * 0.16; // variable depth grain opacities
+      const shade = (i % 3 === 0) ? '#e4e4e7' : (i % 3 === 1) ? '#ffffff' : '#a1a1aa';
+      return { x, y, r: radius, opacity, fill: shade };
+    });
+  });
+};
 
-const INVISIBLE_INK_DOTS = Array.from({ length: DOT_COUNT }, (_, i) => {
-  const s1 = Math.sin(997 + i * 31.7) * 10000;
-  const s2 = Math.cos(823 + i * 47.3) * 10000;
-  const s3 = Math.sin(641 + i * 19.1) * 10000;
-  const left = Math.abs(s1 - Math.floor(s1)) * SCREEN_W;
-  const top = Math.abs(s2 - Math.floor(s2)) * SCREEN_H;
-  const size = 1.6 + Math.abs(s3 - Math.floor(s3)) * 2.0; // 1.6px to 3.6px round sparkles
-  const opacity = 0.25 + (i % 5) * 0.13;
-  const backgroundColor = INK_SHADES[i % INK_SHADES.length];
-  const group = i % 2; // split into 2 twinkling layers
-  return { left, top, size, opacity, backgroundColor, group };
-});
+const STATIC_FRAMES = generateStaticParticles();
 
 export function FriendQrShareModal({
   visible,
@@ -65,21 +61,20 @@ export function FriendQrShareModal({
 }: FriendQrShareModalProps) {
   const screenInsets = useScreenInsets();
   const safeStyles = React.useMemo(() => ({ ...styles,
-    modalViewport: { ...styles.modalViewport, paddingTop: Math.max(12, screenInsets.top + 2), paddingLeft: screenInsets.left + 20, paddingRight: screenInsets.right + 20 },
+    modalViewport: { ...styles.modalViewport, paddingTop: screenInsets.top + 16 , paddingLeft: screenInsets.left + 20, paddingRight: screenInsets.right + 20 },
   }), [screenInsets.top, screenInsets.left, screenInsets.right]);
 
   const cleanUsername = (username || 'user').toLowerCase().replace(/^@/, '');
   const shareUrl = Linking.createURL(`friend?user=${cleanUsername}`);
 
-  // Reanimated shared values for fast tissue-warp pull + full-white-to-solid transition
-  const backdropOpacity = useSharedValue(0);
-  const pullProgress = useSharedValue(0); // 0 = tucked above top edge, 1 = landed
-  const whiteOverlay = useSharedValue(0); // turns full white as it comes down, then snaps to solid
-  const sheenProgress = useSharedValue(-1);
   const isClosingRef = useRef(false);
-  const [activeFrameIndex, setActiveFrameIndex] = useState(0);
 
-  const offscreenTopY = -(screenInsets.top + 380);
+  // Animations
+  const backdropOpacity = useRef(new Animated.Value(0)).current;
+  const meltProgress = useRef(new Animated.Value(0)).current; // 0 = bright liquid white, 1 = transparent clear
+  const cardScale = useRef(new Animated.Value(0.92)).current;
+  const cardSlideDown = useRef(new Animated.Value(-40)).current;
+  const [activeFrameIndex, setActiveFrameIndex] = useState(0);
 
   // Compute standard 2D QR matrix
   const matrix = useMemo(() => {
@@ -89,27 +84,34 @@ export function FriendQrShareModal({
   useEffect(() => {
     if (visible) {
       isClosingRef.current = false;
-      pullProgress.value = 0;
-      whiteOverlay.value = 1;
-      sheenProgress.value = -1;
-      backdropOpacity.value = 0;
+      // 1. Entrance: top-docked slide down with pure white liquid melting in
+      Animated.parallel([
+        Animated.timing(backdropOpacity, {
+          toValue: 1,
+          duration: 250,
+          useNativeDriver: true,
+        }),
+        Animated.timing(meltProgress, {
+          toValue: 1,
+          duration: 480,
+          easing: Easing.bezier(0.16, 1, 0.3, 1),
+          useNativeDriver: true,
+        }),
+        Animated.spring(cardScale, {
+          toValue: 1,
+          friction: 8,
+          tension: 75,
+          useNativeDriver: true,
+        }),
+        Animated.spring(cardSlideDown, {
+          toValue: 0,
+          friction: 8,
+          tension: 75,
+          useNativeDriver: true,
+        }),
+      ]).start();
 
-      // Slower 680ms warped pull-down with no bounce; fast 200ms white-to-solid transition
-      backdropOpacity.value = withTiming(1, { duration: 260 });
-      pullProgress.value = withTiming(1, {
-        duration: 680,
-        easing: ReanimatedEasing.out(ReanimatedEasing.cubic),
-      });
-      whiteOverlay.value = withTiming(0, {
-        duration: 200,
-        easing: ReanimatedEasing.out(ReanimatedEasing.quad),
-      });
-      sheenProgress.value = withTiming(1, {
-        duration: 560,
-        easing: ReanimatedEasing.bezier(0.22, 1, 0.36, 1),
-      });
-
-      // High-speed particle static grain flicker
+      // 2. High-speed 30 FPS particle static grain flicker
       let frame = 0;
       const interval = setInterval(() => {
         frame = (frame + 1) % 4;
@@ -120,37 +122,26 @@ export function FriendQrShareModal({
         clearInterval(interval);
       };
     } else {
-      pullProgress.value = 0;
-      whiteOverlay.value = 0;
-      backdropOpacity.value = 0;
-      sheenProgress.value = -1;
+      Animated.parallel([
+        Animated.timing(backdropOpacity, { toValue: 0, duration: 180, useNativeDriver: true }),
+        Animated.timing(cardScale, { toValue: 0.92, duration: 180, useNativeDriver: true }),
+        Animated.timing(meltProgress, { toValue: 0, duration: 150, useNativeDriver: true }),
+      ]).start();
     }
   }, [visible]);
-
-  const finishClose = () => {
-    isClosingRef.current = false;
-    onClose();
-  };
 
   const handleClose = () => {
     if (isClosingRef.current) return;
     isClosingRef.current = true;
     Haptics.selectionAsync().catch(() => {});
-
-    backdropOpacity.value = withTiming(0, { duration: 340 });
-    whiteOverlay.value = 0;
-    pullProgress.value = withTiming(
-      0,
-      {
-        duration: 420,
-        easing: ReanimatedEasing.bezier(0.5, 0, 0.8, 0.3),
-      },
-      (finished) => {
-        if (finished) {
-          runOnJS(finishClose)();
-        }
-      }
-    );
+    Animated.parallel([
+      Animated.timing(backdropOpacity, { toValue: 0, duration: 180, useNativeDriver: true }),
+      Animated.timing(cardScale, { toValue: 0.92, duration: 180, useNativeDriver: true }),
+      Animated.timing(cardSlideDown, { toValue: -30, duration: 180, useNativeDriver: true }),
+    ]).start(() => {
+      isClosingRef.current = false;
+      onClose();
+    });
   };
 
   const handleNativeShare = async () => {
@@ -171,194 +162,58 @@ export function FriendQrShareModal({
   const matrixDimension = matrix.length;
   const cellSize = qrBoxSize / matrixDimension;
 
-  const backdropStyle = useAnimatedStyle(() => ({
-    opacity: backdropOpacity.value,
-  }));
-
-  // Pulled-sheet warp style: symmetrical curved bottom, gentle side-to-side shift + tilt, no bottom bounce
-  const cardWarpStyle = useAnimatedStyle(() => {
-    const p = pullProgress.value;
-    return {
-      borderTopLeftRadius: interpolate(p, [0, 0.5, 1], [10, 18, 22]),
-      borderTopRightRadius: interpolate(p, [0, 0.5, 1], [10, 18, 22]),
-      borderBottomLeftRadius: interpolate(p, [0, 0.5, 1], [68, 38, 22]),
-      borderBottomRightRadius: interpolate(p, [0, 0.5, 1], [68, 38, 22]),
-      transform: [
-        { perspective: 750 },
-        { translateY: interpolate(p, [0, 0.55, 1], [offscreenTopY, -28, 0]) },
-        { translateX: interpolate(p, [0, 0.35, 0.7, 1], [0, -8, 4, 0]) },
-        { scaleX: interpolate(p, [0, 0.5, 1], [0.8, 0.94, 1]) },
-        { scaleY: interpolate(p, [0, 0.5, 1], [1.22, 1.07, 1]) },
-        { rotateX: `${interpolate(p, [0, 0.5, 1], [26, 9, 0])}deg` },
-        { skewX: `${interpolate(p, [0, 0.35, 0.7, 1], [0, 4.5, -2, 0])}deg` },
-      ],
-    };
+  // Melting white flash overlay interpolation
+  const meltWhiteFlashOpacity = meltProgress.interpolate({
+    inputRange: [0, 0.45, 1],
+    outputRange: [0.98, 0.45, 0],
   });
 
-  const whiteFlashStyle = useAnimatedStyle(() => ({
-    opacity: whiteOverlay.value,
-  }));
-
-  const prismStyle = useAnimatedStyle(() => ({
-    opacity: interpolate(whiteOverlay.value, [0, 0.45, 1], [0, 0.48, 0.62]),
-  }));
-
-  const sheenStyle = useAnimatedStyle(() => ({
-    opacity: interpolate(sheenProgress.value, [-1, -0.2, 0.4, 1], [0, 0.8, 0.45, 0]),
-    transform: [
-      { translateX: interpolate(sheenProgress.value, [-1, 1], [-280, 280]) },
-      { rotate: '22deg' },
-    ],
-  }));
-
   if (!visible) return null;
+
+  const currentParticles = STATIC_FRAMES[activeFrameIndex];
 
   return (
     <Modal visible={visible} transparent animationType="none" onRequestClose={handleClose} edgeToEdge>
       <View style={safeStyles.modalViewport}>
-        {/* More Transparent Backdrop + Apple Invisible Ink Shimmering Particles */}
+        {/* Backdrop Tint */}
         <Animated.View
           style={[
             styles.backdropLayer,
             {
-              backgroundColor: isDark ? 'rgba(18, 18, 22, 0.44)' : 'rgba(24, 24, 28, 0.32)',
+              opacity: backdropOpacity,
+              backgroundColor: isDark ? 'rgba(9, 9, 11, 0.88)' : 'rgba(15, 15, 18, 0.68)',
             },
-            backdropStyle,
           ]}
         >
           <TouchableOpacity style={StyleSheet.absoluteFill} activeOpacity={1} onPress={handleClose} />
 
-          {/* Layer A: Shimmering Invisible Ink Micro-Dots */}
-          <View
-            style={[
-              styles.particlesContainer,
-              {
-                opacity: activeFrameIndex % 2 === 0 ? 0.92 : 0.48,
-                transform: [
-                  { scaleX: activeFrameIndex % 2 === 0 ? 1 : -1 },
-                  { translateX: activeFrameIndex === 0 ? 0 : activeFrameIndex === 1 ? 3 : activeFrameIndex === 2 ? -2 : 1 },
-                  { translateY: activeFrameIndex === 0 ? 0 : activeFrameIndex === 1 ? -2 : activeFrameIndex === 2 ? 2 : -1 },
-                ],
-              },
-            ]}
-            pointerEvents="none"
-          >
-            {INVISIBLE_INK_DOTS.filter((d) => d.group === 0).map((pt, i) => (
-              <View
-                key={`ink-a-${i}`}
-                style={{
-                  position: 'absolute',
-                  left: pt.left,
-                  top: pt.top,
-                  width: pt.size,
-                  height: pt.size,
-                  borderRadius: pt.size / 2,
-                  backgroundColor: pt.backgroundColor,
-                  opacity: pt.opacity,
-                }}
-              />
-            ))}
-          </View>
-
-          {/* Layer B: Staggered Counter-Twinkling Invisible Ink Micro-Dots */}
-          <View
-            style={[
-              styles.particlesContainer,
-              {
-                opacity: activeFrameIndex % 2 === 1 ? 0.92 : 0.48,
-                transform: [
-                  { scaleY: activeFrameIndex < 2 ? 1 : -1 },
-                  { translateX: activeFrameIndex === 0 ? -2 : activeFrameIndex === 1 ? 1 : activeFrameIndex === 2 ? 3 : -1 },
-                  { translateY: activeFrameIndex === 0 ? 2 : activeFrameIndex === 1 ? -1 : activeFrameIndex === 2 ? -2 : 2 },
-                ],
-              },
-            ]}
-            pointerEvents="none"
-          >
-            {INVISIBLE_INK_DOTS.filter((d) => d.group === 1).map((pt, i) => (
-              <View
-                key={`ink-b-${i}`}
-                style={{
-                  position: 'absolute',
-                  left: pt.left,
-                  top: pt.top,
-                  width: pt.size,
-                  height: pt.size,
-                  borderRadius: pt.size / 2,
-                  backgroundColor: pt.backgroundColor,
-                  opacity: pt.opacity,
-                }}
-              />
-            ))}
+          {/* Full Screen High-Density Real Static Particle Noise Field */}
+          <View style={styles.particlesContainer} pointerEvents="none">
+            <View style={StyleSheet.absoluteFill} pointerEvents="none">
+              {currentParticles.map((pt, i) => <View key={`grain-${i}`} style={{ position: 'absolute', left: pt.x-pt.r, top: pt.y-pt.r, width: pt.r*2, height: pt.r*2, borderRadius: pt.r, backgroundColor: isDark ? pt.fill : (pt.fill === '#ffffff' ? '#e2e8f0' : '#475569'), opacity: pt.opacity }} />)}
+            </View>
           </View>
         </Animated.View>
 
-        {/* Top-Docked Warped Tissue -> Solid QR Card */}
+        {/* Top-Docked QR Card (Clean & Compact) */}
         <Animated.View
           style={[
             styles.topQrCard,
             {
               backgroundColor: isDark ? '#18181b' : '#ffffff',
-              borderColor: isDark ? 'rgba(255, 255, 255, 0.16)' : 'rgba(255, 255, 255, 0.95)',
-              shadowColor: avatarColor || '#a855f7',
-              transformOrigin: 'top center',
+              borderColor: isDark ? '#27272a' : '#e4e4e7',
+              transform: [{ scale: cardScale }, { translateY: cardSlideDown }],
             },
-            cardWarpStyle,
           ]}
         >
-          {/* Luminous Liquid Glass Color Layer (vibrant while moving, fades out as card becomes solid) */}
-          <Animated.View style={[StyleSheet.absoluteFill, prismStyle]} pointerEvents="none">
-            <LinearGradient
-              colors={['rgba(56, 189, 248, 0.48)', 'rgba(168, 85, 247, 0.48)', 'rgba(236, 72, 153, 0.44)', 'rgba(99, 102, 241, 0.4)']}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={StyleSheet.absoluteFill}
-            />
-          </Animated.View>
-
-          {/* Diagonal Specular Glass Sheen Sweep */}
-          <Animated.View
-            pointerEvents="none"
-            style={[
-              {
-                position: 'absolute',
-                top: -40,
-                bottom: -40,
-                width: 90,
-              },
-              sheenStyle,
-            ]}
-          >
-            <LinearGradient
-              colors={['transparent', 'rgba(255, 255, 255, 0.85)', 'transparent']}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 0 }}
-              style={StyleSheet.absoluteFill}
-            />
-          </Animated.View>
-
-          {/* Top Inner Specular Glass Rim */}
-          <View
-            pointerEvents="none"
-            style={{
-              position: 'absolute',
-              top: 0,
-              left: 14,
-              right: 14,
-              height: 1.5,
-              borderRadius: 1,
-              backgroundColor: isDark ? 'rgba(255, 255, 255, 0.28)' : 'rgba(255, 255, 255, 0.85)',
-            }}
-          />
-
-          {/* Full Solid White Form Overlay (turns white as it comes down, then snaps off) */}
+          {/* Liquid Pure White Melt-in Overlay */}
           <Animated.View
             style={[
               styles.meltFlashOverlay,
               {
+                opacity: meltWhiteFlashOpacity,
                 backgroundColor: '#ffffff',
               },
-              whiteFlashStyle,
             ]}
             pointerEvents="none"
           />

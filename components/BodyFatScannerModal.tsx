@@ -753,8 +753,11 @@ const styles = StyleSheet.create({
   },
   segmentedBar: {
     flexDirection: 'row',
+    marginHorizontal: -16,
     borderRadius: 12,
-    padding: 3,
+    paddingVertical: 0,
+    paddingHorizontal: 0,
+    overflow: 'hidden',
   },
   segmentItem: {
     flex: 1,
@@ -763,7 +766,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 6,
     paddingVertical: 9,
-    borderRadius: 9,
+    borderRadius: 12,
   },
   segmentActive: {
     shadowColor: '#000',

@@ -27,13 +27,13 @@ function CalorieMeter({ calories = 0, target }: { calories?: number; target?: nu
         <Text style={[s.caption, { color: colors.textMuted }]}>{target ? 'kcal logged today' : 'Ready to begin'}</Text>
       </View>
     </View>
-    {!!target && <>
+    {target ? <>
       <Text style={[s.small, { color: colors.primary }]}>{Math.round(percent)}% of your daily target</Text>
       <View style={[s.row, { width: '100%' }]}>
         <View style={s.stat}><Text style={[s.value, { color: colors.text }]}>{target.toLocaleString()} kcal</Text><Text style={[s.caption, { color: colors.textMuted }]}>daily goal</Text></View>
         <View style={[s.stat, { alignItems: 'flex-end' }]}><Text style={[s.value, { color: colors.text }]}>{Math.abs(target-calories).toLocaleString()} kcal</Text><Text style={[s.caption, { color: colors.textMuted }]}>{calories > target ? 'above target' : 'to your target'}</Text></View>
       </View>
-    </>}
+    </> : <Text style={[s.caption, { color: colors.textMuted }]}>Set a daily calorie target to start filling your ring.</Text>}
   </View>;
 }
 
@@ -91,7 +91,7 @@ export function CalorieChallenges({ compact = false, embedded = false }: { compa
     const daysLeft = c.status === 'finished' || c.status === 'cancelled' ? 0 : c.end
       ? Math.max(0, Math.round((Date.parse(c.end)-Date.parse(c.today))/86400000)+1) : c.days;
     const result = c.status === 'finished' ? c.winner === null ? 'CHALLENGE DRAW' : c.winner === c.you ? 'YOU WON' : `${c.players[c.winner].name.toUpperCase()} WON`
-      : c.status === 'cancelled' ? 'CHALLENGE ENDED' : c.status === 'waiting' ? 'WAITING FOR A FRIEND' : 'Cut or bulk? Hit it today.';
+      : c.status === 'cancelled' ? 'CHALLENGE ENDED' : c.status === 'waiting' ? 'WAITING FOR A FRIEND' : 'Cut or bulk?\nHit it today.';
     return <View style={[s.card, { backgroundColor: colors.surfaceElevated, borderColor: colors.border }]}>
       <View style={s.row}><View style={{ flex: 1 }}>
         <View style={[s.row, { gap: 6, marginBottom: 4 }]}><Ionicons name="flame" size={13} color={colors.primary} /><Text style={[s.eyebrow, { color: colors.primary, flexShrink: 1 }]}>{result}</Text></View>
@@ -132,7 +132,7 @@ export function CalorieChallenges({ compact = false, embedded = false }: { compa
       {!!error && <Text style={[s.caption, muted, { marginBottom: 10 }]}>Showing last synced progress. Open Manage to retry.</Text>}
       {featured ? <TouchableOpacity activeOpacity={.9} accessibilityRole="button" accessibilityLabel="Manage calorie challenge" onPress={show}>{summary(featured)}</TouchableOpacity>
         : <TouchableOpacity activeOpacity={.9} accessibilityRole="button" onPress={newChallenge} style={[s.card, { backgroundColor: colors.surfaceElevated, borderColor: colors.border }]}>
-          <View style={s.row}><Text style={[s.cardTitle, text, { flex: 1 }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8}>{'Cut or bulk? Hit it today.'}</Text></View>
+          <View style={s.row}><Text style={[s.cardTitle, text, { flex: 1 }]}>{'Cut or bulk?\nHit it today.'}</Text></View>
           <Text style={[s.caption, muted, { marginTop: 8 }]}>Pick a cut or bulk goal and challenge a friend to build a consistent routine.</Text>
           <CalorieMeter />
           <Text style={[s.small, { color: colors.primary }]}>Create your first calorie challenge →</Text>

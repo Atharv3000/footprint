@@ -76,12 +76,12 @@ export const InteractiveBottomModal: React.FC<InteractiveBottomModalProps> = ({
     Animated.parallel([
       Animated.timing(translateY, {
         toValue: SCREEN_HEIGHT,
-        duration: 150,
+        duration: 220,
         useNativeDriver: true,
       }),
       Animated.timing(backdropOpacity, {
         toValue: 0,
-        duration: 140,
+        duration: 200,
         useNativeDriver: true,
       }),
     ]).start(() => {
@@ -104,12 +104,12 @@ export const InteractiveBottomModal: React.FC<InteractiveBottomModalProps> = ({
       Animated.parallel([
         Animated.timing(translateY, {
           toValue: 0,
-          duration: 160,
+          duration: 280,
           useNativeDriver: true,
         }),
         Animated.timing(backdropOpacity, {
           toValue: 1,
-          duration: 140,
+          duration: 260,
           useNativeDriver: true,
         }),
       ]).start();

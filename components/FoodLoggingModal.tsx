@@ -17,7 +17,6 @@ import {
   TouchableWithoutFeedback,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import * as ImagePicker from 'expo-image-picker';
 import * as Haptics from 'expo-haptics';
@@ -46,7 +45,6 @@ export function FoodLoggingModal({
   onMealSaved,
 }: FoodLoggingModalProps) {
   const { colors } = useTheme();
-  const insets = useSafeAreaInsets();
 
   const [mealType, setMealType] = useState<MealType>(initialMealType);
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
@@ -382,18 +380,18 @@ export function FoodLoggingModal({
     return matchesCat && matchesQuery;
   });
 
-  // Mode button press handler: switch scan mode without interrupting the live camera
+  // Switch scan mode without interrupting the live camera
   const handleModePress = (mode: FoodScanMode) => {
     Haptics.selectionAsync().catch(() => {});
     setScanMode(mode);
   };
 
   return (
-    <Modal visible={visible} animationType="slide" presentationStyle="fullScreen" edgeToEdge onRequestClose={handleResetAndClose}>
-      <View style={[styles.safeArea, { backgroundColor: colors.background }]}>
+    <Modal visible={visible} animationType="slide" presentationStyle="fullScreen" onRequestClose={handleResetAndClose}>
+      <View style={[styles.safeArea, { backgroundColor: '#09090b' }]}>
         <View style={styles.fullPageContainer}>
           {/* Top Bar Floating Controls */}
-          <View style={[styles.topBar, { top: insets.top + 6 }]}>
+          <View style={styles.topBar}>
             <TouchableOpacity onPress={handleResetAndClose} style={styles.topIconBtn} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
               <Ionicons name="close" size={22} color="#ffffff" />
             </TouchableOpacity>
@@ -421,14 +419,14 @@ export function FoodLoggingModal({
           </View>
 
           {/* MAIN CAMERA VIEWER */}
-          <View style={[styles.cameraViewportWrap, { height: Math.min(460, SCREEN_HEIGHT * 0.48) }]}>
+          <View style={styles.cameraViewportWrap}>
             {selectedImage ? (
               <View style={styles.previewContainer}>
                 <Image source={{ uri: selectedImage }} style={styles.cameraFill} resizeMode="cover" />
                 {/* Viewfinder crosshairs overlaid on captured photo */}
                 <View style={styles.viewfinderOverlay}>
-                  <View style={[styles.cornerTL, { top: insets.top + 68 }]} />
-                  <View style={[styles.cornerTR, { top: insets.top + 68 }]} />
+                  <View style={styles.cornerTL} />
+                  <View style={styles.cornerTR} />
                   <View style={styles.cornerBL} />
                   <View style={styles.cornerBR} />
 
@@ -457,13 +455,13 @@ export function FoodLoggingModal({
                 <CameraView ref={cameraRef} style={styles.cameraFill} facing="back">
                   {/* Viewfinder target bounds */}
                   <View style={styles.viewfinderOverlay}>
-                    <View style={[styles.cornerTL, { top: insets.top + 68 }]} />
-                    <View style={[styles.cornerTR, { top: insets.top + 68 }]} />
+                    <View style={styles.cornerTL} />
+                    <View style={styles.cornerTR} />
                     <View style={styles.cornerBL} />
                     <View style={styles.cornerBR} />
 
                     {/* Mode tag indicator inside the viewfinder */}
-                    <View style={[styles.cameraModeIndicator, { marginTop: insets.top + 62 }]}>
+                    <View style={styles.cameraModeIndicator}>
                       <Text style={styles.cameraModeIndicatorText}>
                         {scanMode === 'food' ? 'FOOD SCAN' : scanMode === 'label' ? 'NUTRITION LABEL' : 'RECEIPT'}
                       </Text>
@@ -486,20 +484,6 @@ export function FoodLoggingModal({
                 </TouchableOpacity>
               </View>
             )}
-
-            {/* Translucent greyed-out top band so camera/photo remains visible underneath while framing the middle */}
-            <View
-              pointerEvents="none"
-              style={{
-                position: 'absolute',
-                top: 0,
-                left: 0,
-                right: 0,
-                height: insets.top + 58,
-                backgroundColor: 'rgba(18, 18, 22, 0.45)',
-                zIndex: 10,
-              }}
-            />
 
             {/* Shutter Capture Button (Clean normal camera shutter: white circle with inner disc) */}
             {!selectedImage && !isAnalyzing && (
@@ -675,7 +659,7 @@ export function FoodLoggingModal({
           {/* LOWER CONTROLS & RESULTS AREA */}
           <ScrollView
             style={[styles.lowerSection, { backgroundColor: colors.background }]}
-            contentContainerStyle={[styles.lowerScrollContent, { paddingBottom: Math.max(40, insets.bottom + 20) }]}
+            contentContainerStyle={styles.lowerScrollContent}
             keyboardShouldPersistTaps="handled"
             showsVerticalScrollIndicator={false}
           >
@@ -822,120 +806,136 @@ export function FoodLoggingModal({
 
             {/* 3x2 BUTTON GRID (SOUTH OF THE CAMERA VIEWER) */}
             <View style={styles.gridContainer}>
-              {(() => {
-                const circleBase = {
-                  backgroundColor: colors.isDark ? 'rgba(255, 255, 255, 0.12)' : colors.surfaceElevated,
-                  borderColor: colors.isDark ? 'rgba(255, 255, 255, 0.2)' : colors.border,
-                };
-                const circleActive = {
-                  backgroundColor: colors.isDark ? '#ffffff' : colors.text,
-                  borderColor: colors.isDark ? '#ffffff' : colors.text,
-                };
-                const iconColor = (active: boolean) =>
-                  active ? (colors.isDark ? '#000000' : colors.background) : (colors.isDark ? '#ffffff' : colors.text);
-                const textBase = { color: colors.isDark ? 'rgba(255, 255, 255, 0.7)' : colors.textSecondary };
-                const textActive = { color: colors.isDark ? '#ffffff' : colors.text, fontWeight: '800' as const };
+              {/* ROW 1: SCAN MODES (Food | Nutrition Label | Receipt) */}
+              <View style={styles.gridRow}>
+                {/* 1. Food Scanner */}
+                <TouchableOpacity
+                  style={[
+                    styles.gridButton,
+                    scanMode === 'food' && styles.gridButtonActive,
+                  ]}
+                  onPress={() => handleModePress('food')}
+                  activeOpacity={0.7}
+                >
+                  <View style={[styles.gridIconCircle, scanMode === 'food' && styles.gridIconCircleActive]}>
+                    <Ionicons
+                      name="restaurant-outline"
+                      size={20}
+                      color={scanMode === 'food' ? '#000000' : '#ffffff'}
+                    />
+                  </View>
+                  <Text style={[styles.gridButtonText, scanMode === 'food' && styles.gridButtonTextActive]} numberOfLines={1}>
+                    Food
+                  </Text>
+                </TouchableOpacity>
 
-                return (
-                  <>
-                    {/* ROW 1: SCAN MODES (Food | Nutrition Label | Receipt) */}
-                    <View style={styles.gridRow}>
-                      {/* 1. Food Scanner */}
-                      <TouchableOpacity
-                        style={[styles.gridButton, scanMode === 'food' && styles.gridButtonActive]}
-                        onPress={() => handleModePress('food')}
-                        activeOpacity={0.7}
-                      >
-                        <View style={[styles.gridIconCircle, circleBase, scanMode === 'food' && [styles.gridIconCircleActive, circleActive]]}>
-                          <Ionicons name="restaurant-outline" size={20} color={iconColor(scanMode === 'food')} />
-                        </View>
-                        <Text style={[styles.gridButtonText, textBase, scanMode === 'food' && textActive]} numberOfLines={1}>
-                          Food
-                        </Text>
-                      </TouchableOpacity>
+                {/* 2. Nutrition Label Scanner */}
+                <TouchableOpacity
+                  style={[
+                    styles.gridButton,
+                    scanMode === 'label' && styles.gridButtonActive,
+                  ]}
+                  onPress={() => handleModePress('label')}
+                  activeOpacity={0.7}
+                >
+                  <View style={[styles.gridIconCircle, scanMode === 'label' && styles.gridIconCircleActive]}>
+                    <Ionicons
+                      name="barcode-outline"
+                      size={20}
+                      color={scanMode === 'label' ? '#000000' : '#ffffff'}
+                    />
+                  </View>
+                  <Text style={[styles.gridButtonText, scanMode === 'label' && styles.gridButtonTextActive]} numberOfLines={1}>
+                    Label
+                  </Text>
+                </TouchableOpacity>
 
-                      {/* 2. Nutrition Label Scanner */}
-                      <TouchableOpacity
-                        style={[styles.gridButton, scanMode === 'label' && styles.gridButtonActive]}
-                        onPress={() => handleModePress('label')}
-                        activeOpacity={0.7}
-                      >
-                        <View style={[styles.gridIconCircle, circleBase, scanMode === 'label' && [styles.gridIconCircleActive, circleActive]]}>
-                          <Ionicons name="barcode-outline" size={20} color={iconColor(scanMode === 'label')} />
-                        </View>
-                        <Text style={[styles.gridButtonText, textBase, scanMode === 'label' && textActive]} numberOfLines={1}>
-                          Label
-                        </Text>
-                      </TouchableOpacity>
+                {/* 3. Receipt Scanner */}
+                <TouchableOpacity
+                  style={[
+                    styles.gridButton,
+                    scanMode === 'receipt' && styles.gridButtonActive,
+                  ]}
+                  onPress={() => handleModePress('receipt')}
+                  activeOpacity={0.7}
+                >
+                  <View style={[styles.gridIconCircle, scanMode === 'receipt' && styles.gridIconCircleActive]}>
+                    <Ionicons
+                      name="receipt-outline"
+                      size={20}
+                      color={scanMode === 'receipt' ? '#000000' : '#ffffff'}
+                    />
+                  </View>
+                  <Text style={[styles.gridButtonText, scanMode === 'receipt' && styles.gridButtonTextActive]} numberOfLines={1}>
+                    Receipt
+                  </Text>
+                </TouchableOpacity>
+              </View>
 
-                      {/* 3. Receipt Scanner */}
-                      <TouchableOpacity
-                        style={[styles.gridButton, scanMode === 'receipt' && styles.gridButtonActive]}
-                        onPress={() => handleModePress('receipt')}
-                        activeOpacity={0.7}
-                      >
-                        <View style={[styles.gridIconCircle, circleBase, scanMode === 'receipt' && [styles.gridIconCircleActive, circleActive]]}>
-                          <Ionicons name="receipt-outline" size={20} color={iconColor(scanMode === 'receipt')} />
-                        </View>
-                        <Text style={[styles.gridButtonText, textBase, scanMode === 'receipt' && textActive]} numberOfLines={1}>
-                          Receipt
-                        </Text>
-                      </TouchableOpacity>
-                    </View>
+              {/* ROW 2: OTHER FEATURES (Typing / Describe | Preselected | Upload Photo) */}
+              <View style={styles.gridRow}>
+                {/* 4. Type / Describe */}
+                <TouchableOpacity
+                  style={[
+                    styles.gridButton,
+                    activeSheet === 'describe' && styles.gridButtonActive,
+                  ]}
+                  onPress={() => {
+                    Haptics.selectionAsync().catch(() => {});
+                    setActiveSheet((curr) => (curr === 'describe' ? 'none' : 'describe'));
+                  }}
+                  activeOpacity={0.7}
+                >
+                  <View style={[styles.gridIconCircle, activeSheet === 'describe' && styles.gridIconCircleActive]}>
+                    <Ionicons
+                      name="pencil-outline"
+                      size={20}
+                      color={activeSheet === 'describe' ? '#000000' : '#ffffff'}
+                    />
+                  </View>
+                  <Text style={[styles.gridButtonText, activeSheet === 'describe' && styles.gridButtonTextActive]} numberOfLines={1}>
+                    Typing
+                  </Text>
+                </TouchableOpacity>
 
-                    {/* ROW 2: OTHER FEATURES (Typing / Describe | Preselected | Upload Photo) */}
-                    <View style={styles.gridRow}>
-                      {/* 4. Type / Describe */}
-                      <TouchableOpacity
-                        style={[styles.gridButton, activeSheet === 'describe' && styles.gridButtonActive]}
-                        onPress={() => {
-                          Haptics.selectionAsync().catch(() => {});
-                          setActiveSheet((curr) => (curr === 'describe' ? 'none' : 'describe'));
-                        }}
-                        activeOpacity={0.7}
-                      >
-                        <View style={[styles.gridIconCircle, circleBase, activeSheet === 'describe' && [styles.gridIconCircleActive, circleActive]]}>
-                          <Ionicons name="pencil-outline" size={20} color={iconColor(activeSheet === 'describe')} />
-                        </View>
-                        <Text style={[styles.gridButtonText, textBase, activeSheet === 'describe' && textActive]} numberOfLines={1}>
-                          Typing
-                        </Text>
-                      </TouchableOpacity>
+                {/* 5. Choose From Preselected */}
+                <TouchableOpacity
+                  style={[
+                    styles.gridButton,
+                    activeSheet === 'preselected' && styles.gridButtonActive,
+                  ]}
+                  onPress={() => {
+                    Haptics.selectionAsync().catch(() => {});
+                    setActiveSheet((curr) => (curr === 'preselected' ? 'none' : 'preselected'));
+                  }}
+                  activeOpacity={0.7}
+                >
+                  <View style={[styles.gridIconCircle, activeSheet === 'preselected' && styles.gridIconCircleActive]}>
+                    <Ionicons
+                      name="list-outline"
+                      size={20}
+                      color={activeSheet === 'preselected' ? '#000000' : '#ffffff'}
+                    />
+                  </View>
+                  <Text style={[styles.gridButtonText, activeSheet === 'preselected' && styles.gridButtonTextActive]} numberOfLines={1}>
+                    Preselected
+                  </Text>
+                </TouchableOpacity>
 
-                      {/* 5. Choose From Preselected */}
-                      <TouchableOpacity
-                        style={[styles.gridButton, activeSheet === 'preselected' && styles.gridButtonActive]}
-                        onPress={() => {
-                          Haptics.selectionAsync().catch(() => {});
-                          setActiveSheet((curr) => (curr === 'preselected' ? 'none' : 'preselected'));
-                        }}
-                        activeOpacity={0.7}
-                      >
-                        <View style={[styles.gridIconCircle, circleBase, activeSheet === 'preselected' && [styles.gridIconCircleActive, circleActive]]}>
-                          <Ionicons name="list-outline" size={20} color={iconColor(activeSheet === 'preselected')} />
-                        </View>
-                        <Text style={[styles.gridButtonText, textBase, activeSheet === 'preselected' && textActive]} numberOfLines={1}>
-                          Preselected
-                        </Text>
-                      </TouchableOpacity>
-
-                      {/* 6. Upload Photo */}
-                      <TouchableOpacity
-                        style={styles.gridButton}
-                        onPress={handlePickLibrary}
-                        activeOpacity={0.7}
-                      >
-                        <View style={[styles.gridIconCircle, circleBase]}>
-                          <Ionicons name="images-outline" size={20} color={iconColor(false)} />
-                        </View>
-                        <Text style={[styles.gridButtonText, textBase]} numberOfLines={1}>
-                          Upload
-                        </Text>
-                      </TouchableOpacity>
-                    </View>
-                  </>
-                );
-              })()}
+                {/* 6. Upload Photo */}
+                <TouchableOpacity
+                  style={styles.gridButton}
+                  onPress={handlePickLibrary}
+                  activeOpacity={0.7}
+                >
+                  <View style={styles.gridIconCircle}>
+                    <Ionicons name="images-outline" size={20} color="#ffffff" />
+                  </View>
+                  <Text style={styles.gridButtonText} numberOfLines={1}>
+                    Upload
+                  </Text>
+                </TouchableOpacity>
+              </View>
             </View>
 
             {/* EXPANDED DRAWER: WRITE WHAT IT IS */}
