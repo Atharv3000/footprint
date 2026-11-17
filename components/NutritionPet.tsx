@@ -1,11 +1,13 @@
+import { DEFAULT_PET_APPEARANCE, PetAppearance } from '@/constants/petAppearance';
+import { loadNutritionPetProfile, saveNutritionPetProfile } from '@/constants/nutritionPetProfile';
+import { PetCustomizerModal } from './PetCustomizerModal';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AccessibilityInfo, ActivityIndicator, Alert, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Haptics from 'expo-haptics';
 import { Ionicons } from '@expo/vector-icons';
 import { BRAND_ROUNDED_FONT_EXTRA, useTheme } from '@/constants/ThemeContext';
 import type { DietGoal, MealLog } from '@/constants/nutritionStorage';
-import { computeNutritionPet } from '@/constants/nutritionPet';
+import { computeNutritionPet, nutritionPetDialogue } from '@/constants/nutritionPet';
 import { NutritionPetArtwork } from './NutritionPetArtwork';
 
 export function NutritionPet({ userId, meals, target, goal, todayKey, active, ready, error, onLogMeal, onAdjustGoal, onRetry }: {
@@ -16,7 +18,12 @@ export function NutritionPet({ userId, meals, target, goal, todayKey, active, re
   const pet = useMemo(() => computeNutritionPet(meals, target, goal, todayKey), [meals, target, goal, todayKey]);
   const [name, setName] = useState('Pip'); const [draft, setDraft] = useState('Pip'); const [renaming, setRenaming] = useState(false);
   const [reduceMotion, setReduceMotion] = useState(false); const [celebration, setCelebration] = useState(0);
+  const [appearance, setAppearance] = useState<PetAppearance>(DEFAULT_PET_APPEARANCE);
+  const [customizing, setCustomizing] = useState(false);
+  const [profileReady, setProfileReady] = useState(false);
   const [petted, setPetted] = useState(false);
+  const [dialogueBeat, setDialogueBeat] = useState(0);
+  const [justFed, setJustFed] = useState(false);
   const happyTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastRub = useRef(0);
   const onHeadRub = useCallback(() => {
@@ -34,14 +41,28 @@ export function NutritionPet({ userId, meals, target, goal, todayKey, active, re
     setPetted(false); lastRub.current = 0;
     return () => { if (happyTimer.current) clearTimeout(happyTimer.current); };
   }, [active, userId]);
+  useEffect(() => {
+    if (!active || !ready || error) return;
+    const timer = setInterval(() => setDialogueBeat(value => value + 1), 14000);
+    return () => clearInterval(timer);
+  }, [active, ready, error]);
+  useEffect(() => {
+    if (!justFed) return;
+    const timer = setTimeout(() => setJustFed(false), 4000);
+    return () => clearTimeout(timer);
+  }, [justFed, celebration]);
+  useEffect(() => { setJustFed(false); setDialogueBeat(0); }, [userId, todayKey, active]);
   const account = useRef(userId); account.current = userId;
   const previous = useRef<{ date: string; userId: string; ids: Set<string> } | null>(null);
   useEffect(() => {
+    let alive = true;
     setName('Pip'); setDraft('Pip'); setRenaming(false); previous.current = null;
-    AsyncStorage.getItem(`@footprint_nutrition_pet_${userId}`).then(raw => {
-      if (!raw || account.current !== userId) return;
-      const saved = JSON.parse(raw); if (typeof saved.name === 'string' && saved.name.trim()) { setName(saved.name); setDraft(saved.name); }
-    }).catch(() => {});
+    setAppearance({ ...DEFAULT_PET_APPEARANCE }); setCustomizing(false); setProfileReady(false);
+    loadNutritionPetProfile(userId).then(saved => {
+      if (!alive || account.current !== userId) return;
+      setName(saved.name); setDraft(saved.name); setAppearance(saved.appearance);
+    }).catch(() => {}).finally(() => { if (alive && account.current === userId) setProfileReady(true); });
+    return () => { alive = false; };
   }, [userId]);
   useEffect(() => {
     let alive = true;
@@ -55,6 +76,7 @@ export function NutritionPet({ userId, meals, target, goal, todayKey, active, re
     const old = previous.current;
     if (old && old.date === todayKey && old.userId === userId && pet.todayMealIds.some(id => !old.ids.has(id))) {
       setCelebration(value => value+1);
+      setJustFed(true);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
     }
     previous.current = { date: todayKey, userId, ids };
@@ -62,26 +84,39 @@ export function NutritionPet({ userId, meals, target, goal, todayKey, active, re
   const saveName = async () => {
     const clean = draft.replace(/[\u0000-\u001f]/g, '').trim().slice(0,18) || 'Pip';
     try {
-      await AsyncStorage.setItem(`@footprint_nutrition_pet_${userId}`, JSON.stringify({ version: 1, name: clean }));
+      await saveNutritionPetProfile(userId, { name: clean });
       if (account.current === userId) { setName(clean); setDraft(clean); setRenaming(false); }
     } catch { Alert.alert('Name not saved', 'Try renaming your pet again.'); }
   };
+  const saveAppearance = async (value: PetAppearance) => {
+    const saved = await saveNutritionPetProfile(userId, { appearance: value });
+    if (account.current === userId) setAppearance(saved.appearance);
+  };
+  const pettingLines = appearance.species === 'fox'
+    ? ['You found my happy spot! Watch that tail go!', 'Wiggle wiggle! More head rubs, please.', 'My tail has a mind of its own!']
+    : appearance.species === 'bunny'
+    ? ['Boing! Those head rubs put a spring in my paws!', 'Happy hops for my favorite human!', 'One head rub, a whole lot of happy hops!']
+    : ['Purrr… those head rubs are the best!', 'You found the purr button! Happy little paws.', 'More head rubs, please! This is my favorite.'];
   const accent = goal === 'bulk' ? '#62B9F5' : goal === 'cut' ? colors.primary : '#B9A1F5';
   const text = { color: colors.text }, muted = { color: colors.textMuted };
   const plan = goal === 'cut' ? 'Cut' : goal === 'bulk' ? 'Bulk' : 'Maintain';
   return <View style={s.content}>
     <View style={s.row}><View style={{ flex: 1 }}><Text style={[s.eyebrow, { color: accent }]}>YOUR DAILY COMPANION</Text><Text style={[s.title, text]}>{name}</Text></View>
       <View style={[s.levelBadge, { backgroundColor: colors.primaryBg }]}><Ionicons name="sparkles" size={15} color={colors.primary} /><Text style={[s.small, { color: colors.primary }]}>Lv. {pet.level}</Text></View>
-      <TouchableOpacity accessibilityLabel={`Rename ${name}`} hitSlop={10} onPress={() => setRenaming(value => !value)} style={[s.iconButton, { backgroundColor: colors.surfaceElevated }]}><Ionicons name="pencil-outline" size={18} color={colors.textMuted} /></TouchableOpacity>
+      <TouchableOpacity accessibilityLabel={`Rename ${name}`} disabled={!profileReady} hitSlop={10} onPress={() => setRenaming(value => !value)} style={[s.iconButton, { backgroundColor: colors.surfaceElevated }]}><Ionicons name="pencil-outline" size={18} color={colors.textMuted} /></TouchableOpacity>
     </View>
     {renaming && <View style={s.row}><TextInput accessibilityLabel="Pet name" value={draft} onChangeText={setDraft} maxLength={18} autoFocus returnKeyType="done" onSubmitEditing={saveName} style={[s.input, text, { borderColor: colors.border, backgroundColor: colors.surfaceElevated }]} /><TouchableOpacity onPress={saveName} style={[s.save, { backgroundColor: colors.primary }]}><Text style={s.darkButton}>Save</Text></TouchableOpacity></View>}
     <View style={[s.petCard, { backgroundColor: colors.surfaceElevated, borderColor: colors.border }]}>
       <View style={s.row}><View style={[s.mood, { backgroundColor: colors.primaryBg }]}><View style={[s.dot, { backgroundColor: accent }]} /><Text style={[s.small, text]}>{ready ? pet.label : 'Checking your diary'}</Text></View>
         <TouchableOpacity accessibilityLabel="Change nutrition goal" onPress={onAdjustGoal} style={[s.plan, { borderColor: colors.border }]}><Text style={[s.small, { color: accent }]}>{plan} plan</Text><Ionicons name="chevron-down" size={12} color={accent} /></TouchableOpacity>
       </View>
-      <View style={[s.dialogue, { backgroundColor: colors.background }]}><Text accessibilityLiveRegion="polite" style={[s.dialogueText, text]}>{error || (!ready ? 'Getting your latest food logs...' : petted ? 'Purrr... those head rubs are the best!' : pet.dialogue)}</Text></View>
-      <View style={s.artwork}><NutritionPetArtwork state={pet} active={active && ready && !error} reduceMotion={reduceMotion} celebration={celebration} petted={petted} onHeadRub={onHeadRub} /></View>
+      <View style={[s.dialogue, { backgroundColor: colors.background }]}><Text accessibilityLiveRegion="polite" style={[s.dialogueText, text]}>{error || (!ready ? 'Getting your latest food logs...' : petted ? pettingLines[celebration % pettingLines.length] : justFed ? 'Munch munch! New meal logged—my diary belly just updated!' : nutritionPetDialogue(pet, dialogueBeat))}</Text></View>
+      <View style={s.artwork}><NutritionPetArtwork state={pet} appearance={appearance} active={active && ready && !error} reduceMotion={reduceMotion} celebration={celebration} petted={petted} onHeadRub={onHeadRub} /></View>
       <Text style={[s.caption, muted, { textAlign: 'center', marginBottom: 12 }]}>Rub back and forth on my head.</Text>
+      <TouchableOpacity accessibilityRole="button" accessibilityLabel={`Customize ${name}`} disabled={!profileReady}
+        onPress={() => setCustomizing(true)} style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7, padding: 11, borderWidth: 1, borderRadius: 15, borderColor: colors.border, marginBottom: 14 }}>
+        <Ionicons name="color-palette-outline" size={18} color={colors.primary} /><Text style={[s.small, { color: colors.primary }]}>{profileReady ? `Customize ${name}` : 'Loading pet style…'}</Text>
+      </TouchableOpacity>
       {!ready && !error && <ActivityIndicator color={colors.primary} />}
       {!!error && <TouchableOpacity onPress={onRetry}><Text style={[s.small, { color: colors.primary, textAlign: 'center', marginBottom: 12 }]}>Retry diary</Text></TouchableOpacity>}
       <View style={s.row}><View style={s.stat}><Text style={[s.value, text]}>{Math.round(pet.calories).toLocaleString()} <Text style={[s.caption, muted]}>kcal</Text></Text><Text style={[s.caption, muted]}>logged today</Text></View><View style={[s.stat, { alignItems: 'flex-end' }]}><Text style={[s.value, text]}>{Math.round(pet.target).toLocaleString()} <Text style={[s.caption, muted]}>kcal</Text></Text><Text style={[s.caption, muted]}>{plan.toLowerCase()} target</Text></View></View>
@@ -99,6 +134,8 @@ export function NutritionPet({ userId, meals, target, goal, todayKey, active, re
       <Text style={[s.caption, muted]}>{pet.daysToNextLevel} more logged {pet.daysToNextLevel === 1 ? 'day' : 'days'} to level {pet.level+1}.</Text>
     </View>
     <Text style={[s.caption, muted, { textAlign: 'center', paddingHorizontal: 8 }]}>Fullness starts fresh each day. Care levels grow from logging days, not eating more or less. Your pet follows your diary, so missing logs do not mean missing meals.</Text>
+    {customizing && <PetCustomizerModal visible name={name} appearance={appearance} state={pet} reduceMotion={reduceMotion}
+      onClose={() => setCustomizing(false)} onSave={saveAppearance} />}
   </View>;
 }
 

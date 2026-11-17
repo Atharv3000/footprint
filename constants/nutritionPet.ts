@@ -53,3 +53,42 @@ export function computeNutritionPet(meals: readonly PetMeal[], dailyTarget: numb
     level: 1+Math.floor(days.size/3), careProgress: (days.size%3)/3, daysToNextLevel: 3-days.size%3,
     bellyScale: Math.min(1.13, .96+Math.min(1.4, ratio)*.12) };
 }
+
+/** Rotate character dialogue without changing calorie targets or care rewards. */
+export function nutritionPetDialogue(state: NutritionPetState, variation = 0): string {
+  if (!state.target) return state.dialogue;
+  let lines: string[];
+  if (state.goal === 'bulk' && state.percent < 70) {
+    lines = [
+      'Rumble rumble… my virtual tummy is hungry! Any meals to log for our bulk?',
+      `Bulk buddy reporting for snack duty! Our diary has ${Math.round(Math.max(0, state.target - state.calories))} kcal left to the target.`,
+      "My bowl looks a little empty for our bulk. Did a meal miss the diary?",
+    ];
+  } else if (state.goal === 'cut' && state.percent >= 100) {
+    lines = [
+      "Whoa, snack chef! We've reached today's cut target. My virtual belly is full!",
+      "My snack paws are off duty—we've reached our cut target. Keep logging anything else you eat, too.",
+      "Purr… full belly, cut target reached. I'll take head rubs instead of virtual snacks!",
+    ];
+  } else if (state.goal === 'bulk' && state.percent < 90) {
+    lines = [state.dialogue, 'Bulk fuel loading… almost there! My tail is getting its energy back.', 'Feeling stronger! Our bulk diary is getting close to the target.'];
+  } else if (state.goal === 'cut' && state.percent >= 70) {
+    lines = [state.dialogue, "Our cut diary is getting close to its target. I'm settling in for some head rubs.", "Paws on the dashboard—we're nearly at today's cut target!"];
+  } else if (state.percent > 110) {
+    lines = [state.dialogue, "My virtual belly is extra round today. Thanks for keeping the diary honest!", 'Stretch… purr… time for a cozy cat nap.'];
+  } else {
+    lines = [state.dialogue, state.percent >= 90 ? 'Happy belly, happy tail! Got a head rub for your favorite logging buddy?' : 'Tiny paws, big plans. I follow the meals you log!', 'Psst… my ears accept head rubs at all times.'];
+  }
+  const index = Number.isFinite(variation) ? Math.abs(Math.floor(variation)) % lines.length : 0;
+  return lines[index];
+}
+
+/** Mood art follows the saved daily target; affection temporarily cheers every species. */
+export function nutritionPetExpression(state: Pick<NutritionPetState, 'target' | 'percent'>, petted = false): 'ready' | 'hungry' | 'happy' | 'full' {
+  if (petted) return 'happy';
+  if (!Number.isFinite(state.target) || state.target <= 0 || !Number.isFinite(state.percent)) return 'ready';
+  // Keep exact target boundaries stable after ratio-to-percentage rounding.
+  if (state.percent < 90 - 1e-8) return 'hungry';
+  if (state.percent > 110 + 1e-8) return 'full';
+  return 'happy';
+}

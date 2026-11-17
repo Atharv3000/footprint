@@ -23,6 +23,8 @@ export interface WorkoutTrackingData {
   boxingMisses?: number;
   boxingBestCombo?: number;
   durationSeconds: number;
+  confirmedWeight?: number;
+  confirmedWeightUnit?: 'kg' | 'lb';
 }
 
 export interface WorkoutLogEntry {
@@ -151,6 +153,23 @@ export async function saveWorkoutLog(
   }
 
   return newLog;
+}
+
+/** Save one completed session together, or leave the existing history untouched on failure. */
+export async function saveWorkoutLogBatch(
+  userId: string,
+  entries: Omit<WorkoutLogEntry, 'id' | 'userId' | 'date'>[],
+): Promise<WorkoutLogEntry[]> {
+  if (!entries.length) return [];
+  const key = LOG_STORAGE_KEY(userId);
+  const raw = await AsyncStorage.getItem(key);
+  const existing: WorkoutLogEntry[] = raw ? JSON.parse(raw) : [];
+  const date = new Date().toISOString();
+  const logs = entries.map(entry => ({ ...entry, userId, date,
+    id: `log_${Date.now()}_${Math.random().toString(36).slice(2, 9)}` }));
+  await AsyncStorage.setItem(key, JSON.stringify([...logs, ...existing]));
+  DeviceEventEmitter.emit(WORKOUT_LOGS_CHANGED, { userId });
+  return logs;
 }
 
 export async function deleteWorkoutLogsByIds(userId: string, idsToDelete: string[]): Promise<void> {

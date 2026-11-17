@@ -33,7 +33,7 @@ function CalorieMeter({ calories = 0, target }: { calories?: number; target?: nu
         <View style={s.stat}><Text style={[s.value, { color: colors.text }]}>{target.toLocaleString()} kcal</Text><Text style={[s.caption, { color: colors.textMuted }]}>daily goal</Text></View>
         <View style={[s.stat, { alignItems: 'flex-end' }]}><Text style={[s.value, { color: colors.text }]}>{Math.abs(target-calories).toLocaleString()} kcal</Text><Text style={[s.caption, { color: colors.textMuted }]}>{calories > target ? 'above target' : 'to your target'}</Text></View>
       </View>
-    </> : <Text style={[s.caption, { color: colors.textMuted }]}>Set a daily calorie target to start filling your ring.</Text>}
+    </> : null}
   </View>;
 }
 
@@ -41,20 +41,24 @@ export function CalorieChallenges({ compact = false, embedded = false }: { compa
   const { colors } = useTheme(); const { user } = useAuth();
   const id = user?.id || 'guest_user';
   const [items, setItems] = useState<CalorieChallenge[]>([]); const [selected, setSelected] = useState('');
-  const [open, setOpen] = useState(false); const [panel, setPanel] = useState<'home' | 'create'>('home');
+  const [open, setOpen] = useState(false); const [creating, setCreating] = useState(false);
+  const [joinOpen, setJoinOpen] = useState(false);
+  const [progressOpen, setProgressOpen] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+  const actionBusy = useRef(false);
   const [mode, setMode] = useState<'cut' | 'bulk'>('cut'); const [target, setTarget] = useState('2000');
   const [days, setDays] = useState(7); const [code, setCode] = useState('');
   const [friends, setFriends] = useState<FriendUser[]>([]); const [friend, setFriend] = useState('');
   const [busy, setBusy] = useState(false); const [error, setError] = useState('');
   const scope = useRef(id); scope.current = id; const syncing = useRef(false);
   const refresh = useCallback(async () => {
-    if (syncing.current) return; syncing.current = true;
+    if (syncing.current) return; syncing.current = true; setRefreshing(true);
     try { const result = await syncCalorieChallenges(id); if (scope.current === id) { setItems(result); setError(''); } }
     catch (e) { if (scope.current === id) setError((e as Error).message); }
-    finally { syncing.current = false; }
+    finally { syncing.current = false; if (scope.current === id) setRefreshing(false); }
   }, [id]);
   useEffect(() => {
-    setItems([]); setSelected(''); setError(''); setOpen(false);
+    setItems([]); setSelected(''); setError(''); setOpen(false); setCreating(false); setJoinOpen(false); setProgressOpen(false); setCode(''); setFriends([]); setFriend('');
     cachedChallenges(id).then(result => { if (scope.current === id) setItems(result); }).catch(() => {});
   }, [id]);
   useFocusEffect(useCallback(() => {
@@ -66,24 +70,27 @@ export function CalorieChallenges({ compact = false, embedded = false }: { compa
   }, [refresh]));
   const active = items.filter(c => c.status === 'active' || c.status === 'waiting');
   const featured = items.find(c => c.code === selected) || active[0] || items[0];
-  const show = () => { setPanel('home'); setOpen(true); refresh(); };
-  const newChallenge = async () => {
-    setPanel('create'); setOpen(true);
-    try { const [list, nutrition] = await Promise.all([loadFriends(id), loadNutritionTargets()]);
+  const loadSetup = async () => {
+    try {
+      const [list, nutrition] = await Promise.all([loadFriends(id), loadNutritionTargets()]);
       if (scope.current === id) { setFriends(list); setTarget(String(Math.round(nutrition.dailyCalories))); }
     } catch { /* The manual form remains usable offline. */ }
   };
-  const run = async (action: () => Promise<unknown>) => {
-    if (busy) return; setBusy(true);
-    try { await action(); await refresh(); }
+  const show = () => {
+    setCreating(false); setJoinOpen(false); setProgressOpen(false); setOpen(true); void refresh(); void loadSetup();
+  };
+  const newChallenge = () => { setCreating(true); setOpen(true); void loadSetup(); };
+  const run = async (action: () => Promise<unknown>, syncAfter = true) => {
+    if (actionBusy.current) return; actionBusy.current = true; setBusy(true);
+    try { await action(); if (syncAfter) await refresh(); }
     catch (e) { Alert.alert('Calorie challenge', (e as Error).message); }
-    finally { setBusy(false); }
+    finally { actionBusy.current = false; setBusy(false); }
   };
   const invite = (challenge: CalorieChallenge) => Share.share({ message:
     `${friend ? `${friend}, join` : 'Join'} my ${challenge.days}-day ${challenge.mode} challenge on Footprint: ${challenge.target.toLocaleString()} kcal/day. Finish each day within 10% of the target. Open Calorie Tracker > Calorie Challenges > Join with code: ${challenge.code}` });
   const text = { color: colors.text }; const muted = { color: colors.textMuted };
-  const button = (label: string, onPress: () => void, primary = false) => <TouchableOpacity key={label} accessibilityRole="button" disabled={busy} onPress={onPress}
-    style={[s.button, { borderColor: primary ? colors.primary : colors.border, backgroundColor: primary ? colors.primary + '18' : colors.surfaceElevated }]}>
+  const button = (label: string, onPress: () => void, primary = false) => <TouchableOpacity key={label} accessibilityRole="button" disabled={busy} accessibilityState={{ disabled: busy }} onPress={onPress}
+    style={[s.button, { opacity: busy ? .5 : 1, borderColor: primary ? colors.primary : colors.border, backgroundColor: primary ? colors.primary + '18' : colors.surfaceElevated }]}>
     <Text style={[s.small, primary ? { color: colors.primary } : text]}>{label}</Text>
   </TouchableOpacity>;
   const summary = (c: CalorieChallenge, manage = false) => {
@@ -112,14 +119,17 @@ export function CalorieChallenges({ compact = false, embedded = false }: { compa
           {c.status === 'active' && !own.complete && button('Finish Today', () => Alert.alert('Finished logging today?', "Your total must be within 10% of the target. Later food edits can change today's result.", [
             { text: 'Keep Logging', style: 'cancel' }, { text: 'Finish Today', onPress: () => run(() => syncCalorieChallenges(id, { code: c.code, complete: true })) },
           ]), true)}
-          {button('Sync Food Logs', refresh)}
         </View>
         {c.status === 'waiting' && <Text selectable style={[s.caption, muted, { marginTop: 8 }]}>Invite code: {c.code} | Expires after 7 days</Text>}
-        <Text style={[s.heading, text]}>Challenge Progress</Text>
+        <TouchableOpacity accessibilityRole="button" accessibilityState={{ expanded: progressOpen }} onPress={() => setProgressOpen(value => !value)} style={[s.row, { justifyContent: 'space-between', marginTop: 16 }]}>
+          <Text style={[s.small, text]}>Challenge progress</Text><Ionicons name={progressOpen ? 'chevron-up' : 'chevron-down'} size={17} color={colors.textMuted} />
+        </TouchableOpacity>
+        {progressOpen && <>
         {c.players.map((player, index) => <View key={index} style={[s.member, { borderColor: colors.border }]}><View style={s.row}><Text style={[s.small, text, { flex: 1 }]}>{index === c.you ? 'You' : player.name}</Text><Text style={[s.small, { color: colors.primary }]}>{player.score} / {c.days} days</Text></View></View>)}
         {(c.status === 'waiting' || c.status === 'active') && button('End Challenge', () => Alert.alert('End challenge?', 'This ends the challenge for both people without a winner.', [
           { text: 'Keep Challenge', style: 'cancel' }, { text: 'End', style: 'destructive', onPress: () => run(() => syncCalorieChallenges(id, { code: c.code, cancel: true })) },
         ]))}
+        </>}
       </>}
     </View>;
   };
@@ -128,46 +138,73 @@ export function CalorieChallenges({ compact = false, embedded = false }: { compa
       <View style={[s.headerIconWrap, { backgroundColor: colors.primary + '18' }]}><Ionicons name="flame" size={17} color={colors.primary} /></View>
       <View style={{ flex: 1 }}><Text style={[s.small, text]}>Calorie Challenges</Text><Text style={[s.caption, muted]}>{active[0] ? `${active[0].target.toLocaleString()} kcal/day | ${active[0].status === 'waiting' ? 'Invite a friend' : 'Track your shared goal'}` : 'Challenge a friend to stay on target'}</Text></View><Ionicons name="chevron-forward" size={17} color={colors.textMuted} />
     </TouchableOpacity> : <>
-      <View style={s.headerRow}><View style={[s.row, { flexShrink: 1 }]}><View style={[s.headerIconWrap, { backgroundColor: colors.primary + '18' }]}><Ionicons name="flame" size={17} color={colors.primary} /></View><Text style={[s.sectionTitle, text, { flexShrink: 1 }]}>Calorie Challenges</Text></View>{button(featured ? 'Manage' : 'Start', featured ? show : newChallenge, true)}</View>
+      <View style={s.headerRow}><View style={[s.row, { flexShrink: 1 }]}><View style={[s.headerIconWrap, { backgroundColor: colors.primary + '18' }]}><Ionicons name="flame" size={17} color={colors.primary} /></View><Text style={[s.sectionTitle, text, { flexShrink: 1 }]}>Calorie Challenges</Text></View>{button(featured ? 'Manage' : 'Start', show, true)}</View>
       {!!error && <Text style={[s.caption, muted, { marginBottom: 10 }]}>Showing last synced progress. Open Manage to retry.</Text>}
       {featured ? <TouchableOpacity activeOpacity={.9} accessibilityRole="button" accessibilityLabel="Manage calorie challenge" onPress={show}>{summary(featured)}</TouchableOpacity>
-        : <TouchableOpacity activeOpacity={.9} accessibilityRole="button" onPress={newChallenge} style={[s.card, { backgroundColor: colors.surfaceElevated, borderColor: colors.border }]}>
+        : <TouchableOpacity activeOpacity={.9} accessibilityRole="button" onPress={show} style={[s.card, { backgroundColor: colors.surfaceElevated, borderColor: colors.border }]}>
           <View style={s.row}><Text style={[s.cardTitle, text, { flex: 1 }]}>{'Cut or bulk?\nHit it today.'}</Text></View>
-          <Text style={[s.caption, muted, { marginTop: 8 }]}>Pick a cut or bulk goal and challenge a friend to build a consistent routine.</Text>
+          <Text style={[s.caption, muted, { marginTop: 8 }]}>Pick a cut or bulk goal, set a daily calorie target, and challenge a friend to fill your rings together.</Text>
           <CalorieMeter />
-          <Text style={[s.small, { color: colors.primary }]}>Create your first calorie challenge →</Text>
         </TouchableOpacity>}
     </>}
     <Modal visible={open} animationType="slide" onRequestClose={() => setOpen(false)}>
       <View style={{ flex: 1, backgroundColor: colors.background, paddingBottom: 16 }}>
-        <View style={[s.row, { padding: 20 }]}><TouchableOpacity hitSlop={12} accessibilityLabel={panel === 'home' ? 'Close calorie challenges' : 'Back to challenges'} onPress={() => panel === 'home' ? setOpen(false) : setPanel('home')}><Ionicons name={panel === 'home' ? 'close' : 'arrow-back'} size={25} color={colors.text} /></TouchableOpacity><Text style={[s.title, text, { flex: 1 }]}>{panel === 'create' ? 'New Calorie Challenge' : 'Calorie Challenges'}</Text>{busy && <ActivityIndicator color={colors.primary} />}</View>
+        <View style={[s.row, { padding: 20 }]}>
+          <TouchableOpacity hitSlop={12} accessibilityRole="button" accessibilityLabel="Close calorie challenges" onPress={() => setOpen(false)}><Ionicons name="close" size={25} color={colors.text} /></TouchableOpacity>
+          <Text style={[s.title, text, { flex: 1 }]}>Calorie Challenges</Text>
+          <TouchableOpacity accessibilityRole="button" accessibilityLabel="Sync calorie challenges and food logs" disabled={refreshing || busy} onPress={refresh}
+            style={[s.headerIconWrap, { backgroundColor: colors.surfaceElevated }]}>
+            {refreshing || busy ? <ActivityIndicator size="small" color={colors.primary} /> : <Ionicons name="refresh" size={18} color={colors.textMuted} />}
+          </TouchableOpacity>
+        </View>
         <ScrollView contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 45 }} keyboardShouldPersistTaps="handled">
           {!!error && <View style={[s.card, { backgroundColor: colors.surfaceElevated, borderColor: colors.border }]}><Text style={[s.caption, muted]}>Not synced: {error}</Text>{button('Retry', refresh)}</View>}
-          {panel === 'create' ? <>
+          {items.length > 1 && <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingBottom: 10 }}>{items.map(c => <View key={c.code}>{button(`${c.mode === 'cut' ? 'Cut' : 'Bulk'} | ${c.target.toLocaleString()} kcal | ${c.code.slice(-4)}`, () => { setSelected(c.code); setCreating(false); setProgressOpen(false); }, featured?.code === c.code && !creating)}</View>)}</ScrollView>}
+          {featured && !creating && <>
+            {summary(featured, true)}
+            {button('Start another challenge', newChallenge)}
+          </>}
+          {(!featured || creating) && <View style={[s.card, { backgroundColor: colors.surfaceElevated, borderColor: colors.border }]}>
+            <View style={[s.row, { justifyContent: 'space-between', marginBottom: 10 }]}>
+              <Text style={[s.heading, text, { flex: 1, marginVertical: 0 }]}>Start a calorie challenge</Text>
+              {featured && <TouchableOpacity accessibilityRole="button" accessibilityLabel="Cancel new calorie challenge" disabled={busy} onPress={() => setCreating(false)}><Ionicons name="close" size={20} color={colors.textMuted} /></TouchableOpacity>}
+            </View>
+
             <View style={s.row}>{button('Cut', () => setMode('cut'), mode === 'cut')}{button('Bulk', () => setMode('bulk'), mode === 'bulk')}</View>
-            <Text style={[s.heading, text]}>Daily Calorie Target</Text><TextInput accessibilityLabel="Daily calorie target" value={target} onChangeText={setTarget} keyboardType="number-pad" style={[s.input, text, { borderColor: colors.border, backgroundColor: colors.surfaceElevated }]} />
+            <Text style={[s.heading, text]}>Daily Calorie Target</Text><TextInput accessibilityLabel="Daily calorie target" value={target} editable={!busy} onChangeText={setTarget} keyboardType="number-pad" style={[s.input, text, { borderColor: colors.border, backgroundColor: colors.surfaceElevated }]} />
             <Text style={[s.caption, muted]}>kcal per day | Finish within 10% of the target.</Text>
             <Text style={[s.heading, text]}>Challenge Duration</Text><View style={[s.row, { flexWrap: 'wrap' }]}>{[1, 7, 14, 30].map(d => button(`${d} Day${d === 1 ? '' : 's'}`, () => setDays(d), d === days))}</View>
             {!!friends.length && <><Text style={[s.heading, text]}>Invite a Friend</Text><ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>{friends.map(f => <View key={f.id}>{button(f.displayName, () => setFriend(f.displayName), friend === f.displayName)}</View>)}</ScrollView></>}
             <Text style={[s.caption, muted, { marginVertical: 14 }]}>Both people accept the same target. Choose one that fits you both. Challenge targets do not change your nutrition goals.</Text>
-            {button('Create Challenge', () => run(async () => {
+            {button('Start challenge', () => run(async () => {
               if (!/^\d+$/.test(target) || Number(target) < 1000 || Number(target) > 10000) throw new Error('Enter a target from 1,000 to 10,000 kcal.');
               if (active.length >= 10) throw new Error('End an ongoing challenge before creating another.');
               const created = await createCalorieChallenge(id, user?.name || 'Player', mode, Number(target), days);
-              setSelected(created.code); setItems(await cachedChallenges(id)); setPanel('home');
+              if (scope.current !== id) return;
+              setSelected(created.code); setItems(await cachedChallenges(id)); setCreating(false); setProgressOpen(false);
             }), true)}
-          </> : <>
-            <View style={[s.row, { flexWrap: 'wrap' }]}>{button('New Challenge', newChallenge, true)}{button('Refresh', refresh)}</View>
-            {items.length > 1 && <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>{items.map(c => <View key={c.code}>{button(`${c.mode === 'cut' ? 'Cut' : 'Bulk'} | ${c.target.toLocaleString()} kcal | ${c.code.slice(-4)}`, () => setSelected(c.code), featured?.code === c.code)}</View>)}</ScrollView>}
-            {featured ? summary(featured, true) : <Text style={[s.caption, muted, { marginVertical: 16 }]}>Start a new challenge or join your friend with an invite code.</Text>}
-            <Text style={[s.heading, text]}>Join Your Friend</Text><TextInput accessibilityLabel="Challenge invite code" placeholder="12-character invite code" placeholderTextColor={colors.textMuted} autoCapitalize="characters" autoCorrect={false} maxLength={12} value={code} onChangeText={setCode} style={[s.input, text, { borderColor: colors.border, backgroundColor: colors.surfaceElevated }]} />
-            {button('Review Invite', () => run(async () => {
-              const preview = await previewCalorieChallenge(code);
-              Alert.alert('Accept calorie challenge?', `${preview.mode} | ${preview.target.toLocaleString()} kcal/day for ${preview.days} days. Time zone: ${preview.timezone}.`, [
-                { text: 'Cancel', style: 'cancel' }, { text: 'Accept & Join', onPress: () => run(async () => { const joined = await joinCalorieChallenge(id, user?.name || 'Player', code); setSelected(joined.code); setCode(''); }) },
-              ]);
-            }))}
-          </>}
+
+          </View>}
+          <View style={[s.card, { backgroundColor: colors.surfaceElevated, borderColor: colors.border, marginTop: 8 }]}>
+            <TouchableOpacity accessibilityRole="button" accessibilityState={{ expanded: joinOpen }} onPress={() => setJoinOpen(value => !value)} style={[s.row, { justifyContent: 'space-between' }]}>
+              <View style={[s.row, { flex: 1 }]}><Ionicons name="people-outline" size={18} color={colors.primary} /><Text style={[s.small, text]}>Join your friend</Text></View>
+              <Ionicons name={joinOpen ? 'chevron-up' : 'chevron-down'} size={18} color={colors.textMuted} />
+            </TouchableOpacity>
+            {!joinOpen && <Text style={[s.caption, muted, { marginTop: 6 }]}>Have a code? Review the goal before you join.</Text>}
+            {joinOpen && <View style={{ marginTop: 12 }}>
+              <TextInput accessibilityLabel="Challenge invite code" placeholder="12-character invite code" placeholderTextColor={colors.textMuted} autoCapitalize="characters" autoCorrect={false} maxLength={12} value={code} onChangeText={setCode} editable={!busy} style={[s.input, text, { borderColor: colors.border, backgroundColor: colors.surfaceElevated }]} />
+              {button('Review Invite', () => run(async () => {
+                const preview = await previewCalorieChallenge(code);
+                Alert.alert('Accept calorie challenge?', `${preview.mode} | ${preview.target.toLocaleString()} kcal/day for ${preview.days} days. Time zone: ${preview.timezone}.`, [
+                  { text: 'Cancel', style: 'cancel' }, { text: 'Accept & Join', onPress: () => run(async () => {
+                    const joined = await joinCalorieChallenge(id, user?.name || 'Player', code);
+                    if (scope.current !== id) return;
+                    setSelected(joined.code); setItems(await cachedChallenges(id)); setCode(''); setJoinOpen(false); setCreating(false); setProgressOpen(false);
+                  }) },
+                ]);
+              }, false), true)}
+            </View>}
+          </View>
           <Text style={[s.caption, muted, { marginTop: 18 }]}>Most completed days wins; ties are a draw. Food totals are self-reported. Only totals and scores are shared. Joining starts the challenge in the creator's time zone.</Text>
         </ScrollView>
       </View>

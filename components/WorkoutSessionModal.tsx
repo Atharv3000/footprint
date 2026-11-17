@@ -1,3 +1,4 @@
+import { completedWorkoutEntries } from '@/constants/workoutSessionLogging';
 import { ExerciseDemo } from '@/components/ExerciseDemo';
 import { AppModal as Modal } from '@/components/AppModal';
 import React, { useState, useEffect, useRef, useMemo } from 'react';
@@ -20,18 +21,19 @@ import {
   CustomRoutine,
   DEFAULT_EXERCISES,
   ExerciseDefinition,
-  saveWorkoutLog,
+  saveWorkoutLogBatch,
   WorkoutLogEntry,
 } from '@/constants/workoutStorage';
 
 interface WorkoutSessionModalProps {
   visible: boolean;
+  embedded?: boolean;
   routine: CustomRoutine | null;
   allLogs: WorkoutLogEntry[];
   userId: string;
   weightUnit: 'kg' | 'lb';
   onClose: () => void;
-  onFinishSession: (loggedCount: number) => void;
+  onFinishSession: (loggedCount: number, ids: string[]) => void;
 }
 
 interface ExerciseSetRow {
@@ -51,8 +53,16 @@ interface ActiveExerciseState {
   sets: ExerciseSetRow[];
 }
 
+function SessionSurface({ embedded, visible, onClose, children }: {
+  embedded: boolean; visible: boolean; onClose: () => void; children: React.ReactNode;
+}) {
+  return embedded ? <View>{children}</View> : <Modal visible={visible} animationType="slide"
+    presentationStyle="pageSheet" onRequestClose={onClose}>{children}</Modal>;
+}
+
 export function WorkoutSessionModal({
   visible,
+  embedded = false,
   routine,
   allLogs,
   userId,
@@ -89,6 +99,7 @@ export function WorkoutSessionModal({
   const [previousExerciseSnapshot, setPreviousExerciseSnapshot] = useState<ActiveExerciseState[] | null>(null);
   const [repeatTimer, setRepeatTimer] = useState<ReturnType<typeof setTimeout> | null>(null);
   const [isFinishing, setIsFinishing] = useState<boolean>(false);
+  const finishing = useRef(false);
   const finishScale = useRef(new Animated.Value(1)).current;
   const finishFill = useRef(new Animated.Value(0)).current;
   const finishCheckScale = useRef(new Animated.Value(1)).current;
@@ -493,54 +504,27 @@ export function WorkoutSessionModal({
     if (repeatTimer) clearTimeout(repeatTimer);
   };
 
-  // Log all current exercises in session (multiplying sets according to x2/x3/x4 and multiple rows)
+  // Persist only checked rows; validate every row before the single storage write.
   const handleFinishAll = async () => {
-    if (exerciseStates.length === 0 || isFinishing) return;
-    setIsFinishing(true);
-
-    // Multi-stage haptic ripple
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => { });
-    setTimeout(() => {
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => { });
-    }, 140);
-
-    // Satisfying button scale pulse & fill animation
-    Animated.sequence([
-      Animated.timing(finishScale, { toValue: 0.94, duration: 90, useNativeDriver: true }),
-      Animated.spring(finishScale, { toValue: 1.02, friction: 4, tension: 180, useNativeDriver: true }),
-      Animated.spring(finishScale, { toValue: 1, friction: 6, tension: 140, useNativeDriver: true }),
-    ]).start();
-
-    Animated.timing(finishFill, { toValue: 1, duration: 180, useNativeDriver: false }).start();
-    Animated.sequence([
-      Animated.timing(finishCheckScale, { toValue: 1.45, duration: 160, useNativeDriver: true }),
-      Animated.spring(finishCheckScale, { toValue: 1, friction: 4, tension: 190, useNativeDriver: true }),
-    ]).start();
-
-    let totalLogged = 0;
-    for (const ex of exerciseStates) {
-      for (let sIdx = 0; sIdx < ex.sets.length; sIdx++) {
-        const s = ex.sets[sIdx];
-        const mult = s.multiplier || 1;
-        for (let m = 0; m < mult; m++) {
-          await saveWorkoutLog(userId, {
-            exerciseId: ex.exerciseId,
-            exerciseName: ex.name,
-            reps: s.reps,
-            weight: s.weight,
-            weightUnit,
-            notes: `Set ${sIdx + 1}${mult > 1 ? ` (${m + 1}/${mult})` : ''} · ${routine?.title || 'Workout'} (${formatTime(elapsedSeconds)})`,
-          });
-          totalLogged++;
-        }
+    if (finishing.current) return;
+    try {
+      const entries = completedWorkoutEntries(exerciseStates, weightUnit,
+        `${routine?.title || 'Workout'} (${formatTime(elapsedSeconds)})`);
+      if (!entries.length) {
+        Alert.alert('No completed sets', 'Check off the sets you actually completed before logging.');
+        return;
       }
-    }
-
-    setTimeout(() => {
-      onFinishSession(totalLogged);
+      finishing.current = true;
+      setIsFinishing(true);
+      const logs = await saveWorkoutLogBatch(userId, entries);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+      onFinishSession(logs.length, logs.map(log => log.id));
+    } catch (error) {
+      Alert.alert('Workout not saved', error instanceof Error ? error.message : 'Please try again.');
+    } finally {
+      finishing.current = false;
       setIsFinishing(false);
-      finishFill.setValue(0);
-    }, 450);
+    }
   };
 
   if (!routine) return null;
@@ -554,13 +538,8 @@ export function WorkoutSessionModal({
   }, 0);
 
   return (
-    <Modal
-      visible={visible}
-      animationType="slide"
-      presentationStyle="pageSheet"
-      onRequestClose={onClose}
-    >
-      <View style={[styles.container, { backgroundColor: colors.background }]}>
+    <SessionSurface embedded={embedded} visible={visible} onClose={onClose}>
+      <View style={[styles.container, { backgroundColor: colors.background }, embedded && { flex: 0, marginHorizontal: -16 }]}>
         {/* Apple Dynamic Island / Top Widget Bar */}
         <View style={[styles.dynamicIslandBar, { backgroundColor: '#000000' }]}>
           <View style={styles.islandIndicator}>
@@ -723,7 +702,8 @@ export function WorkoutSessionModal({
 
         {/* Exercises Scroll List */}
         <ScrollView
-          style={styles.scrollList}
+          scrollEnabled={!embedded}
+          style={[styles.scrollList, embedded && { flex: 0 }]}
           contentContainerStyle={styles.scrollContent}
           showsVerticalScrollIndicator={false}
         >
@@ -1120,6 +1100,9 @@ export function WorkoutSessionModal({
             return (
               <Animated.View style={{ transform: [{ scale: finishScale }] }}>
                 <TouchableOpacity
+                  disabled={isFinishing || completedSetsCount === 0}
+                  accessibilityState={{ disabled: isFinishing || completedSetsCount === 0 }}
+                  style={{ opacity: isFinishing || completedSetsCount === 0 ? 0.5 : 1 }}
                   onPress={handleFinishAll}
                   activeOpacity={0.85}
                 >
@@ -1131,10 +1114,10 @@ export function WorkoutSessionModal({
                         color={isDark ? '#000000' : '#ffffff'}
                       />
                     </Animated.View>
-                    <Text style={[styles.finishBtnText, { color: isDark ? '#000000' : '#ffffff' }]}>
+                    <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.75} style={[styles.finishBtnText, { flexShrink: 1, color: isDark ? '#000000' : '#ffffff' }]}>
                       {isFinishing
-                        ? `Workout Logged!`
-                        : `Log Entire Workout (${totalSetsCount} Sets · ${completedSetsCount} Done)`}
+                        ? `Saving…`
+                        : `Log ${completedSetsCount} Completed Set${completedSetsCount === 1 ? '' : 's'}`}
                     </Text>
                   </Animated.View>
                 </TouchableOpacity>
@@ -1649,7 +1632,7 @@ export function WorkoutSessionModal({
           </View>
         </Modal>
       </View>
-    </Modal>
+    </SessionSurface>
   );
 }
 

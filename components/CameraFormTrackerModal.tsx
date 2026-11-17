@@ -1,8 +1,9 @@
+import { confirmedCameraWeight } from '@/constants/workoutSessionLogging';
 import { useScreenInsets } from '@/constants/useScreenInsets';
 import { AppModal as Modal } from '@/components/AppModal';
 import { BoxingPads } from '@/components/BoxingPads';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Alert, AppState, Image, Linking, Share, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { Alert, AppState, Image, Linking, Share, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View, KeyboardAvoidingView } from 'react-native';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as Haptics from 'expo-haptics';
@@ -18,8 +19,9 @@ import { BattleState, ownShare, PoseFrame, RepConnection, repServerUrl } from '@
 
 interface Props {
   visible: boolean;
+  weightUnit?: 'kg' | 'lb';
   onClose: () => void;
-  onSaveTrackedWorkout: (data: WorkoutTrackingData) => void;
+  onSaveTrackedWorkout: (data: WorkoutTrackingData) => void | Promise<void>;
 }
 export type TrackableExercise = 'pushups' | 'squats' | 'bicep_curls' | 'boxing';
 const bones = [['shoulder_l', 'shoulder_r'], ['shoulder_l', 'elbow_l'], ['elbow_l', 'wrist_l'],
@@ -36,12 +38,15 @@ function Action({ children, onPress, disabled = false, secondary = false }: {
   </TouchableOpacity>;
 }
 
-export function CameraFormTrackerModal({ visible, onClose, onSaveTrackedWorkout }: Props) {
+export function CameraFormTrackerModal({ visible, onClose, onSaveTrackedWorkout, weightUnit = 'lb' }: Props) {
   const screenInsets = useScreenInsets();
+  const hudTop = screenInsets.top + 54;
+  const deckBottom = screenInsets.bottom + 12;
   const safeStyles = React.useMemo(() => ({ ...styles,
-    topBar: { ...styles.topBar, top: screenInsets.top + 8 , left: screenInsets.left + 12, right: screenInsets.right + 12 },
-    hudOverlay: { ...styles.hudOverlay, top: screenInsets.top + 54 , left: screenInsets.left + 16, right: screenInsets.right + 16 },
-  }), [screenInsets.top, screenInsets.left, screenInsets.right]);
+    topBar: { ...styles.topBar, top: screenInsets.top + 8, left: screenInsets.left + 12, right: screenInsets.right + 12 },
+    hudOverlay: { ...styles.hudOverlay, top: hudTop, left: screenInsets.left + 16, right: screenInsets.right + 16 },
+    bottomDeck: { ...styles.bottomDeck, bottom: deckBottom, left: screenInsets.left + 16, right: screenInsets.right + 16 },
+  }), [screenInsets.top, screenInsets.left, screenInsets.right, hudTop, deckBottom]);
 
   const { user } = useAuth();
   const { colors } = useTheme();
@@ -59,6 +64,7 @@ export function CameraFormTrackerModal({ visible, onClose, onSaveTrackedWorkout 
   const facingRef = useRef(facing);
   facingRef.current = facing;
   const [mode, setMode] = useState<'solo' | 'battle'>('solo');
+  const [weightUsed, setWeightUsed] = useState('');
   const [exercise, setExercise] = useState<TrackableExercise>('pushups');
   const [connected, setConnected] = useState(false);
   const [connecting, setConnecting] = useState(false);
@@ -112,7 +118,7 @@ export function CameraFormTrackerModal({ visible, onClose, onSaveTrackedWorkout 
     setRunning(false); setBattle(null); setPose(null); setMode('solo'); setExercise('pushups');
     setError(''); setOpponentFrame(null); setJoinCode(''); setPending(false); saved.current = false;
     ignoredRooms.current.clear();
-    setCameraReady(false); setCameraError(''); setShowInfoModal(false); setShowZoomControls(false);
+    setCameraReady(false); setCameraError(''); setShowInfoModal(false); setShowZoomControls(false); setWeightUsed('');
   }, [visible]);
 
   useEffect(() => {
@@ -283,16 +289,30 @@ export function CameraFormTrackerModal({ visible, onClose, onSaveTrackedWorkout 
 
   const boxing = exercise === 'boxing' && mode === 'solo';
   const ownReps = battle ? battle.counts[playerId] || 0 : pose?.rep_count || 0;
-  function save() {
+  async function save() {
     if (!ownReps || saved.current) return;
+    let confirmedWeight: number;
+    try {
+      confirmedWeight = confirmedCameraWeight(battle || mode === 'battle' ? 'pushups' : exercise, weightUsed);
+    } catch (error) {
+      setRunning(false);
+      Alert.alert('Confirm weight', error instanceof Error ? error.message : 'Enter the weight you used.');
+      return;
+    }
     saved.current = true; setRunning(false);
-    onSaveTrackedWorkout({ exerciseType: battle || mode === 'battle' ? 'pushups' : exercise, repCount: ownReps,
-      averageFormScore: 0, formAdvice: [exercise === 'boxing' ? 'Shadowboxing pad hits, not a boxing technique or impact-force assessment.' : 'Camera-counted repetitions. A biomechanical form score was not assessed.'],
-      boxingScore: pose?.boxing?.score, boxingMisses: pose?.boxing?.misses, boxingBestCombo: pose?.boxing?.best_combo,
-      feedbackHighlights: [exercise === 'boxing' ? 'Camera shadowboxing pad hits; experimental direction heuristics.' : battle ? 'Live push-up battle.' : 'Pose-based camera rep tracking.', 'Only complete visible cycles counted.'],
-      durationSeconds: Math.max(1, Math.round((Date.now() - startedAt.current) / 1000)),
-    });
-    onClose();
+    try {
+      await onSaveTrackedWorkout({ exerciseType: battle || mode === 'battle' ? 'pushups' : exercise, repCount: ownReps,
+        confirmedWeight, confirmedWeightUnit: weightUnit,
+        averageFormScore: 0, formAdvice: [exercise === 'boxing' ? 'Shadowboxing pad hits, not a boxing technique or impact-force assessment.' : 'Camera-counted repetitions. A biomechanical form score was not assessed.'],
+        boxingScore: pose?.boxing?.score, boxingMisses: pose?.boxing?.misses, boxingBestCombo: pose?.boxing?.best_combo,
+        feedbackHighlights: [exercise === 'boxing' ? 'Camera shadowboxing pad hits; experimental direction heuristics.' : battle ? 'Live push-up battle.' : 'Pose-based camera rep tracking.', 'Only complete visible cycles counted.'],
+        durationSeconds: Math.max(1, Math.round((Date.now() - startedAt.current) / 1000)),
+      });
+      onClose();
+    } catch (error) {
+      saved.current = false;
+      Alert.alert('Workout not saved', error instanceof Error ? error.message : 'Please try saving again.');
+    }
   }
 
   const opponent = battle?.players.find(p => p !== playerId);
@@ -377,18 +397,6 @@ export function CameraFormTrackerModal({ visible, onClose, onSaveTrackedWorkout 
               }
             } catch {}
           }} onMountError={event => { setCameraError(event.message); setRunning(false); }} />
-        {!boxing && <View pointerEvents="none" style={[styles.framingGuideBox, { borderColor: guideColor }]}>
-          <View style={[styles.guideCorner, styles.guideCornerTL, { borderColor: guideColor }]} />
-          <View style={[styles.guideCorner, styles.guideCornerTR, { borderColor: guideColor }]} />
-          <View style={[styles.guideCorner, styles.guideCornerBL, { borderColor: guideColor }]} />
-          <View style={[styles.guideCorner, styles.guideCornerBR, { borderColor: guideColor }]} />
-          <View style={[styles.distanceBadge, { backgroundColor: poseFresh && pose?.valid ? 'rgba(34,197,94,0.9)' : 'rgba(245,158,11,0.9)' }]}>
-            <Ionicons name={poseFresh && pose?.valid ? 'checkmark-circle' : 'warning'} size={14} color="#fff" />
-            <Text style={styles.distanceBadgeText}>{poseFresh && pose?.valid ? 'OPTIMAL DISTANCE · BODY IN FRAME'
-              : exercise === 'pushups' || mode === 'battle' ? 'SIDE-ON VIEW · SHOW ARM & HIPS' : 'STEP BACK · FULL BODY MUST BE IN BOX'}</Text>
-          </View>
-        </View>
-        }
         {boxing && <BoxingPads state={pose?.boxing} frame={projected} running={running} fresh={poseFresh && !!pose?.valid} />}
         {running && pose && bodyDetected && <Svg pointerEvents="none" width={viewSize.width} height={viewSize.height} style={StyleSheet.absoluteFill}>
           {bones.map(([a, b]) => {
@@ -440,7 +448,7 @@ export function CameraFormTrackerModal({ visible, onClose, onSaveTrackedWorkout 
               const selected = (mode === 'battle' ? 'pushups' : exercise) === ex;
               return <TouchableOpacity key={ex} disabled={running || mode === 'battle'}
                 style={[styles.exercisePill, selected && { backgroundColor: colors.primary, borderColor: colors.primary }]}
-                onPress={() => { Haptics.selectionAsync().catch(() => {}); setExercise(ex); reset(ex); }}>
+                onPress={() => { Haptics.selectionAsync().catch(() => {}); setExercise(ex); setWeightUsed(''); reset(ex); }}>
                 <Text style={[styles.exercisePillText, selected && { color: '#09090b', fontWeight: '800' }]}>{ex === 'boxing' ? 'Boxing' : ex === 'pushups' ? 'Pushups' : ex === 'squats' ? 'Squats' : 'Curls'}</Text>
               </TouchableOpacity>;
             })}
@@ -479,26 +487,34 @@ export function CameraFormTrackerModal({ visible, onClose, onSaveTrackedWorkout 
             <View style={[s.marker, { left: `${Math.max(1, Math.min(99, share * 100))}%` }]} /><View style={s.midline} />
           </View>
           <Text style={s.hint}>Lead by {battle.lead_to_win} reps to fill the bar and win.</Text>
-        </View> : <View style={[styles.hudStatCard, boxing && { flexWrap: 'wrap', gap: 8 }]}>
-          <View><Text style={styles.hudLabel}>{boxing ? 'BOXING SCORE' : 'REPS LOGGED'}</Text><Text style={styles.hudValue}>{boxing ? pose?.boxing?.score || 0 : ownReps}</Text>{boxing && <Text style={s.hint}>{ownReps} hits | {pose?.boxing?.misses || 0} misses | x{pose?.boxing?.combo || 0} combo</Text>}</View>
+        </View> : <View style={[styles.hudStatCard, { paddingVertical: 8 }, boxing && { flexWrap: 'wrap', gap: 8 }]}>
+          <View><Text style={styles.hudLabel}>{boxing ? 'BOXING SCORE' : 'REPS COUNTED'}</Text><Text style={styles.hudValue}>{boxing ? pose?.boxing?.score || 0 : ownReps}</Text>{boxing && <Text style={s.hint}>{ownReps} hits | {pose?.boxing?.misses || 0} misses | x{pose?.boxing?.combo || 0} combo</Text>}</View>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flexShrink: 1 }}>
           <View style={styles.autoStatusPill}><View style={[styles.autoStatusDot, (!connected || running && trackingStatus !== 'COUNTING REPS') && { backgroundColor: '#f59e0b' }]} />
             <Text style={[styles.autoStatusText, running && trackingStatus !== 'COUNTING REPS' && { color: '#f59e0b' }]}>{boxing ? `${pose?.boxing?.remaining ?? 60}s | ${pose?.boxing?.finished ? 'ROUND COMPLETE' : pose?.boxing?.result || trackingStatus}` : trackingStatus}</Text>
           </View>
-        </View>}
-        {(!boxing || !running || !pose?.calibrated || !!error) && <View style={styles.adviceCapsule}>
-          <View style={[styles.adviceHeaderRow, { justifyContent: 'space-between' }]}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}><Ionicons name="scan" size={15} color="#22c55e" /><Text style={styles.adviceTitle}>FORM TRACKING & GUIDANCE</Text></View>
-            <TouchableOpacity accessibilityLabel="Camera setup guide" onPress={() => setShowInfoModal(true)}><Ionicons name="information-circle-outline" size={20} color="#22c55e" /></TouchableOpacity>
-          </View>
-          <Text accessibilityLiveRegion="polite" style={[styles.adviceMessage, !!error && { color: '#fca5a5' }]}>{error || feedback}</Text>
-          {!connected && !connecting && <TouchableOpacity onPress={() => setConnectionAttempt(n => n + 1)} style={{ paddingTop: 10 }}><Text style={s.link}>Reconnect</Text></TouchableOpacity>}
-        </View>
-        }
         {!battle && !boxing && <TouchableOpacity disabled={pending} onPress={() => changeMode(mode === 'solo' ? 'battle' : 'solo')}
-          style={[styles.autoStatusPill, { alignSelf: 'flex-start', backgroundColor: 'rgba(10,10,16,0.94)' }]}>
+          accessibilityRole="button"
+          accessibilityLabel={mode === 'solo' ? 'Challenge a friend' : 'Back to solo tracking'}
+          style={[styles.circleIconButton, { width: 32, height: 32 }]}>
           <Ionicons name={mode === 'solo' ? 'people-outline' : 'fitness-outline'} size={15} color="#22c55e" />
-          <Text style={styles.autoStatusText}>{mode === 'solo' ? 'CHALLENGE A FRIEND' : 'BACK TO SOLO TRACKING'}</Text>
+
         </TouchableOpacity>}
+          </View>
+        </View>}
+        {(!boxing || !running || !pose?.calibrated || !!error) && <View style={[styles.adviceCapsule, { padding: 10, borderColor: guideColor }]}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+            <Ionicons name={error ? 'warning-outline' : 'scan-outline'} size={17} color={guideColor} />
+            <Text accessibilityLiveRegion="polite" numberOfLines={error ? undefined : 2}
+              style={[styles.adviceMessage, { flex: 1, fontSize: 12, lineHeight: 16 }, !!error && { color: '#fca5a5' }]}>{error || feedback}</Text>
+            <TouchableOpacity accessibilityLabel="Camera setup guide" hitSlop={8} onPress={() => setShowInfoModal(true)}>
+              <Ionicons name="information-circle-outline" size={22} color="#22c55e" />
+            </TouchableOpacity>
+          </View>
+          {!connected && !connecting && <TouchableOpacity onPress={() => setConnectionAttempt(n => n + 1)} style={{ paddingTop: 8 }}><Text style={s.link}>Reconnect</Text></TouchableOpacity>}
+        </View>}
+
+
       </View>
 
       {opponent && !finished && <View style={s.friendPreview}>
@@ -508,7 +524,7 @@ export function CameraFormTrackerModal({ visible, onClose, onSaveTrackedWorkout 
       </View>}
       {battle?.status === 'countdown' && <View pointerEvents="none" style={s.countdown}><Text style={[s.countdownNumber, { color: colors.primary }]}>{countdown || 'GO'}</Text><Text style={s.body}>Hold your plank. Start on GO.</Text></View>}
 
-      <View style={styles.bottomDeck}>
+      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={safeStyles.bottomDeck}>
         <View style={[s.deck, mode === 'battle' && styles.adviceCapsule]}>
         {finished ? <>
           <Text style={s.result}>{battle?.status === 'cancelled' ? 'Battle cancelled' : battle?.winner === playerId ? 'You won!' : `${opponentName} won`}</Text>
@@ -531,7 +547,13 @@ export function CameraFormTrackerModal({ visible, onClose, onSaveTrackedWorkout 
           </>}
           {battle.status === 'active' && <><Text style={s.body}>{pose && tick - lastPoseAt.current < 2000 ? pose.feedback : 'Tracking paused until your full pose is visible.'}</Text><Action secondary onPress={close}>Leave battle</Action></>}
         </> : <>
-
+          {!running && ownReps > 0 && (exercise === 'squats' || exercise === 'bicep_curls') && <View style={styles.adviceCapsule}>
+            <Text style={[s.body, { marginBottom: 8 }]}>Weight used ({weightUnit})</Text>
+            <TextInput accessibilityLabel={`Weight used in ${weightUnit}`} keyboardType="decimal-pad"
+              value={weightUsed} onChangeText={setWeightUsed} placeholder="Enter weight; 0 for no added weight"
+              placeholderTextColor="#71717a" style={s.input} />
+            <Text style={s.hint}>The camera counts reps; confirm your weight before saving.</Text>
+          </View>}
           <View style={s.row}>
             <Action secondary={running} disabled={!connected || !cameraReady} onPress={() => {
               if (running) { setRunning(false); send({ type: 'pause' }); }
@@ -541,7 +563,16 @@ export function CameraFormTrackerModal({ visible, onClose, onSaveTrackedWorkout 
           </View>
         </>}
         </View>
-      </View>
+      </KeyboardAvoidingView>
+
+      {!boxing && visible && active && permission?.granted && !cameraError && <View pointerEvents="none"
+        style={[styles.framingGuideBox, { borderColor: guideColor, top: screenInsets.top + 2,
+          bottom: screenInsets.bottom + 2, left: screenInsets.left + 4, right: screenInsets.right + 4 }]}>
+        <View style={[styles.guideCorner, styles.guideCornerTL, { borderColor: guideColor }]} />
+        <View style={[styles.guideCorner, styles.guideCornerTR, { borderColor: guideColor }]} />
+        <View style={[styles.guideCorner, styles.guideCornerBL, { borderColor: guideColor }]} />
+        <View style={[styles.guideCorner, styles.guideCornerBR, { borderColor: guideColor }]} />
+      </View>}
 
       <Modal visible={visible && showZoomControls} transparent animationType="fade" onRequestClose={() => setShowZoomControls(false)}>
         <View style={styles.infoModalBackdrop}><View style={styles.infoModalCard}>
@@ -639,10 +670,7 @@ const styles = StyleSheet.create({
   },
   framingGuideBox: {
     position: 'absolute',
-    top: '8%',
-    bottom: '10%',
-    left: '2%',
-    right: '2%',
+    zIndex: 30,
     borderWidth: 1.5,
     borderStyle: 'dashed',
     borderRadius: 24,
@@ -660,21 +688,6 @@ const styles = StyleSheet.create({
   guideCornerTR: { top: -2, right: -2, borderBottomWidth: 0, borderLeftWidth: 0, borderTopRightRadius: 22 },
   guideCornerBL: { bottom: -2, left: -2, borderTopWidth: 0, borderRightWidth: 0, borderBottomLeftRadius: 22 },
   guideCornerBR: { bottom: -2, right: -2, borderTopWidth: 0, borderLeftWidth: 0, borderBottomRightRadius: 22 },
-  distanceBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 16,
-  },
-  distanceBadgeText: {
-    fontFamily: BRAND_ROUNDED_FONT_EXTRA,
-    color: '#ffffff',
-    fontSize: 10,
-    fontWeight: '800',
-    letterSpacing: 0.4,
-  },
   topBar: {
     position: 'absolute',
     top: Platform.OS === 'ios' ? 44 : 14,

@@ -53,3 +53,46 @@ test('streak traverses calendar days across month, year and daylight-saving boun
     assert.equal(compute(dates.map((d,i)=>meal(String(i),100,d)),2000,'maintain',end).streak,3);
   }
 });
+
+test('bulk hunger dialogue rotates, follows logged calories, and leaves rewards unchanged', () => {
+  const empty=compute([],2500,'bulk',today);
+  const lines=[0,1,2].map(i=>output.nutritionPetDialogue(empty,i));
+  assert.equal(new Set(lines).size,3);
+  assert.match(lines[0],/hungry/);
+  assert.ok(lines.every(line=>/bulk/i.test(line)));
+  assert.equal(empty.loggedDays,0);assert.equal(empty.target,2500);
+  const fueled=compute([meal('a',2300)],2500,'bulk',today);
+  assert.doesNotMatch(output.nutritionPetDialogue(fueled,0),/hungry/);
+});
+test('cut banter begins at the target, never prematurely, and keeps logging available', () => {
+  const below=compute([meal('a',1900)],2000,'cut',today);
+  assert.doesNotMatch(output.nutritionPetDialogue(below,1),/paws are off duty/);
+  for(const calories of [2000,2600]) {
+    const reached=compute([meal('a',calories)],2000,'cut',today);
+    assert.match(output.nutritionPetDialogue(reached,0),/cut target/);
+    assert.match(output.nutritionPetDialogue(reached,1),/Keep logging/);
+    assert.match(output.nutritionPetDialogue(reached,2),/head rubs/);
+    assert.equal(reached.calories,calories);
+  }
+});
+test('missing targets request setup; dialogue handles changing goals and invalid variation safely', () => {
+  const missing=compute([],0,'cut',today);
+  assert.equal(output.nutritionPetDialogue(missing,2),missing.dialogue);
+  const cut=compute([meal('a',2000)],2000,'cut',today);
+  const bulk=compute([meal('a',2000)],3000,'bulk',today);
+  assert.notEqual(output.nutritionPetDialogue(cut),output.nutritionPetDialogue(bulk));
+  for(const index of [-10,NaN,Infinity]) assert.equal(typeof output.nutritionPetDialogue(cut,index),'string');
+});
+
+test('expressions show hunger or overfull sadness outside the target range; head rubs cheer them temporarily', () => {
+  for(const goal of ['cut','bulk','maintain']) {
+    for(const [calories,expression] of [[0,'hungry'],[1000,'hungry'],[1799,'hungry'],[1800,'happy'],[2000,'happy'],[2200,'happy'],[2201,'full'],[3000,'full']]) {
+      const state=compute([meal('a',calories)],2000,goal,today);
+      assert.equal(output.nutritionPetExpression(state),expression);
+      assert.equal(output.nutritionPetExpression(state,true),'happy');
+      assert.equal(output.nutritionPetExpression(state),expression);
+    }
+  }
+  assert.equal(output.nutritionPetExpression(compute([],0,'bulk',today)),'ready');
+  assert.equal(output.nutritionPetExpression({target:2000,percent:NaN}),'ready');
+});

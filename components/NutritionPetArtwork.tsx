@@ -1,22 +1,31 @@
+import { DEFAULT_PET_APPEARANCE, PET_PALETTES, PetAppearance } from '@/constants/petAppearance';
+import { PetSpeciesBody } from './PetSpeciesBody';
 import React, { useEffect, useId, useMemo, useRef, useState } from 'react';
-import { Animated, PanResponder, StyleSheet, View, useWindowDimensions } from 'react-native';
+import { Animated, Easing, PanResponder, StyleSheet, View, useWindowDimensions } from 'react-native';
 import Svg, { Circle, Defs, Ellipse, G, LinearGradient, Path, Stop } from 'react-native-svg';
-import { NutritionPetState } from '@/constants/nutritionPet';
+import { NutritionPetState, nutritionPetExpression } from '@/constants/nutritionPet';
 import { createHeadRubTracker } from '@/constants/petHeadRub';
 
-export function NutritionPetArtwork({ state, active, reduceMotion, celebration, petted, onHeadRub }: {
+export function NutritionPetArtwork({ state, active, reduceMotion, celebration, petted, onHeadRub, appearance = DEFAULT_PET_APPEARANCE, sizeOverride }: {
   state: NutritionPetState; active: boolean; reduceMotion: boolean; celebration: number;
-  petted: boolean; onHeadRub: () => void;
+  petted: boolean; onHeadRub: () => void; appearance?: PetAppearance; sizeOverride?: number;
 }) {
   const { width } = useWindowDimensions();
-  const size = Math.min(300, Math.max(180, width-68));
+  const size = sizeOverride ?? Math.min(300, Math.max(180, width-68));
+  const palette = PET_PALETTES[appearance.color];
+  const bunny = appearance.species === 'bunny';
+  const fox = appearance.species === 'fox';
   const id = `pip${useId().replace(/[^a-zA-Z0-9]/g,'')}`;
   const bob = useRef(new Animated.Value(0)).current;
   const breath = useRef(new Animated.Value(0)).current;
   const hearts = useRef(new Animated.Value(0)).current;
+  const playBow = useRef(new Animated.Value(0)).current;
+  const wag = useRef(new Animated.Value(0)).current;
+  const hop = useRef(new Animated.Value(0)).current;
   const [blink, setBlink] = useState(false);
-  const relaxed = !petted && (state.mood === 'full' || state.mood === 'stuffed');
-  const happy = petted || state.mood === 'satisfied' || state.mood === 'energized';
+  const expression = nutritionPetExpression(state, petted);
+  const relaxed = !petted && (expression === 'hungry' || expression === 'full');
+  const happy = expression === 'happy';
   const headResponder = useMemo(() => {
     const tracker = createHeadRubTracker(14*size/300);
     return PanResponder.create({
@@ -60,38 +69,74 @@ export function NutritionPetArtwork({ state, active, reduceMotion, celebration, 
     ]);
     animation.start(); return () => animation.stop();
   }, [celebration, active, reduceMotion, hearts]);
-  return <View style={{ width: size, height: size*280/300, alignItems: 'center', justifyContent: 'center' }}><View style={[s.stage, { transform: [{ scale: size/300 }] }]}>
+  useEffect(() => {
+    const target = active && fox && petted ? 1 : 0;
+    if (reduceMotion || !active) { playBow.setValue(target); return; }
+    const animation = Animated.timing(playBow, { toValue: target, duration: 220, useNativeDriver: true });
+    animation.start(); return () => animation.stop();
+  }, [active, fox, petted, reduceMotion, playBow]);
+  useEffect(() => {
+    if (!active || !fox || !petted || reduceMotion) { wag.setValue(0); return; }
+    wag.setValue(-1);
+    const animation = Animated.loop(Animated.sequence([
+      Animated.timing(wag, { toValue: 1, duration: 170, useNativeDriver: true }),
+      Animated.timing(wag, { toValue: -1, duration: 170, useNativeDriver: true }),
+    ]));
+    animation.start(); return () => { animation.stop(); wag.setValue(0); };
+  }, [active, fox, petted, reduceMotion, wag]);
+  useEffect(() => {
+    if (!active || reduceMotion) { hop.setValue(0); return; }
+    if (!bunny || !petted) {
+      const landing = Animated.timing(hop, { toValue: 0, duration: 150, easing: Easing.in(Easing.quad), useNativeDriver: true });
+      landing.start(); return () => landing.stop();
+    }
+    hop.setValue(0);
+    const animation = Animated.loop(Animated.sequence([
+      Animated.timing(hop, { toValue: 1, duration: 240, easing: Easing.out(Easing.quad), useNativeDriver: true }),
+      Animated.timing(hop, { toValue: 0, duration: 280, easing: Easing.in(Easing.quad), useNativeDriver: true }),
+      Animated.delay(140),
+    ]));
+    animation.start(); return () => animation.stop();
+  }, [active, bunny, petted, reduceMotion, hop]);
+  return <View style={{ width: size, height: size*(bunny ? 336 : 280)/300, alignItems: 'center', justifyContent: 'center' }}><View style={[s.stage, { transform: [{ scale: size/300 }] }]}>
     <Svg width={300} height={280} style={StyleSheet.absoluteFill} viewBox="0 0 300 280">
       <Ellipse cx={150} cy={246} rx={102} ry={19} fill="#86B95A" opacity={.12} />
       <Circle cx={54} cy={73} r={4} fill={ribbon} opacity={.5} /><Circle cx={251} cy={110} r={3} fill={ribbon} opacity={.4} />
       <Path d="M 249 49 L 252 56 L 259 59 L 252 62 L 249 69 L 246 62 L 239 59 L 246 56 Z" fill={ribbon} opacity={.5} />
     </Svg>
-    <Animated.View style={[s.tail, { transform: [{ rotate: breath.interpolate({ inputRange: [0,1], outputRange: ['-8deg','8deg'] }) }] }]}>
-      <Svg width={100} height={100} viewBox="0 0 100 100"><Path d="M 77 78 C 21 93 5 57 15 25 C 18 13 34 15 34 28 C 26 50 40 62 71 58 Z" fill="#74CDB4" stroke="#48A68E" strokeWidth={3} /><Path d="M 17 23 Q 22 18 29 24" stroke="#C6F5DF" strokeWidth={7} strokeLinecap="round" fill="none" /></Svg>
-    </Animated.View>
-    <Animated.View style={{ transform: [{ translateY: bob.interpolate({ inputRange:[0,1],outputRange:[0, relaxed ? -2 : happy ? -8 : -4] }) }, { scaleX: state.bellyScale }, { scale: breath.interpolate({inputRange:[0,1],outputRange:[1,1.015]}) }] }}>
-      <Svg width={300} height={280} viewBox="0 0 300 280">
-        <Defs><LinearGradient id={id} x1="0" y1="0" x2="0.8" y2="1"><Stop offset="0" stopColor="#C4F7DF" /><Stop offset="0.5" stopColor="#96E2C6" /><Stop offset="1" stopColor="#5EBEA4" /></LinearGradient></Defs>
-        <Path d="M 85 89 L 70 43 Q 66 28 80 34 L 117 56 Q 148 43 181 58 L 215 35 Q 229 28 226 45 L 217 94 C 235 116 239 149 229 174 C 241 202 224 238 194 243 Q 148 257 105 241 C 75 240 60 208 72 179 C 56 145 65 113 85 89 Z" fill={`url(#${id})`} stroke="#4A9E89" strokeWidth={3} />
-        <Path d="M 80 46 L 91 82 L 108 64 Z M 214 46 L 207 83 L 190 65 Z" fill="#E6A8AE" opacity={.8} />
-        <Ellipse cx={150} cy={199} rx={state.mood === 'stuffed' ? 66 : 57} ry={39} fill="#E9F7D6" opacity={.88} />
-        <Path d="M 91 79 Q 150 53 211 79 L 210 91 Q 150 67 88 93 Z" fill={ribbon} />
-        <Path d="M 201 86 L 229 94 L 218 102 L 204 94 Z" fill={ribbon} />
-        <Ellipse cx={104} cy={144} rx={15} ry={8} fill="#EFA2AF" opacity={petted ? .85 : relaxed ? .65 : .4} />
-        <Ellipse cx={197} cy={144} rx={15} ry={8} fill="#EFA2AF" opacity={petted ? .85 : relaxed ? .65 : .4} />
-        {blink || relaxed ? <G stroke="#244940" strokeWidth={4} fill="none" strokeLinecap="round"><Path d="M 103 126 Q 113 132 123 126 M 178 126 Q 188 132 198 126" /></G>
-          : happy ? <G stroke="#244940" strokeWidth={4} fill="none" strokeLinecap="round"><Path d="M 103 129 Q 113 115 123 129 M 178 129 Q 188 115 198 129" /></G>
-          : <G><Ellipse cx={113} cy={127} rx={7} ry={10} fill="#244940" /><Ellipse cx={188} cy={127} rx={7} ry={10} fill="#244940" /><Circle cx={115} cy={124} r={2.3} fill="#fff" /><Circle cx={190} cy={124} r={2.3} fill="#fff" /></G>}
-        <Path d="M 143 140 Q 150 135 157 140 L 150 146 Z" fill="#C27384" />
-        {state.mood === 'stuffed' && !petted ? <Ellipse cx={150} cy={156} rx={7} ry={9} fill="#36574A" />
-          : happy ? <><Path d="M 135 150 Q 150 179 165 150 Z" fill="#31564B" /><Ellipse cx={150} cy={162} rx={8} ry={4} fill="#ED9FAD" /></>
-          : <Path d={state.mood === 'hungry' ? 'M 140 157 Q 150 150 160 157' : 'M 137 151 Q 150 164 163 151'} stroke="#31564B" strokeWidth={3} fill="none" strokeLinecap="round" />}
-        <Path d={relaxed ? 'M 93 184 Q 113 199 124 187 M 208 184 Q 188 201 176 188' : 'M 83 174 Q 94 194 109 187 M 218 174 Q 207 194 192 187'} stroke="#4A9E89" strokeWidth={4} fill="none" strokeLinecap="round" />
-        <Ellipse cx={108} cy={240} rx={25} ry={11} fill="#9DE4C7" stroke="#4A9E89" strokeWidth={2} /><Ellipse cx={194} cy={240} rx={25} ry={11} fill="#9DE4C7" stroke="#4A9E89" strokeWidth={2} />
-        {state.mood === 'stuffed' && !petted && <Path d="M 233 105 Q 245 123 233 126 Q 222 124 233 105 Z" fill="#8BCBE4" />}
+    <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, {
+      transform: [{ translateY: hop.interpolate({ inputRange: [0,1], outputRange: [0,-22] }) }] }]}>
+    <Animated.View style={[s.tail, bunny && { left: 20, top: 161 }, { opacity: playBow.interpolate({ inputRange: [0,1], outputRange: [1,0] }), transform: [{ rotate: breath.interpolate({ inputRange: [0,1], outputRange: ['-8deg','8deg'] }) }] }]}>
+      <Svg width={100} height={100} viewBox="0 0 100 100">
+        {bunny ? <><Circle cx={62} cy={64} r={22} fill={palette.belly} stroke={palette.outline} strokeWidth={3} /><Circle cx={53} cy={58} r={7} fill={palette.light} /></>
+          : fox ? <><Path d="M 80 83 C 7 106 -6 57 20 18 L 42 5 Q 80 35 49 47 Q 48 63 86 59 Z" fill={palette.mid} stroke={palette.outline} strokeWidth={3} /><Path d="M 42 5 Q 61 21 61 33 L 48 30 L 45 43 L 31 37 L 17 49 Q 10 31 20 18 Z" fill={palette.belly} /></>
+          : <><Path d="M 77 78 C 21 93 5 57 15 25 C 18 13 34 15 34 28 C 26 50 40 62 71 58 Z" fill={palette.mid} stroke={palette.outline} strokeWidth={3} /><Path d="M 17 23 Q 22 18 29 24" stroke={palette.light} strokeWidth={7} strokeLinecap="round" fill="none" /></>}
       </Svg>
     </Animated.View>
-    <View {...headResponder.panHandlers} style={{ position: 'absolute', left: 65, top: 30, width: 170, height: 125 }} accessible accessibilityRole="image" accessibilityLabel={petted ? 'Your pet is happy from head rubs' : `A mint cat with ${state.label.toLowerCase()} expression`} accessibilityHint="Rub left and right across the head to make your pet happy" accessibilityActions={[{ name: 'pet', label: 'Rub pet head' }]} onAccessibilityAction={event => { if (active && event.nativeEvent.actionName === 'pet') onHeadRub(); }} />
+    <Animated.View style={{ opacity: playBow.interpolate({ inputRange: [0,1], outputRange: [1,0] }), transform: [{ translateY: bob.interpolate({ inputRange:[0,1],outputRange:[0, bunny && petted ? 0 : relaxed ? -2 : happy ? -8 : -4] }) }, { scaleX: state.bellyScale }, { scale: breath.interpolate({inputRange:[0,1],outputRange:[1,1.015]}) }] }}>
+      <Svg width={300} height={280} viewBox="0 0 300 280">
+        <Defs><LinearGradient id={id} x1="0" y1="0" x2="0.8" y2="1"><Stop offset="0" stopColor={palette.light} /><Stop offset="0.5" stopColor={palette.mid} /><Stop offset="1" stopColor={palette.dark} /></LinearGradient></Defs>
+        <PetSpeciesBody appearance={appearance} state={state} gradient={id} bow={false} petted={petted}
+          blink={blink} relaxed={relaxed} happy={happy} ribbon={ribbon} />
+      </Svg>
+    </Animated.View>
+    {fox && <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, { opacity: playBow,
+      transform: [{ translateY: playBow.interpolate({ inputRange: [0,1], outputRange: [8,0] }) }, { scaleX: Math.max(1, Math.min(1.08, state.bellyScale)) }] }]}>
+      <Animated.View style={{ position: 'absolute', left: 160, top: 68,
+        transform: [{ rotate: wag.interpolate({ inputRange: [-1,1], outputRange: ['-26deg','26deg'] }) }] }}>
+        <Svg width={100} height={100} viewBox="0 0 100 100">
+          <Path d="M 50 53 Q 104 65 92 15 L 73 1 L 48 14 Q 80 28 50 34 Z" fill={palette.mid} stroke={palette.outline} strokeWidth={3} />
+          <Path d="M 73 1 L 92 15 Q 98 35 85 41 L 76 31 L 65 39 L 48 14 Z" fill={palette.belly} />
+        </Svg>
+      </Animated.View>
+      <Svg width={300} height={280} viewBox="0 0 300 280">
+        <Defs><LinearGradient id={`${id}bow`} x1="0" y1="0" x2="0.8" y2="1"><Stop offset="0" stopColor={palette.light} /><Stop offset="0.5" stopColor={palette.mid} /><Stop offset="1" stopColor={palette.dark} /></LinearGradient></Defs>
+        <PetSpeciesBody appearance={appearance} state={state} gradient={`${id}bow`} bow petted={petted}
+          blink={blink} relaxed={false} happy ribbon={ribbon} />
+      </Svg>
+    </Animated.View>}
+    </Animated.View>
+    <View {...headResponder.panHandlers} style={{ position: 'absolute', left: fox && petted ? 22 : 60, top: fox && petted ? 115 : 35, width: 180, height: 145 }} accessible accessibilityRole="image" accessibilityLabel={petted ? (bunny ? 'Your bunny is happy and hopping from head rubs' : fox ? 'Your fox is happy and wagging its tail from head rubs' : 'Your cat is happy and purring from head rubs') : `A ${palette.label.toLowerCase()} ${appearance.species} with ${expression === 'hungry' ? 'sad, hungry' : expression === 'full' ? 'sad, overfull' : expression} expression`} accessibilityHint="Rub left and right across the head to make your pet happy" accessibilityActions={[{ name: 'pet', label: 'Rub pet head' }]} onAccessibilityAction={event => { if (active && event.nativeEvent.actionName === 'pet') onHeadRub(); }} />
     <Animated.View pointerEvents="none" style={[s.hearts, { opacity: hearts.interpolate({inputRange:[0,1,2],outputRange:[0,1,0]}), transform:[{translateY:hearts.interpolate({inputRange:[0,2],outputRange:[0,-62]})}] }]}>
       <Svg width={90} height={70} viewBox="0 0 90 70"><Path d="M 45 43 C 10 23 26 4 45 20 C 65 3 80 24 45 43 Z" fill="#F3A4B3" /><Path d="M 14 63 C -2 52 4 43 14 50 C 24 42 30 53 14 63 Z M 75 61 C 59 50 65 41 75 48 C 85 40 91 51 75 61 Z" fill="#C4E8A6" /></Svg>
     </Animated.View>

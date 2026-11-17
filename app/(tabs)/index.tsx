@@ -2084,43 +2084,7 @@ export default function TrackScreen() {
                 title={route.name}
                 pinColor={color}
               />
-              {/* Highlight / Spot Points along this suggested route */}
-              {route.pois && route.pois.map((poi, pIdx) => {
-                const pCoord = poi.coordinate || (route.coordinates.length > 0
-                  ? route.coordinates[Math.min(route.coordinates.length - 1, Math.floor(((pIdx + 1) / (route.pois!.length + 1)) * (route.coordinates.length - 1)))]
-                  : null);
-                if (!pCoord) return null;
-                const catIcon =
-                  poi.category === 'park' ? 'leaf'
-                  : poi.category === 'water' ? 'water'
-                  : poi.category === 'viewpoint' ? 'eye'
-                  : poi.category === 'trail' ? 'walk'
-                  : 'compass';
-
-                return (
-                  <Marker
-                    key={`poi_marker_${poi.id || pIdx}`}
-                    coordinate={pCoord}
-                    title={poi.name}
-                    description={`${poi.category.toUpperCase()} • ${poi.distanceAlongKm || 0} km along path`}
-                    zIndex={12}
-                  >
-                    <View style={{ alignItems: 'center' }}>
-                      {showsBuildings && (
-                        <View style={[styles.poiCalloutBadge, { backgroundColor: '#18181b', borderColor: color }]}>
-                          <Text style={styles.poiCalloutText} numberOfLines={1}>
-                            {poi.name}
-                          </Text>
-                        </View>
-                      )}
-                      <View style={[styles.mapPoiPin, { backgroundColor: color, borderColor: '#ffffff' }]}>
-                        <Ionicons name={catIcon as any} size={11} color="#ffffff" />
-                      </View>
-                    </View>
-                  </Marker>
-                );
-              })}
-            </React.Fragment>
+              </React.Fragment>
           );
         })}
 
@@ -2220,43 +2184,7 @@ export default function TrackScreen() {
                 )}
               </>
             )}
-            {/* Highlight Spots Along the Selected Path */}
-            {selectedRoute.pois && selectedRoute.pois.map((poi, pIdx) => {
-              const pCoord = poi.coordinate || (selectedRoute.coordinates.length > 0
-                ? selectedRoute.coordinates[Math.min(selectedRoute.coordinates.length - 1, Math.floor(((pIdx + 1) / (selectedRoute.pois!.length + 1)) * (selectedRoute.coordinates.length - 1)))]
-                : null);
-              if (!pCoord) return null;
-              const catIcon =
-                poi.category === 'park' ? 'leaf'
-                : poi.category === 'water' ? 'water'
-                : poi.category === 'viewpoint' ? 'eye'
-                : poi.category === 'trail' ? 'walk'
-                : 'compass';
-
-              return (
-                <Marker
-                  key={`selected_poi_${poi.id || pIdx}`}
-                  coordinate={pCoord}
-                  title={poi.name}
-                  description={`${poi.category.toUpperCase()} • ${poi.distanceAlongKm || 0} km in`}
-                  zIndex={20}
-                >
-                  <View style={{ alignItems: 'center' }}>
-                    {showsBuildings && (
-                      <View style={[styles.poiCalloutBadge, { backgroundColor: '#18181b', borderColor: '#38bdf8' }]}>
-                        <Text style={styles.poiCalloutText} numberOfLines={1}>
-                          {poi.name}
-                        </Text>
-                      </View>
-                    )}
-                    <View style={[styles.mapPoiPin, { backgroundColor: '#38bdf8', borderColor: '#ffffff' }]}>
-                      <Ionicons name={catIcon as any} size={12} color="#ffffff" />
-                    </View>
-                  </View>
-                </Marker>
-              );
-            })}
-          </>
+            </>
         )}
 
         {/* Continuous Walking Trail Polyline with Smooth, Long, Multi-Stage Fading Trail */}
@@ -3317,7 +3245,7 @@ export default function TrackScreen() {
             </TouchableOpacity>
           </View>
 
-          {/* Scrollable Body: Metrics, Stops, Highlights, and Route Preferences */}
+          {/* Scrollable Body: Metrics, Stops, and Route Preferences */}
           <ScrollView
             style={styles.routePreviewScrollBody}
             contentContainerStyle={styles.routePreviewScrollContent}
@@ -3599,152 +3527,7 @@ export default function TrackScreen() {
               </View>
             </View>
 
-            {/* Highlights Along Route */}
-            {selectedRoute.pois && selectedRoute.pois.length > 0 && (
-              <View style={styles.routePreviewStopsSection}>
-                <View style={styles.routePoiSectionHeader}>
-                  <Ionicons name="sparkles" size={13} color="#38bdf8" />
-                  <Text style={[styles.routePoiSectionTitle, { color: themeColors.text }]}>
-                    Highlights Along Path
-                  </Text>
-                </View>
-                <ScrollView
-                  horizontal={true}
-                  nestedScrollEnabled={true}
-                  showsHorizontalScrollIndicator={false}
-                  contentContainerStyle={{ gap: 10, paddingVertical: 2, paddingRight: 8 }}
-                >
-                  {selectedRoute.pois.map((poi, pIdx) => {
-                    const catIcon =
-                      poi.category === 'park' ? 'leaf'
-                      : poi.category === 'water' ? 'water'
-                      : poi.category === 'viewpoint' ? 'eye'
-                      : poi.category === 'trail' ? 'walk'
-                      : 'compass';
-
-                    const stopIdx = routeStops.findIndex((s) => {
-                      if (s.placeId === poi.id || s.placeId === `poi_${poi.id}` || s.placeId.startsWith(`poi_${poi.id}_`)) return true;
-                      if (s.shortName && poi.name && s.shortName.trim().toLowerCase() === poi.name.trim().toLowerCase()) return true;
-                      if (s.displayName && poi.name && s.displayName.trim().toLowerCase() === poi.name.trim().toLowerCase()) return true;
-                      if (
-                        poi.coordinate &&
-                        Math.abs(s.latitude - poi.coordinate.latitude) < 0.0008 &&
-                        Math.abs(s.longitude - poi.coordinate.longitude) < 0.0008
-                      ) {
-                        return true;
-                      }
-                      return false;
-                    });
-                    const isAlreadyStop = stopIdx >= 0;
-
-                    return (
-                      <TouchableOpacity
-                        key={poi.id || pIdx}
-                        style={[
-                          styles.previewPoiCard,
-                          {
-                            backgroundColor: themeColors.surface,
-                            borderColor: isAlreadyStop ? themeColors.primary : themeColors.border,
-                            borderWidth: isAlreadyStop ? 1.5 : 1,
-                          },
-                        ]}
-                        activeOpacity={0.82}
-                        onPress={async () => {
-                          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
-                          const targetPlace: GeocodedPlace = {
-                            placeId: `poi_${poi.id}`,
-                            displayName: poi.name,
-                            shortName: poi.name,
-                            latitude: poi.coordinate?.latitude || location?.coords.latitude || 37.33182,
-                            longitude: poi.coordinate?.longitude || location?.coords.longitude || -122.03118,
-                            category: (poi.category as any) || 'place',
-                            imageUrl: poi.imageUrl,
-                            description: `${poi.category.toUpperCase()} • Popular highlight along route`,
-                          };
-
-                          if (isAlreadyStop && stopIdx >= 0) {
-                            await handleRemoveStop(stopIdx);
-                          } else {
-                            await handleAddStopToRoute(targetPlace);
-                          }
-                        }}
-                      >
-                        <View style={styles.previewPoiImgWrap}>
-                          <Image
-                            source={{ uri: poi.imageUrl }}
-                            style={styles.previewPoiImg}
-                            resizeMode="cover"
-                            defaultSource={{ uri: 'https://images.unsplash.com/photo-1519331379826-f10be5486c6f?auto=format&fit=crop&w=600&q=80' }}
-                          />
-                          <View style={styles.poiCategoryBadge}>
-                            <Ionicons name={catIcon as any} size={10} color="#ffffff" />
-                            <Text style={styles.poiCategoryText}>{poi.category.toUpperCase()}</Text>
-                          </View>
-                          <View
-                            style={{
-                              position: 'absolute',
-                              top: 6,
-                              right: 6,
-                              backgroundColor: isAlreadyStop ? themeColors.primary : 'rgba(0, 0, 0, 0.72)',
-                              borderRadius: 12,
-                              paddingHorizontal: 6,
-                              paddingVertical: 3,
-                              flexDirection: 'row',
-                              alignItems: 'center',
-                              gap: 3,
-                              borderWidth: 0.5,
-                              borderColor: isAlreadyStop ? themeColors.primary : 'rgba(255, 255, 255, 0.3)',
-                            }}
-                          >
-                            <Ionicons
-                              name={isAlreadyStop ? 'checkmark' : 'add'}
-                              size={11}
-                              color={isAlreadyStop ? (themeColors.isDark ? '#09090b' : '#ffffff') : '#ffffff'}
-                            />
-                            <Text
-                              style={{
-                                fontSize: 9,
-                                fontWeight: '800',
-                                color: isAlreadyStop ? (themeColors.isDark ? '#09090b' : '#ffffff') : '#ffffff',
-                              }}
-                            >
-                              {isAlreadyStop ? 'ADDED' : 'ADD'}
-                            </Text>
-                          </View>
-                        </View>
-                        <View style={styles.previewPoiDetails}>
-                          <Text style={[styles.previewPoiName, { color: themeColors.text }]} numberOfLines={1}>
-                            {poi.name}
-                          </Text>
-                          {typeof poi.distanceAlongKm === 'number' && (
-                            <View style={styles.poiDistRow}>
-                              <Ionicons name="navigate-outline" size={10} color="#38bdf8" />
-                              <Text style={[styles.poiDist, { color: themeColors.textMuted }]}>
-                                {isUS ? `${(poi.distanceAlongKm * 0.621371).toFixed(1)} mi in` : `${poi.distanceAlongKm} km in`}
-                              </Text>
-                            </View>
-                          )}
-                          {Boolean(poi.description || poi.infoSnippet) && (
-                            <Text
-                              style={{
-                                fontSize: 9.5,
-                                lineHeight: 13,
-                                color: themeColors.textSecondary,
-                                marginTop: 3,
-                              }}
-                              numberOfLines={2}
-                            >
-                              {poi.description || poi.infoSnippet}
-                            </Text>
-                          )}
-                        </View>
-                      </TouchableOpacity>
-                    );
-                  })}
-                </ScrollView>
-              </View>
-            )}
-          </ScrollView>
+            </ScrollView>
 
           {/* Docked Action Row: Start Navigation & Cancel (always visible at bottom above tab bar) */}
           <View style={[styles.routePreviewActionRow, { borderTopColor: themeColors.border, backgroundColor: themeColors.surface }]}>
@@ -5100,85 +4883,6 @@ activeOpacity={0.8}
 </View>
 </View>
 </TouchableOpacity>
-
-{/* Highlights / POI Images Along the Route */}
-{route.pois && route.pois.length > 0 && (
-<View style={styles.routePoiSection}>
-<View style={styles.routePoiSectionHeader}>
-<Ionicons name="images" size={14} color={routeColor} />
-<Text style={[styles.routePoiSectionTitle, { color: themeColors.textSecondary }]}>
-Highlights Along This Route
-</Text>
-<Text style={[styles.routePoiCountBadge, { color: themeColors.textMuted }]}>
-{route.pois.length} spots (Swipe →)
-</Text>
-</View>
-<ScrollView
-horizontal={true}
-nestedScrollEnabled={true}
-directionalLockEnabled={true}
-scrollEventThrottle={16}
-showsHorizontalScrollIndicator={true}
-contentContainerStyle={{ gap: 12, paddingVertical: 4, paddingRight: 16 }}
->
-{route.pois.map((poi, pIdx) => {
-const catIcon =
-poi.category === 'park' ? 'leaf'
-: poi.category === 'water' ? 'water'
-: poi.category === 'viewpoint' ? 'eye'
-: poi.category === 'trail' ? 'walk'
-: 'compass';
-
-return (
-<View
-key={poi.id || pIdx}
-style={[
-styles.poiCard,
-{ backgroundColor: themeColors.surface, borderColor: themeColors.border },
-]}
->
-<View style={styles.poiImageContainer}>
-<Image source={{ uri: poi.imageUrl }} style={styles.poiImage} resizeMode="cover" />
-<View style={[styles.poiMilestoneBadge, { backgroundColor: routeColor }]}>
-<Text style={styles.poiMilestoneText}>STOP {pIdx + 1}</Text>
-</View>
-<View style={styles.poiCategoryBadge}>
-<Ionicons name={catIcon as any} size={11} color="#FFF" />
-<Text style={styles.poiCategoryText}>{poi.category.toUpperCase()}</Text>
-</View>
-</View>
-<View style={[styles.poiInfo, { padding: 10 }]}>
-<Text style={[styles.poiName, { color: themeColors.text }]} numberOfLines={1}>
-{poi.name}
-</Text>
-{typeof poi.distanceAlongKm === 'number' && (
-<View style={styles.poiDistRow}>
-<Ionicons name="navigate-outline" size={10} color={routeColor} />
-<Text style={[styles.poiDist, { color: themeColors.textMuted }]}>
-{isUS ? `${(poi.distanceAlongKm * 0.621371).toFixed(1)} mi along route` : `${poi.distanceAlongKm} km along route`}
-</Text>
-</View>
-)}
-{Boolean(poi.description || poi.infoSnippet) && (
-<Text
-style={{
-fontSize: 10.5,
-lineHeight: 14,
-color: themeColors.textSecondary,
-marginTop: 4,
-}}
-numberOfLines={2}
->
-{poi.description || poi.infoSnippet}
-</Text>
-)}
-</View>
-</View>
-);
-})}
-</ScrollView>
-</View>
-)}
 
 {/* Select & Start Button */}
 <TouchableOpacity
