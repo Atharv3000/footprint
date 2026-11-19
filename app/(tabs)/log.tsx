@@ -1,3 +1,4 @@
+import { TutorialAnchor, TutorialScrollView } from "@/components/FirstRunTutorial";
 import { WorkoutStartPanel } from '@/components/WorkoutStartPanel';
 import { ExerciseDemo, ExerciseDemoProvider } from '@/components/ExerciseDemo';
 import { useScreenInsets } from '@/constants/useScreenInsets';
@@ -54,9 +55,10 @@ import {
 } from '@/constants/muscleRecoveryEngine';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
-const ROUTINE_CARD_GAP = 9;
+const ROUTINE_CARD_GAP = 10;
+const ROUTINE_CARDS_PER_PAGE = 2;
 const ROUTINE_PAGE_WIDTH = SCREEN_WIDTH - 32;
-const ROUTINE_CARD_WIDTH = Math.floor((ROUTINE_PAGE_WIDTH - ROUTINE_CARD_GAP * 2) / 3);
+const ROUTINE_CARD_WIDTH = Math.floor((ROUTINE_PAGE_WIDTH - ROUTINE_CARD_GAP) / ROUTINE_CARDS_PER_PAGE);
 const ROUTINE_PAGE_SNAP_INTERVAL = ROUTINE_PAGE_WIDTH + ROUTINE_CARD_GAP;
 
 interface LogScreenSetRow {
@@ -149,7 +151,7 @@ const ExerciseRowItem = React.memo(function ExerciseRowItem({
   );
 });
 
-const MODAL_EX_ROW_HEIGHT = 60;
+const MODAL_EX_ROW_HEIGHT = 96;
 
 interface ModalExerciseCheckItemProps {
   ex: ExerciseDefinition;
@@ -187,15 +189,18 @@ const ModalExerciseCheckItem = React.memo(function ModalExerciseCheckItem({
           borderColor: isSelected ? accentColor : borderColor,
         },
       ]}
+      accessibilityRole="checkbox"
+      accessibilityState={{ checked: isSelected }}
+      accessibilityLabel={ex.name}
       onPress={() => onToggle(ex)}
       activeOpacity={0.75}
     >
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 }}>
-        {ex.imageUrl ? <ExerciseDemo imageUrl={ex.imageUrl} name={ex.name} size={26} radius={6} active={isSelected} /> : <Ionicons name="barbell-outline" size={18} color={isSelected ? accentColor : textMutedColor} />}
+        {ex.imageUrl ? <ExerciseDemo imageUrl={ex.imageUrl} name={ex.name} size={40} radius={10} active={isSelected} /> : <Ionicons name="barbell-outline" size={18} color={isSelected ? accentColor : textMutedColor} />}
         <View style={{ flex: 1 }}>
           <Text
-            numberOfLines={1}
-            style={[styles.modalExName, { color: isSelected ? textColor : textMutedColor }]}
+            numberOfLines={2}
+            style={[styles.modalExName, { color: textColor }]}
           >
             {ex.name}
           </Text>
@@ -207,7 +212,7 @@ const ModalExerciseCheckItem = React.memo(function ModalExerciseCheckItem({
       </View>
       <Ionicons
         name={isSelected ? 'checkbox' : 'square-outline'}
-        size={20}
+        size={24}
         color={isSelected ? accentColor : textMutedColor}
       />
     </TouchableOpacity>
@@ -549,12 +554,11 @@ export default function LogScreen() {
     | { type: 'new_day' };
 
   const routinePages = useMemo(() => {
-    const items: RoutineSliderItem[] = routines.map((r) => ({ type: 'routine', data: r }));
-    items.push({ type: 'new_day' });
+    const items: RoutineSliderItem[] = [{ type: 'new_day' }, ...routines.map((r): RoutineSliderItem => ({ type: 'routine', data: r }))];
 
     const pages: RoutineSliderItem[][] = [];
-    for (let i = 0; i < items.length; i += 3) {
-      pages.push(items.slice(i, i + 3));
+    for (let i = 0; i < items.length; i += ROUTINE_CARDS_PER_PAGE) {
+      pages.push(items.slice(i, i + ROUTINE_CARDS_PER_PAGE));
     }
     return pages;
   }, [routines]);
@@ -968,7 +972,7 @@ export default function LogScreen() {
   return (
     <ExerciseDemoProvider>
     <View style={[styles.container, { backgroundColor: colors.background }]}>
-      <ScrollView
+      <TutorialScrollView
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
@@ -979,7 +983,7 @@ export default function LogScreen() {
         </View>
 
         {/* ── 3 PROMINENT QUICK ACTION TILES ── */}
-        <View accessibilityLabel="Fitness tools" style={[styles.quickActionButtonsRow, { backgroundColor: colors.surfaceElevated }]}>
+        <TutorialAnchor tutorialId="fitness-tools" accessibilityLabel="Fitness tools" style={[styles.quickActionButtonsRow, { backgroundColor: colors.surfaceElevated }]}>
           {([
             { id: 'aiForm', color: '#10b981', label: 'AI Form', icon: 'videocam-outline', open: () => setShowCameraTracker(true) },
             { id: 'bodyFat', color: '#a855f7', label: 'Body Fat', icon: 'scan-circle-outline', open: () => setShowBodyFatModal(true) },
@@ -993,9 +997,10 @@ export default function LogScreen() {
               <Text style={[styles.quickActionTitle, { color: tool.color }]} numberOfLines={1}>{tool.label}</Text>
             </TouchableOpacity>;
           })}
-        </View>
+        </TutorialAnchor>
 
-        {/* ── SECTION 0: CUSTOM WORKOUT DAY PRESETS / ROUTINES (SLIDER: 3 VISIBLE AT ONCE, SNAPPY) ── */}
+        {/* ── SECTION 0: CUSTOM WORKOUT DAY PRESETS / ROUTINES (SLIDER: 2 LARGER CARDS AT ONCE) ── */}
+        <TutorialAnchor tutorialId="workout-days"><Text style={{ color: colors.text, fontSize: 14, fontWeight: '800', marginTop: 6, marginBottom: 10 }}>Workout days</Text>
         <ScrollView
           horizontal
           pagingEnabled={false}
@@ -1026,7 +1031,7 @@ export default function LogScreen() {
                         styles.newDayCardSlider,
                         {
                           backgroundColor: colors.surfaceElevated,
-                          borderColor: colors.border,
+                          borderColor: colors.primary,
                         },
                       ]}
                       onPress={() => {
@@ -1037,7 +1042,7 @@ export default function LogScreen() {
                     >
                       <View style={styles.newDayInnerRow}>
                         <View style={[styles.newDayIconCircle, { backgroundColor: colors.surfaceSecondary }]}>
-                          <Ionicons name="add" size={17} color={colors.primary} />
+                          <Ionicons name="add" size={23} color={colors.primary} />
                         </View>
                         <View style={{ flex: 1 }}>
                           <Text
@@ -1045,9 +1050,9 @@ export default function LogScreen() {
                               styles.routinePillTitle,
                               { color: colors.primary },
                             ]}
-                            numberOfLines={1}
+                            numberOfLines={2}
                           >
-                            New Day
+                            New workout
                           </Text>
                         </View>
                       </View>
@@ -1092,7 +1097,7 @@ export default function LogScreen() {
                             styles.routinePillTitle,
                             { color: colors.text },
                           ]}
-                          numberOfLines={1}
+                          numberOfLines={2}
                         >
                           {routine.title}
                         </Text>
@@ -1102,7 +1107,7 @@ export default function LogScreen() {
                           styles.routinePillSub,
                           { color: colors.textSecondary },
                         ]}
-                        numberOfLines={1}
+                        numberOfLines={2}
                       >
                         {exCount} {exCount === 1 ? 'exercise' : 'exercises'}
                       </Text>
@@ -1136,6 +1141,7 @@ export default function LogScreen() {
           ))}
         </ScrollView>
 
+        </TutorialAnchor>
         {/* Black Dots Indicator below the workout days/routines */}
         {routinePageCount > 1 && (
           <View style={styles.routineDotsRow}>
@@ -1189,7 +1195,7 @@ export default function LogScreen() {
             }}
           />
         )}
-      </ScrollView>
+      </TutorialScrollView>
 
       {/* Custom Routine / Workout Day Creation Modal */}
       <RoutineBuilderModal
@@ -1339,7 +1345,7 @@ const styles = StyleSheet.create({
     paddingVertical: 11,
     borderRadius: 18,
     gap: 7,
-    minHeight: 42,
+    minHeight: 46.2,
   },
   quickActionTitle: {
     fontFamily: BRAND_ROUNDED_FONT_EXTRA,
@@ -1559,11 +1565,11 @@ const styles = StyleSheet.create({
     width: ROUTINE_CARD_WIDTH,
     borderRadius: 16,
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'stretch',
     justifyContent: 'space-between',
-    paddingLeft: 12,
-    paddingRight: 6,
-    height: 52,
+    paddingLeft: 14,
+    paddingRight: 8,
+    height: 80.75,
   },
   newDayCardSlider: {
     borderWidth: 1.5,
@@ -1578,9 +1584,9 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   newDayIconCircle: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -1600,12 +1606,14 @@ const styles = StyleSheet.create({
   },
   routinePillTitle: {
     fontFamily: BRAND_ROUNDED_FONT,
-    fontSize: 12.5,
-    fontWeight: '700',
+    fontSize: 15,
+    fontWeight: '800',
+    lineHeight: 20,
+    flexShrink: 1,
     letterSpacing: -0.2,
   },
   routinePillSub: {
-    fontSize: 10.5,
+    fontSize: 12,
     fontWeight: '500',
   },
   successTextRowBelowDays: {
@@ -1657,9 +1665,12 @@ const styles = StyleSheet.create({
   },
   routineCardMainTap: {
     flex: 1,
+    justifyContent: 'center',
+    paddingVertical: 14,
   },
   routineThreeDotsBtn: {
-    padding: 6,
+    padding: 8,
+    minWidth: 44,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -2363,17 +2374,20 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    height: 88,
     padding: 12,
     borderRadius: 14,
     borderWidth: 1,
     marginBottom: 8,
   },
   modalExName: {
-    fontSize: 13.5,
+    fontSize: 15,
+    lineHeight: 19,
     fontWeight: '700',
   },
   modalExMeta: {
-    fontSize: 11,
+    fontSize: 12,
+    lineHeight: 15,
     marginTop: 2,
   },
   modalActionsRow: {

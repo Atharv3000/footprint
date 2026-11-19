@@ -1,3 +1,5 @@
+import { TutorialAnchor, TutorialScrollScope } from "@/components/FirstRunTutorial";
+import { CommunityGoals } from '@/components/CommunityGoals';
 import { useScreenInsets } from '@/constants/useScreenInsets';
 import { AppModal as Modal } from '@/components/AppModal';
 import { CountryQuests } from '@/components/CountryQuests';
@@ -64,66 +66,6 @@ import {
 import { supabase } from '@/constants/supabaseClient';
 import { SquadDetailScreen, calculateSquadGrade, computeSquadMetrics } from '@/components/SquadDetailScreen';
 
-
-export interface CommunityQuest {
-  id: string;
-  title: string;
-  category: 'daily' | 'weekly' | 'squad';
-  description: string;
-  current: number;
-  target: number;
-  unit: string;
-  reward: string;
-  icon: keyof typeof Ionicons.glyphMap;
-  color: string;
-  daysLeft: number;
-  joined?: boolean;
-}
-
-const INITIAL_QUESTS: CommunityQuest[] = [
-  {
-    id: 'quest_2',
-    title: 'Sunrise Stepper',
-    category: 'daily',
-    description: 'Log 4,000 steps before 9:00 AM to kickstart your morning metabolism.',
-    current: 3100,
-    target: 4000,
-    unit: 'steps',
-    reward: 'Early Bird Pin',
-    icon: 'sunny',
-    color: '#eab308',
-    daysLeft: 1,
-    joined: true,
-  },
-  {
-    id: 'quest_1',
-    title: 'Weekend 15,000 Step Trek',
-    category: 'weekly',
-    description: 'Crush 15,000 steps this weekend with fellow community walkers.',
-    current: 11420,
-    target: 15000,
-    unit: 'steps',
-    reward: 'Gold Footprint Badge + 150 Pts',
-    icon: 'flame',
-    color: '#f97316',
-    daysLeft: 2,
-    joined: true,
-  },
-  {
-    id: 'quest_3',
-    title: 'Squad Century Expedition',
-    category: 'squad',
-    description: 'Collaborate with your squad to cover a combined 100km total distance.',
-    current: 68.4,
-    target: 100,
-    unit: 'km',
-    reward: 'Expedition Trophy + Squad Rank Boost',
-    icon: 'shield-checkmark',
-    color: '#3b82f6',
-    daysLeft: 4,
-    joined: true,
-  },
-];
 
 const SQUAD_EMOJI_PICKER = ['👟', '🏃‍♂️', '⚡', '🌄', '🌲', '🏆', '🔥', '🚴', '🚀', '🎯', '🌿', '🧭'];
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -199,8 +141,6 @@ export default function CommunityScreen() {
   // Unified Notifications Modal
   const [showNotificationsModal, setShowNotificationsModal] = useState<boolean>(false);
 
-  // Quests list state
-  const [quests] = useState<CommunityQuest[]>(INITIAL_QUESTS);
 
   // Squads specific state
   const [selectedSquadType, setSelectedSquadType] = useState<SquadType>('open_invite');
@@ -503,7 +443,7 @@ export default function CommunityScreen() {
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
-      <FlatList
+      <TutorialScrollScope scrollRef={mainScrollRef} kind="list"><FlatList
 
         ref={mainScrollRef}
         data={[]}
@@ -788,88 +728,11 @@ export default function CommunityScreen() {
 
             <View style={{ paddingBottom: 24 }}>
                                 {/* Calorie challenges */}
-                <View style={{ marginTop: 12, marginBottom: 8 }}>
+                <TutorialAnchor tutorialId="calorie-challenge" style={{ marginTop: 12, marginBottom: 8 }}>
                   <CalorieChallenges />
-                </View>
-                <View style={{ paddingTop: 4, marginBottom: 8 }}><CountryQuests /></View>
-                {(() => {
-                  const filteredQuests = quests.filter((q) => {
-                    if (!searchQuery.trim()) return true;
-                    const query = searchQuery.toLowerCase();
-                    return (
-                      q.title.toLowerCase().includes(query) ||
-                      q.description.toLowerCase().includes(query) ||
-                      q.category.toLowerCase().includes(query)
-                    );
-                  });
-
-                  if (filteredQuests.length === 0) {
-                    return (
-                      <View style={[styles.emptyCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-                        <Ionicons name="compass-outline" size={32} color={colors.textMuted} />
-                        <Text style={[styles.emptyTitle, { color: colors.text }]}>No Quests Found</Text>
-                        <Text style={[styles.emptyDesc, { color: colors.textMuted }]}>
-                          No quests match your search query. Try another keyword!
-                        </Text>
-                      </View>
-                    );
-                  }
-
-                  return (
-                    <View style={{ gap: 12 }}>
-                      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 2, marginTop: 4 }}>
-                        <Text style={{ fontSize: 11, fontWeight: '800', letterSpacing: 0.8, color: colors.textMuted }}>
-                          ACTIVE CHALLENGES ({filteredQuests.length})
-                        </Text>
-                      </View>
-
-                      {filteredQuests.map((quest) => {
-                        const pct = Math.min(100, Math.round((quest.current / quest.target) * 100));
-                        return (
-                          <View
-                            key={quest.id}
-                            style={[styles.questCard, { backgroundColor: colors.surfaceElevated }]}
-                          >
-                            <View style={styles.questTopRow}>
-                              <View style={[styles.questIconCircle, { backgroundColor: `${quest.color}18` }]}>
-                                <Ionicons name={quest.icon} size={22} color={quest.color} />
-                              </View>
-                              <View style={{ flex: 1, marginLeft: 12 }}>
-                                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-                                  <Text style={[styles.questCategoryPill, { color: quest.color }]}>
-                                    {quest.category.toUpperCase()} QUEST
-                                  </Text>
-                                  <Text style={[styles.questDaysLeft, { color: colors.textMuted }]}>
-                                    {quest.daysLeft}d left
-                                  </Text>
-                                </View>
-                                <Text style={[styles.questTitle, { color: colors.text }]}>{quest.title}</Text>
-
-                              </View>
-                            </View>
-
-                            {/* Progress Bar & Numbers */}
-                            <View style={styles.questProgressSection}>
-                              <View style={styles.questProgressHeader}>
-                                <Text style={[styles.questProgressValues, { color: colors.textSecondary }]}>
-                                  {quest.current.toLocaleString()} / {quest.target.toLocaleString()} {quest.unit}
-                                </Text>
-                                <Text style={[styles.questProgressPercent, { color: quest.color }]}>
-                                  {pct}%
-                                </Text>
-                              </View>
-                              <View style={[styles.questProgressTrack, { backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)' }]}>
-                                <View style={[styles.questProgressBar, { width: `${pct}%`, backgroundColor: quest.color }]} />
-                              </View>
-                            </View>
-
-
-                          </View>
-                        );
-                      })}
-                    </View>
-                  );
-                })()}
+                </TutorialAnchor>
+                <TutorialAnchor tutorialId="country-quest" style={{ paddingTop: 4, marginBottom: 8 }}><CountryQuests /></TutorialAnchor>
+                <CommunityGoals search={searchQuery} />
               </View>
 
 
@@ -880,7 +743,7 @@ export default function CommunityScreen() {
           </View>
         }
         renderItem={null}
-      />
+      /></TutorialScrollScope>
 
       {/* FRIEND FULL PROFILE BOTTOM SHEET — tapped from friends carousel */}
       <InteractiveBottomModal

@@ -99,7 +99,7 @@ export function InsightsSection({
 
     // 2. Derive from actual recorded step activity history (peak active hour across recorded days)
     const allDays = Object.values(stepDays);
-    if (allDays.length > 0) {
+    if (allDays.some(day => day.totalSteps > 0)) {
       let maxHourSteps = 0;
       let totalRecordedSteps = 0;
       let totalActiveDays = 0;
@@ -127,16 +127,12 @@ export function InsightsSection({
       };
     }
 
-    // Default fallback if brand new account with 0 steps
-    return {
-      distanceKm: 3.2,
-      durationSeconds: 22 * 60,
-      source: 'Activity baseline',
-    };
+    return null;
   }, [walks, stepDays]);
 
   // Compute predictions for all 5 race lengths
   const predictions = useMemo(() => {
+    if (!baselinePerformance) return [];
     const longestKm = Math.max(...walks.map((w) => (w.distanceMeters || 0) / 1000), 5.0);
     return RACE_DISTANCES.map((race) => {
       const predictedSec = predictRaceTimeSeconds(
@@ -189,6 +185,9 @@ export function InsightsSection({
       </View>
 
       {/* Slim Horizontal Cards: Neutral 20% block on left, time and stats on right */}
+      {!baselinePerformance && <Text style={{ color: colors.textMuted, paddingVertical: 20 }}>
+        Log a walk or run to unlock your race predictions.
+      </Text>}
       <View style={styles.cardsList}>
         {predictions.map((item) => {
           return (
@@ -250,7 +249,7 @@ export function InsightsSection({
       <View style={styles.footnoteRow}>
         <Ionicons name="flash-outline" size={13} color={colors.textMuted} />
         <Text style={[styles.footnoteText, { color: colors.textMuted }]}>
-          Based on: {baselinePerformance.source} · Peter Riegel formula
+          Based on: {baselinePerformance?.source ?? 'No recorded activity yet'} · Peter Riegel formula
         </Text>
       </View>
 

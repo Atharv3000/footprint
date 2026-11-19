@@ -1,3 +1,5 @@
+import { TutorialButton, TutorialScrollView } from "@/components/FirstRunTutorial";
+import { previewOnboardingTutorial } from '@/components/FirstRunTutorial';
 import { ProfileProgressSection } from '@/components/ProfileProgressSection';
 import { useScreenInsets } from '@/constants/useScreenInsets';
 import { AppModal as Modal } from '@/components/AppModal';
@@ -29,7 +31,6 @@ import {
   inchesToCm,
   calculateScientificCaloriesBurned,
 } from '@/constants/userProfile';
-import { ensureMockDataSeeded } from '@/constants/stepsStorage';
 import { StepsCharts } from '@/components/StepsCharts';
 import { FlipNumberPicker } from '@/components/FlipNumberPicker';
 import { getOrCreateMyUsername, setMyUsername } from '@/constants/socialEngine';
@@ -116,8 +117,6 @@ export default function ProfileScreen() {
         setUsernameInput(u);
       })
       .catch(() => {});
-    // Seed demo step data for charts
-    ensureMockDataSeeded(effectiveUserId, profile.stepsGoal ?? 8000).catch(() => {});
     // Compute user badges
     getUserBadgeStats(effectiveUserId)
       .then((stats) => {
@@ -357,7 +356,7 @@ export default function ProfileScreen() {
   const [scrollEnabled, setScrollEnabled] = useState(true);
 
   return (
-    <ScrollView
+    <TutorialScrollView
       style={[styles.container, { backgroundColor: colors.background }]}
       contentContainerStyle={safeStyles.scrollContent}
       scrollEnabled={scrollEnabled}
@@ -458,6 +457,13 @@ export default function ProfileScreen() {
             {/* Dropdown Menu */}
             {showOptionsMenu && (
               <View style={[styles.dotsDropdownCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+                <TouchableOpacity style={styles.dropdownMenuItem} testID="preview-tutorial" onPress={() => {
+                  setShowOptionsMenu(false); previewOnboardingTutorial();
+                }} activeOpacity={0.7}>
+                  <Ionicons name="sparkles-outline" size={16} color={colors.primary} style={{ marginRight: 8 }} />
+                  <Text style={[styles.dropdownMenuItemText, { color: colors.text }]}>Preview tutorial</Text>
+                </TouchableOpacity>
+                <View style={[styles.dropdownDivider, { backgroundColor: colors.border }]} />
                 <TouchableOpacity
                   style={styles.dropdownMenuItem}
                   onPress={() => {
@@ -769,11 +775,11 @@ export default function ProfileScreen() {
             { id: 'badges', label: 'Badges', icon: 'ribbon-outline' },
           ] as const).map(tab => {
             const selected = activeSubTab === tab.id;
-            return <TouchableOpacity key={tab.id} accessibilityRole="tab" accessibilityState={{ selected }}
+            return <TutorialButton tutorialId={`profile-${tab.id}`} key={tab.id} accessibilityRole="tab" accessibilityState={{ selected }}
               style={[styles.subTabBtn, { backgroundColor: selected ? colors.primaryBg : 'transparent' }]} onPress={() => switchTab(tab.id)} activeOpacity={0.75}>
               <Ionicons name={tab.icon} size={16} color={selected ? colors.primary : colors.textMuted} />
               <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.85} style={[styles.subTabText, { color: selected ? colors.primary : colors.textMuted }]}>{tab.label}</Text>
-            </TouchableOpacity>;
+            </TutorialButton>;
           })}
         </View>
 
@@ -1136,7 +1142,7 @@ export default function ProfileScreen() {
           setProfileRefreshKey((k) => k + 1);
         }}
       />
-    </ScrollView>
+    </TutorialScrollView>
   );
 }
 

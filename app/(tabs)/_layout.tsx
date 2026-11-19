@@ -1,3 +1,4 @@
+import { FirstRunTutorial, TutorialTabButton } from '@/components/FirstRunTutorial';
 import React, { useEffect } from 'react';
 import { Tabs, router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -25,9 +26,9 @@ return (
 );
 }
 
-if (!user) return null;
+if (!user || !profile.hasCompletedSetup) return null;
 return (
-<Tabs
+<FirstRunTutorial key={user.id}><Tabs
 screenOptions={{
 tabBarActiveTintColor: colors.primary,
 tabBarInactiveTintColor: colors.textMuted,
@@ -80,6 +81,7 @@ fontSize: 16,
       <Tabs.Screen
         name="log"
         options={{
+          tabBarButton: props => <TutorialTabButton {...props} tutorialId="workouts" />,
           title: 'Log',
           headerShown: false,
           tabBarIcon: ({ color, focused }) => (
@@ -94,6 +96,7 @@ fontSize: 16,
       <Tabs.Screen
         name="nutrition"
         options={{
+          tabBarButton: props => <TutorialTabButton {...props} tutorialId="nutrition" />,
           title: 'Calorie Tracker',
           headerShown: false,
           tabBarIcon: ({ color, focused }) => (
@@ -108,6 +111,7 @@ fontSize: 16,
       <Tabs.Screen
         name="index"
         options={{
+          tabBarButton: props => <TutorialTabButton {...props} tutorialId="map" />,
           title: 'Track',
           headerShown: false,
           tabBarIcon: ({ color, focused }) => (
@@ -122,6 +126,7 @@ fontSize: 16,
       <Tabs.Screen
         name="community"
         options={{
+          tabBarButton: props => <TutorialTabButton {...props} tutorialId="community" />,
           title: 'Community',
           headerShown: false,
           tabBarIcon: ({ color, focused }) => (
@@ -137,6 +142,7 @@ fontSize: 16,
 <Tabs.Screen
 name="profile"
 options={{
+tabBarButton: props => <TutorialTabButton {...props} tutorialId="account" />,
 title: 'Profile',
 headerShown: false,
 tabBarIcon: ({ color, focused }) => {
@@ -187,6 +193,6 @@ tabBarIcon: ({ color, focused }) => {
 },
 }}
 />
-</Tabs>
+</Tabs></FirstRunTutorial>
 );
 }

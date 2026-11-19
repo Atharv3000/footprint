@@ -1,3 +1,4 @@
+import { loadAllStepData, parseDate } from './stepsStorage';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { loadWalks } from './walkStorage';
 
@@ -30,6 +31,7 @@ export interface UserStatsForBadges {
   totalCaloriesBurned?: number;
   paceRecordMinPerKm?: number;
   elevationMeters?: number;
+  fastWalkSessions?: number;
 }
 
 const STEPS_STORAGE_PREFIX = '@stridetrack_steps_';
@@ -40,11 +42,13 @@ export async function getUserBadgeStats(userId: string): Promise<UserStatsForBad
   let consecutiveStreakDays = 0;
 
   try {
-    const rawSteps = await AsyncStorage.getItem(`${STEPS_STORAGE_PREFIX}${userId}`);
+    const map = await loadAllStepData(userId);
+    const rawSteps = JSON.stringify(map);
     if (rawSteps) {
-      const map: Record<string, { totalSteps: number }> = JSON.parse(rawSteps);
+
       const days = Object.keys(map).sort();
       let currentStreak = 0;
+      let previousDay: string | null = null;
 
       for (const day of days) {
         const s = map[day]?.totalSteps || 0;
@@ -53,6 +57,8 @@ export async function getUserBadgeStats(userId: string): Promise<UserStatsForBad
           singleDayRecordSteps = s;
         }
         if (s >= 5000) {
+          const expected = parseDate(day); expected.setDate(expected.getDate() - 1);
+          if (!previousDay || parseDate(previousDay).getTime() !== expected.getTime()) currentStreak = 0;
           currentStreak++;
           if (currentStreak > consecutiveStreakDays) {
             consecutiveStreakDays = currentStreak;
@@ -60,6 +66,7 @@ export async function getUserBadgeStats(userId: string): Promise<UserStatsForBad
         } else {
           currentStreak = 0;
         }
+        previousDay = day;
       }
     }
   } catch (e) {
@@ -70,11 +77,13 @@ export async function getUserBadgeStats(userId: string): Promise<UserStatsForBad
   let totalWalks = 0;
   let totalDistanceKm = 0;
   let longestWalkMinutes = 0;
+  let fastWalkSessions = 0;
 
   try {
     const walks = await loadWalks(userId);
     totalWalks = walks.length;
     for (const w of walks) {
+      if (w.distanceMeters > 0 && w.durationSeconds > 0 && (w.durationSeconds / 60) / (w.distanceMeters / 1000) <= 10) fastWalkSessions++;
       totalDistanceKm += (w.distanceMeters || 0) / 1000;
       const mins = Math.round((w.durationSeconds || 0) / 60);
       if (mins > longestWalkMinutes) {
@@ -86,15 +95,16 @@ export async function getUserBadgeStats(userId: string): Promise<UserStatsForBad
   }
 
   return {
-    totalSteps: Math.max(totalSteps, 45000), // Graceful fallback with mock seed
-    totalWalks: Math.max(totalWalks, 6),
-    totalDistanceKm: Math.max(Number(totalDistanceKm.toFixed(1)), 34.2),
-    consecutiveStreakDays: Math.max(consecutiveStreakDays, 4),
-    singleDayRecordSteps: Math.max(singleDayRecordSteps, 10450),
-    longestWalkMinutes: Math.max(longestWalkMinutes, 45),
-    totalCaloriesBurned: Math.max(Math.round(totalSteps * 0.04), 1850),
-    paceRecordMinPerKm: 8.5,
-    elevationMeters: 280,
+    totalSteps,
+    totalWalks: totalWalks,
+    totalDistanceKm: Number(totalDistanceKm.toFixed(1)),
+    consecutiveStreakDays: consecutiveStreakDays,
+    singleDayRecordSteps: singleDayRecordSteps,
+    longestWalkMinutes: longestWalkMinutes,
+    totalCaloriesBurned: Math.round(totalSteps * 0.04),
+    paceRecordMinPerKm: 0,
+    elevationMeters: 0,
+    fastWalkSessions,
   };
 }
 
@@ -191,7 +201,7 @@ export function computeBadges(stats: UserStatsForBadges): BadgeDefinition[] {
       icon: 'speedometer',
       description: 'Complete high-cadence power walks and sustained pace sessions.',
       unit: 'sessions',
-      val: Math.max(3, Math.round(stats.totalWalks * 0.7)),
+      val: stats.fastWalkSessions ?? 0,
       bronze: 3,
       silver: 10,
       gold: 25,
@@ -203,7 +213,7 @@ export function computeBadges(stats: UserStatsForBadges): BadgeDefinition[] {
       icon: 'trophy',
       description: 'Climb cumulative vertical incline and elevation gain.',
       unit: 'm',
-      val: stats.elevationMeters ?? 280,
+      val: stats.elevationMeters ?? 0,
       bronze: 100,
       silver: 500,
       gold: 1500,
@@ -237,15 +247,7 @@ export function computeBadges(stats: UserStatsForBadges): BadgeDefinition[] {
       progressPercent = Math.min(100, Math.max(0, Math.round((c.val / c.bronze) * 100)));
     }
 
-    // Formatted date when milestone/tier was achieved
-    let earnedDate: string | undefined;
-    if (currentTier) {
-      // Deterministic realistic achievement dates
-      const daysAgo = c.id === 'lifetime_steps' ? 12 : c.id === 'walk_sessions' ? 6 : c.id === 'weekly_streak' ? 3 : 18;
-      const d = new Date();
-      d.setDate(d.getDate() - daysAgo);
-      earnedDate = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-    }
+    const earnedDate: string | undefined = undefined;
 
     return {
       id: c.id,

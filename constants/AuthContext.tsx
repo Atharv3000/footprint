@@ -1,3 +1,5 @@
+import { prepareAccountStorage, setActiveStorageAccount } from './accountStorage';
+import { initializeTutorialInstall, enrollTutorialAccount } from './onboardingStorage';
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { Platform, Alert } from 'react-native';
 import * as AppleAuthentication from 'expo-apple-authentication';
@@ -5,7 +7,7 @@ import * as AuthSession from 'expo-auth-session';
 import * as WebBrowser from 'expo-web-browser';
 import * as SecureStore from 'expo-secure-store';
 import * as Crypto from 'expo-crypto';
-import { loadUserProfile, saveUserProfile, UserProfile, DEFAULT_PROFILE } from './userProfile';
+import { loadUserProfile, saveUserProfile, loadAccountProfile, UserProfile, DEFAULT_PROFILE } from './userProfile';
 
 // Required for expo-auth-session on iOS
 WebBrowser.maybeCompleteAuthSession();
@@ -50,8 +52,8 @@ async function loadEmailAccounts(): Promise<EmailAccount[]> {
     const accounts: EmailAccount[] = raw ? JSON.parse(raw) : [];
 
     // Ensure preloaded fake account always exists in local credentials registry
-    const demoEmailLower = DEMO_ACCOUNT.email.toLowerCase();
-    if (!accounts.some((a) => a.email.toLowerCase() === demoEmailLower)) {
+    const demoEmailLower = DEMO_ACCOUNT.email.trim().toLowerCase();
+    if (!accounts.some((a) => a.email.trim().toLowerCase() === demoEmailLower)) {
       const demoHash = await hashPassword(DEMO_ACCOUNT.password);
       accounts.push({
         email: demoEmailLower,
@@ -135,10 +137,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     (async () => {
       try {
+        await initializeTutorialInstall().catch(() => {});
         // Guarantee demo account credentials exist in registry on startup
         loadEmailAccounts().catch(() => {});
 
         const p = await loadUserProfile();
+        if (p.isLoggedIn && p.email !== DEFAULT_PROFILE.email && p.authProvider === 'guest') p.authProvider = 'email';
+        if (p.email !== DEFAULT_PROFILE.email) await prepareAccountStorage(p.email, p.email);
+        setActiveStorageAccount(p.isLoggedIn ? p.email : null);
         setProfile(p);
         if (p.isLoggedIn && p.email && p.authProvider !== 'guest') {
           setUser({
@@ -185,18 +191,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const persistSignIn = async ({
     name, email, provider,
   }: { name: string; email: string; provider: AuthUser['provider'] }) => {
-    const newUser: AuthUser = { id: email, name, email, provider };
+    email = email.trim().toLowerCase();
+    const previous = await loadUserProfile();
+    await prepareAccountStorage(email, previous.email);
+    const saved = await loadAccountProfile(email);
+    if (!saved || !saved.hasCompletedSetup) await enrollTutorialAccount(email);
     const updatedProfile: UserProfile = {
-      ...profile,
-      isLoggedIn: true,
-      name,
-      email,
-      authProvider: provider === 'email' ? 'guest' : provider as 'apple' | 'google',
-      hasCompletedSetup: true,
+      ...(saved ?? { ...DEFAULT_PROFILE, joinedAt: new Date().toLocaleDateString('en-US', { month: 'long', year: 'numeric' }) }),
+      isLoggedIn: true, name: saved?.name || name, email, authProvider: provider,
     };
-    setUser(newUser);
-    setProfile(updatedProfile);
     await saveUserProfile(updatedProfile);
+    setActiveStorageAccount(email);
+    setProfile(updatedProfile);
+    setUser({ id: email, name: updatedProfile.name, email, provider });
   };
 
   const signInWithGoogleDemo = useCallback(async (customEmail?: string, customName?: string) => {
@@ -262,7 +269,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const signInWithEmail = useCallback(async (email: string, password: string) => {
     const accounts = await loadEmailAccounts();
     const hash = await hashPassword(password);
-    const account = accounts.find((a) => a.email.toLowerCase() === email.toLowerCase());
+    const account = accounts.find((a) => a.email.trim().toLowerCase() === email.trim().toLowerCase());
     if (!account) {
       throw new Error('No account found with this email. Please sign up first.');
     }
@@ -270,7 +277,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       throw new Error('Incorrect password. Please try again.');
     }
     // If logging into the preloaded demo account, ensure full dataset is initialized
-    if (account.email.toLowerCase() === DEMO_ACCOUNT.email.toLowerCase()) {
+    if (account.email.trim().toLowerCase() === DEMO_ACCOUNT.email.trim().toLowerCase()) {
+      await prepareAccountStorage(account.email, (await loadUserProfile()).email);
+      setActiveStorageAccount(account.email);
       await preloadDemoAccountData(account.email);
     }
     await persistSignIn({ name: account.name, email: account.email, provider: 'email' });
@@ -282,35 +291,31 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (password.length < 6) throw new Error('Password must be at least 6 characters.');
 
     const accounts = await loadEmailAccounts();
-    const exists = accounts.find((a) => a.email.toLowerCase() === email.toLowerCase());
+    const exists = accounts.find((a) => a.email.trim().toLowerCase() === email.trim().toLowerCase());
     if (exists) throw new Error('An account with this email already exists. Please sign in.');
 
     const hash = await hashPassword(password);
-    accounts.push({ email: email.toLowerCase(), passwordHash: hash, name: name.trim() });
+    accounts.push({ email: email.trim().toLowerCase(), passwordHash: hash, name: name.trim() });
     await saveEmailAccounts(accounts);
-    await persistSignIn({ name: name.trim(), email: email.toLowerCase(), provider: 'email' });
+    await persistSignIn({ name: name.trim(), email: email.trim().toLowerCase(), provider: 'email' });
   }, [profile]);
 
   const signOut = useCallback(async () => {
-    const updated: UserProfile = {
-      ...profile,
-      isLoggedIn: false,
-      authProvider: 'guest',
-      name: 'Walker',
-      email: 'walker@footprint.app',
-    };
+    await saveUserProfile(profile);
+    const updated = { ...DEFAULT_PROFILE };
+    await saveUserProfile(updated);
+    setActiveStorageAccount(null);
     setUser(null);
     setProfile(updated);
-    await saveUserProfile(updated);
   }, [profile]);
 
   const updateProfile = useCallback(async (updates: Partial<UserProfile>) => {
     const updated = { ...profile, ...updates };
+    await saveUserProfile(updated);
     if (updates.name && user) {
       setUser({ ...user, name: updates.name });
     }
     setProfile(updated);
-    await saveUserProfile(updated);
   }, [profile, user]);
 
   return (

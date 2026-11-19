@@ -1,3 +1,4 @@
+import { cleanAccountRecords } from './accountRecords';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { DeviceEventEmitter } from 'react-native';
 import rawExercisesData from './exercisesData.json';
@@ -193,76 +194,11 @@ export async function loadRankableWorkoutLogs(userId: string): Promise<WorkoutLo
   if (!raw) return [];
   const parsed: unknown = JSON.parse(raw);
   if (!Array.isArray(parsed)) throw new Error('Workout history is unavailable.');
-  return parsed as WorkoutLogEntry[];
+  return cleanAccountRecords(userId, 'workouts', parsed as WorkoutLogEntry[]);
 }
 
 export async function loadWorkoutLogs(userId: string): Promise<WorkoutLogEntry[]> {
-  try {
-    const key = LOG_STORAGE_KEY(userId);
-    const raw = await AsyncStorage.getItem(key);
-    if (raw) {
-      const parsed: WorkoutLogEntry[] = JSON.parse(raw);
-      if (parsed.length > 0) {
-        return parsed.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-      }
-    }
-
-    // If no logs found under current userId, check 'guest_user' storage to preserve user's past workouts
-    if (userId !== 'guest_user') {
-      const guestRaw = await AsyncStorage.getItem(LOG_STORAGE_KEY('guest_user'));
-      if (guestRaw) {
-        const guestParsed: WorkoutLogEntry[] = JSON.parse(guestRaw);
-        if (guestParsed.length > 0) {
-          // Migrate to active userId
-          await AsyncStorage.setItem(key, guestRaw);
-          return guestParsed.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-        }
-      }
-    }
-  } catch (e) {
-    console.error('Failed to load workout logs', e);
-  }
-
-  // Seed default demonstration logs if empty
-  const now = new Date();
-  const demoLogs: WorkoutLogEntry[] = [
-    {
-      id: 'demo_1',
-      userId,
-      exerciseId: 'squats',
-      exerciseName: 'Barbell Squat',
-      reps: 8,
-      weight: 415,
-      weightUnit: 'lb',
-      date: new Date(now.getTime() - 2 * 3600000).toISOString(),
-    },
-    {
-      id: 'demo_2',
-      userId,
-      exerciseId: 'bench_press',
-      exerciseName: 'Bench Press',
-      reps: 10,
-      weight: 225,
-      weightUnit: 'lb',
-      date: new Date(now.getTime() - 4 * 3600000).toISOString(),
-    },
-    {
-      id: 'demo_3',
-      userId,
-      exerciseId: 'deadlift',
-      exerciseName: 'Deadlift',
-      reps: 5,
-      weight: 315,
-      weightUnit: 'lb',
-      date: new Date(now.getTime() - 28 * 3600000).toISOString(),
-    },
-  ];
-
-  try {
-    await AsyncStorage.setItem(LOG_STORAGE_KEY(userId), JSON.stringify(demoLogs));
-  } catch (e) {}
-
-  return demoLogs;
+  return loadRankableWorkoutLogs(userId);
 }
 
 export const CORE_FEATURED_EXERCISE_IDS = [
@@ -326,7 +262,7 @@ export async function loadCustomRoutines(userId: string): Promise<CustomRoutine[
   } catch (e) {
     console.error('Failed to load custom routines', e);
   }
-  return DEFAULT_CUSTOM_ROUTINES;
+  return [];
 }
 
 export async function saveCustomRoutines(userId: string, routines: CustomRoutine[]): Promise<void> {
@@ -351,51 +287,10 @@ export interface ProgressPhoto {
 const PROGRESS_PHOTOS_KEY = (userId: string) => `@stridetrack_progress_photos_${userId}`;
 
 export async function loadProgressPhotos(userId: string): Promise<ProgressPhoto[]> {
-  try {
-    const key = PROGRESS_PHOTOS_KEY(userId);
-    const raw = await AsyncStorage.getItem(key);
-    if (raw) {
-      const parsed: ProgressPhoto[] = JSON.parse(raw);
-      if (parsed.length > 0) {
-        return parsed.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-      }
-    }
-  } catch (e) {
-    console.error('Failed to load progress photos', e);
-  }
-
-  // Pre-populate with realistic demo transformation photos if none exist yet
-  const today = new Date();
-  const dateStrA = today.toISOString().split('T')[0];
-  const dateB = new Date(today.getTime() - 30 * 86400000);
-  const dateStrB = dateB.toISOString().split('T')[0];
-
-  const initialDemos: ProgressPhoto[] = [
-    {
-      id: 'demo_photo_recent',
-      userId,
-      uri: 'https://images.unsplash.com/photo-1517838277536-f5f99be501cd?q=80&w=800&auto=format&fit=crop',
-      date: dateStrA,
-      createdAt: today.toISOString(),
-      caption: 'Current check-in (Week 8)',
-      weightKg: 78.4,
-    },
-    {
-      id: 'demo_photo_before',
-      userId,
-      uri: 'https://images.unsplash.com/photo-1581009146145-b5ef050c2e1e?q=80&w=800&auto=format&fit=crop',
-      date: dateStrB,
-      createdAt: dateB.toISOString(),
-      caption: 'Starting baseline (Week 1)',
-      weightKg: 84.2,
-    },
-  ];
-
-  try {
-    await AsyncStorage.setItem(PROGRESS_PHOTOS_KEY(userId), JSON.stringify(initialDemos));
-  } catch (e) {}
-
-  return initialDemos;
+  const raw = await AsyncStorage.getItem(PROGRESS_PHOTOS_KEY(userId));
+  const records = raw ? JSON.parse(raw) : [];
+  return cleanAccountRecords(userId, 'photos', records as ProgressPhoto[])
+    .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
 }
 
 export async function saveProgressPhoto(
@@ -467,32 +362,10 @@ export interface WeightLogEntry {
 const WEIGHT_LOGS_KEY = (userId: string) => `@stridetrack_weight_logs_${userId}`;
 
 export async function loadWeightLogs(userId: string): Promise<WeightLogEntry[]> {
-  try {
-    const key = WEIGHT_LOGS_KEY(userId);
-    const raw = await AsyncStorage.getItem(key);
-    if (raw) {
-      const parsed: WeightLogEntry[] = JSON.parse(raw);
-      return parsed.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
-    }
-  } catch (e) {
-    console.error('Failed to load weight logs', e);
-  }
-
-  // Seed with realistic demo history over the past 30 days if empty
-  const now = new Date();
-  const demo: WeightLogEntry[] = [
-    { id: 'w_1', userId, weightKg: 73.5, date: new Date(now.getTime() - 28 * 86400000).toISOString() },
-    { id: 'w_2', userId, weightKg: 73.0, date: new Date(now.getTime() - 21 * 86400000).toISOString() },
-    { id: 'w_3', userId, weightKg: 72.4, date: new Date(now.getTime() - 14 * 86400000).toISOString() },
-    { id: 'w_4', userId, weightKg: 71.8, date: new Date(now.getTime() - 7 * 86400000).toISOString() },
-    { id: 'w_5', userId, weightKg: 71.2, date: now.toISOString() },
-  ];
-
-  try {
-    await AsyncStorage.setItem(WEIGHT_LOGS_KEY(userId), JSON.stringify(demo));
-  } catch (e) {}
-
-  return demo;
+  const raw = await AsyncStorage.getItem(WEIGHT_LOGS_KEY(userId));
+  const records = raw ? JSON.parse(raw) : [];
+  return cleanAccountRecords(userId, 'weights', records as WeightLogEntry[])
+    .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
 }
 
 export async function recordWeightLog(userId: string, weightKg: number, date?: string): Promise<WeightLogEntry> {
@@ -534,30 +407,10 @@ export interface BodyFatLogEntry {
 const BODY_FAT_LOGS_KEY = (userId: string) => `@stridetrack_body_fat_logs_${userId}`;
 
 export async function loadBodyFatLogs(userId: string): Promise<BodyFatLogEntry[]> {
-  try {
-    const key = BODY_FAT_LOGS_KEY(userId);
-    const raw = await AsyncStorage.getItem(key);
-    if (raw) {
-      const parsed: BodyFatLogEntry[] = JSON.parse(raw);
-      return parsed.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
-    }
-  } catch (e) {
-    console.error('Failed to load body fat logs', e);
-  }
-
-  // Realistic baseline seed
-  const now = new Date();
-  const demo: BodyFatLogEntry[] = [
-    { id: 'bf_1', userId, bodyFatPercent: 18.2, date: new Date(now.getTime() - 21 * 86400000).toISOString(), method: 'ai_scan' },
-    { id: 'bf_2', userId, bodyFatPercent: 17.5, date: new Date(now.getTime() - 10 * 86400000).toISOString(), method: 'ai_scan' },
-    { id: 'bf_3', userId, bodyFatPercent: 16.8, date: now.toISOString(), method: 'ai_scan' },
-  ];
-
-  try {
-    await AsyncStorage.setItem(BODY_FAT_LOGS_KEY(userId), JSON.stringify(demo));
-  } catch (e) {}
-
-  return demo;
+  const raw = await AsyncStorage.getItem(BODY_FAT_LOGS_KEY(userId));
+  const records = raw ? JSON.parse(raw) : [];
+  return cleanAccountRecords(userId, 'bodyFat', records as BodyFatLogEntry[])
+    .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
 }
 
 export async function recordBodyFatLog(

@@ -28,7 +28,6 @@ import {
 import { InteractiveScaleRuler } from '@/components/InteractiveScaleRuler';
 import { FlipNumberPicker } from '@/components/FlipNumberPicker';
 import { getOrCreateMyUsername, setMyUsername } from '@/constants/socialEngine';
-import { ensureMockDataSeeded } from '@/constants/stepsStorage';
 import { loadWeightLogs, recordWeightLog } from '@/constants/workoutStorage';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -174,7 +173,6 @@ export default function OnboardingScreen() {
       // Record weight log entry
       if (user?.id) {
         await recordWeightLog(user.id, canonicalCurrentKg).catch(() => {});
-        await ensureMockDataSeeded(user.id, stepsGoal).catch(() => {});
       }
 
       router.replace('/(tabs)');

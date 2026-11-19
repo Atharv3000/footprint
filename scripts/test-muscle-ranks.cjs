@@ -12,6 +12,7 @@ function load(relative, mocks = {}) {
   const exports = {};
   vm.runInNewContext(output, { exports, Date, console, require: name => {
     if (name in mocks) return mocks[name];
+    if (name === './accountRecords') return load('constants/accountRecords.ts');
     throw new Error('Unexpected dependency: ' + name);
   } });
   return exports;

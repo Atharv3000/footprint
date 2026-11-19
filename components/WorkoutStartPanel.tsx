@@ -41,17 +41,9 @@ export function WorkoutStartPanel({ routines, logs, onSelectRoutine, onCreateRou
           <View style={[s.spark, { backgroundColor: colors.surfaceElevated }]}><Ionicons name="sparkles" size={17} color={colors.primary} /></View>
         </View>
       </View>
-      <Text style={[s.body, { color: colors.textMuted, marginTop: 14 }]}>Choose a workout day to reveal your exercises, sets, reps, and weights.</Text>
-      <View style={s.steps}>
-        {(['Choose', 'Track', 'Save'] as const).map((label, index) => <View key={label} style={s.step}>
-          <View style={[s.stepNumber, { backgroundColor: colors.primaryBg }]}><Text style={{ color: colors.primary, fontSize: 11, fontWeight: '800' }}>{index + 1}</Text></View>
-          <Text style={{ color: colors.textMuted, fontSize: 12, fontWeight: '600' }}>{label}</Text>
-          {index < 2 && <Ionicons name="chevron-forward" size={12} color={colors.textMuted} />}
-        </View>)}
-      </View>
+      <View style={{ height: 22 }} />
       {routines.length > 0 ? <>
         <WorkoutRoutineCarousel routines={routines} onSelect={onSelectRoutine} />
-        <TouchableOpacity accessibilityRole="button" onPress={onCreateRoutine} style={s.create}><Text style={{ color: colors.textMuted, fontSize: 12, fontWeight: '600' }}>Build a new workout day</Text></TouchableOpacity>
       </> : <TouchableOpacity accessibilityRole="button" onPress={onCreateRoutine} style={[s.start, { backgroundColor: colors.primary }]}>
         <Ionicons name="add" size={17} color="#101609" />
         <Text numberOfLines={1} style={s.startText}>Create a workout day</Text>
@@ -70,10 +62,7 @@ export function WorkoutStartPanel({ routines, logs, onSelectRoutine, onCreateRou
         <Text style={{ color: colors.textMuted, fontSize: 12 }}>{exercise.sets} {exercise.sets === 1 ? 'set' : 'sets'}</Text>
       </View>)}
       {recent.exercises.length > 3 && <Text style={{ color: colors.textMuted, fontSize: 11, marginTop: 9 }}>+{recent.exercises.length - 3} more exercises</Text>}
-    </View> : <View style={s.firstSession}>
-      <Ionicons name="checkmark-circle-outline" size={18} color={colors.textMuted} />
-      <Text style={[s.body, { color: colors.textMuted, flex: 1 }]}>Your completed sets will appear here after your first workout.</Text>
-    </View>}
+    </View> : null}
   </View>;
 }
 

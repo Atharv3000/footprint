@@ -1,3 +1,4 @@
+import { TutorialAnchor } from "@/components/FirstRunTutorial";
 import { DEFAULT_PET_APPEARANCE, PetAppearance } from '@/constants/petAppearance';
 import { loadNutritionPetProfile, saveNutritionPetProfile } from '@/constants/nutritionPetProfile';
 import { PetCustomizerModal } from './PetCustomizerModal';
@@ -111,7 +112,7 @@ export function NutritionPet({ userId, meals, target, goal, todayKey, active, re
         <TouchableOpacity accessibilityLabel="Change nutrition goal" onPress={onAdjustGoal} style={[s.plan, { borderColor: colors.border }]}><Text style={[s.small, { color: accent }]}>{plan} plan</Text><Ionicons name="chevron-down" size={12} color={accent} /></TouchableOpacity>
       </View>
       <View style={[s.dialogue, { backgroundColor: colors.background }]}><Text accessibilityLiveRegion="polite" style={[s.dialogueText, text]}>{error || (!ready ? 'Getting your latest food logs...' : petted ? pettingLines[celebration % pettingLines.length] : justFed ? 'Munch munch! New meal logged—my diary belly just updated!' : nutritionPetDialogue(pet, dialogueBeat))}</Text></View>
-      <View style={s.artwork}><NutritionPetArtwork state={pet} appearance={appearance} active={active && ready && !error} reduceMotion={reduceMotion} celebration={celebration} petted={petted} onHeadRub={onHeadRub} /></View>
+      <TutorialAnchor tutorialId="pet-care" style={s.artwork}><NutritionPetArtwork state={pet} appearance={appearance} active={active && ready && !error} reduceMotion={reduceMotion} celebration={celebration} petted={petted} onHeadRub={onHeadRub} /></TutorialAnchor>
       <Text style={[s.caption, muted, { textAlign: 'center', marginBottom: 12 }]}>Rub back and forth on my head.</Text>
       <TouchableOpacity accessibilityRole="button" accessibilityLabel={`Customize ${name}`} disabled={!profileReady}
         onPress={() => setCustomizing(true)} style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7, padding: 11, borderWidth: 1, borderRadius: 15, borderColor: colors.border, marginBottom: 14 }}>

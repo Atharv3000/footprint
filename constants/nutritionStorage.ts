@@ -1,3 +1,4 @@
+import { accountStorageKey } from './accountStorage';
 import { DeviceEventEmitter } from 'react-native';
 export const MEAL_LOGS_CHANGED = 'footprint:meal-logs-changed';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -158,7 +159,7 @@ export function getTodayDateKey(): string {
 
 export async function loadNutritionTargets(): Promise<NutritionTargets> {
   try {
-    const raw = await AsyncStorage.getItem(STORAGE_KEY_TARGETS);
+    const raw = await AsyncStorage.getItem(accountStorageKey(STORAGE_KEY_TARGETS));
     if (raw) {
       return { ...DEFAULT_NUTRITION_TARGETS, ...JSON.parse(raw) };
     }
@@ -170,7 +171,7 @@ export async function loadNutritionTargets(): Promise<NutritionTargets> {
 
 export async function saveNutritionTargets(targets: NutritionTargets): Promise<void> {
   try {
-    await AsyncStorage.setItem(STORAGE_KEY_TARGETS, JSON.stringify(targets));
+    await AsyncStorage.setItem(accountStorageKey(STORAGE_KEY_TARGETS), JSON.stringify(targets));
   } catch (e) {
     console.error('Error saving nutrition targets:', e);
   }
@@ -178,7 +179,7 @@ export async function saveNutritionTargets(targets: NutritionTargets): Promise<v
 
 export async function loadSavedQuiz(): Promise<MacroQuizAnswers | null> {
   try {
-    const raw = await AsyncStorage.getItem(STORAGE_KEY_QUIZ);
+    const raw = await AsyncStorage.getItem(accountStorageKey(STORAGE_KEY_QUIZ));
     if (raw) return JSON.parse(raw);
   } catch (e) {
     console.error('Error loading quiz:', e);
@@ -188,7 +189,7 @@ export async function loadSavedQuiz(): Promise<MacroQuizAnswers | null> {
 
 export async function saveQuizAnswers(quiz: MacroQuizAnswers): Promise<void> {
   try {
-    await AsyncStorage.setItem(STORAGE_KEY_QUIZ, JSON.stringify(quiz));
+    await AsyncStorage.setItem(accountStorageKey(STORAGE_KEY_QUIZ), JSON.stringify(quiz));
   } catch (e) {
     console.error('Error saving quiz:', e);
   }
@@ -196,7 +197,7 @@ export async function saveQuizAnswers(quiz: MacroQuizAnswers): Promise<void> {
 
 export async function loadMealLogs(dateKey?: string): Promise<MealLog[]> {
   try {
-    const raw = await AsyncStorage.getItem(STORAGE_KEY_MEALS);
+    const raw = await AsyncStorage.getItem(accountStorageKey(STORAGE_KEY_MEALS));
     const allMeals: MealLog[] = raw ? JSON.parse(raw) : [];
     if (dateKey) {
       return allMeals.filter((m) => m.dateKey === dateKey);
@@ -209,8 +210,9 @@ export async function loadMealLogs(dateKey?: string): Promise<MealLog[]> {
 }
 
 export async function saveMealLog(meal: MealLog): Promise<void> {
+  const key = accountStorageKey(STORAGE_KEY_MEALS);
   try {
-    const raw = await AsyncStorage.getItem(STORAGE_KEY_MEALS);
+    const raw = await AsyncStorage.getItem(key);
     const allMeals: MealLog[] = raw ? JSON.parse(raw) : [];
     const existingIndex = allMeals.findIndex((m) => m.id === meal.id);
     if (existingIndex >= 0) {
@@ -218,7 +220,7 @@ export async function saveMealLog(meal: MealLog): Promise<void> {
     } else {
       allMeals.unshift(meal);
     }
-    await AsyncStorage.setItem(STORAGE_KEY_MEALS, JSON.stringify(allMeals));
+    await AsyncStorage.setItem(key, JSON.stringify(allMeals));
     DeviceEventEmitter.emit(MEAL_LOGS_CHANGED);
   } catch (e) {
     console.error('Error saving meal log:', e);
@@ -226,12 +228,13 @@ export async function saveMealLog(meal: MealLog): Promise<void> {
 }
 
 export async function deleteMealLog(mealId: string): Promise<void> {
+  const key = accountStorageKey(STORAGE_KEY_MEALS);
   try {
-    const raw = await AsyncStorage.getItem(STORAGE_KEY_MEALS);
+    const raw = await AsyncStorage.getItem(key);
     if (raw) {
       const allMeals: MealLog[] = JSON.parse(raw);
       const filtered = allMeals.filter((m) => m.id !== mealId);
-      await AsyncStorage.setItem(STORAGE_KEY_MEALS, JSON.stringify(filtered));
+      await AsyncStorage.setItem(key, JSON.stringify(filtered));
       DeviceEventEmitter.emit(MEAL_LOGS_CHANGED);
     }
   } catch (e) {
@@ -241,7 +244,7 @@ export async function deleteMealLog(mealId: string): Promise<void> {
 
 export async function loadDailyWater(dateKey: string): Promise<number> {
   try {
-    const raw = await AsyncStorage.getItem(`${STORAGE_KEY_WATER}_${dateKey}`);
+    const raw = await AsyncStorage.getItem(accountStorageKey(`${STORAGE_KEY_WATER}_${dateKey}`));
     return raw ? parseInt(raw, 10) : 0;
   } catch (e) {
     return 0;
@@ -250,7 +253,7 @@ export async function loadDailyWater(dateKey: string): Promise<number> {
 
 export async function saveDailyWater(dateKey: string, ml: number): Promise<void> {
   try {
-    await AsyncStorage.setItem(`${STORAGE_KEY_WATER}_${dateKey}`, ml.toString());
+    await AsyncStorage.setItem(accountStorageKey(`${STORAGE_KEY_WATER}_${dateKey}`), ml.toString());
   } catch (e) {
     console.error('Error saving water:', e);
   }

@@ -9,7 +9,7 @@ export interface UserProfile {
   name: string;
   email: string;
   avatarUrl?: string; // Camera roll avatar or profile picture
-  authProvider: 'apple' | 'google' | 'guest';
+  authProvider: 'apple' | 'google' | 'email' | 'guest';
   weightKg: number; // Canonical in kg
   heightCm: number; // Canonical in cm
   heightFeet?: number; // Exact US Customary feet input
@@ -31,20 +31,28 @@ export const DEFAULT_PROFILE: UserProfile = {
   email: 'walker@footprint.app',
   avatarUrl: undefined,
   authProvider: 'guest',
-  weightKg: 70,    // Standard default ~154 lbs
-  heightCm: 175,   // Standard default ~5'9"
-  heightFeet: 5,
-  heightInches: 9,
-  age: 28,
+  weightKg: 0,
+  heightCm: 0,
+  heightFeet: 0,
+  heightInches: 0,
+  age: 0,
   gender: 'na',
   unitSystem: 'us_customary', // "Customary"
   hasCompletedSetup: false,
-  joinedAt: 'September 2026',
+  joinedAt: undefined,
   stepsGoal: 8000,
   distanceGoalKm: 5,
 };
 
 const STORAGE_KEY = '@footprint_user_profile';
+const accountProfileKey = (email: string) => `@footprint_account_profile_${email.trim().toLowerCase()}`;
+export async function loadAccountProfile(email: string): Promise<UserProfile | null> {
+  const raw = await AsyncStorage.getItem(accountProfileKey(email));
+  if (raw) return { ...DEFAULT_PROFILE, ...JSON.parse(raw) };
+  // Preserve the last signed-in legacy profile only for its actual owner.
+  const legacy = await loadUserProfile();
+  return legacy.email?.trim().toLowerCase() === email.trim().toLowerCase() ? legacy : null;
+}
 
 export async function loadUserProfile(): Promise<UserProfile> {
   try {
@@ -63,9 +71,11 @@ export async function loadUserProfile(): Promise<UserProfile> {
 
 export async function saveUserProfile(profile: UserProfile): Promise<void> {
   try {
+    if (profile.email && profile.authProvider !== 'guest') await AsyncStorage.setItem(accountProfileKey(profile.email), JSON.stringify(profile));
     await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(profile));
   } catch (e) {
     console.error('Failed to save profile', e);
+    throw e;
   }
 }
 

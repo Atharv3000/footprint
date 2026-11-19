@@ -16,6 +16,7 @@ from .battle import Battles
 from .counter import RepCounter
 from .boxing import BoxingGame
 from .country_quests import CountryQuests
+from .community_goals import CommunityGoals
 
 def get_token():
     return os.environ.get('REP_SERVER_TOKEN', '').strip()
@@ -24,6 +25,7 @@ TOKEN = get_token()
 battles = Battles()
 calorie_challenges = CalorieChallenges(os.environ.get('CALORIE_DB_PATH', str(Path(__file__).parent / 'data/calories.sqlite3')))
 country_quests = CountryQuests(os.environ.get('COUNTRY_QUEST_DB_PATH', str(Path(__file__).parent / 'data/country-quests.sqlite3')), Path(__file__).parent.parent / 'assets/data/countryBorders.json')
+community_goals = CommunityGoals(os.environ.get('COMMUNITY_GOALS_DB_PATH', str(Path(__file__).parent / 'data/community-goals.sqlite3')))
 clients = {}
 sessions = {}
 vision = None
@@ -268,5 +270,24 @@ async def countries(request: Request):
             return country_quests.snapshot(room, member_id)
         if action in ('sync', 'leave', 'close'): return country_quests.update(data)
         raise ValueError('Unknown quest action.')
+    except PermissionError as error: raise HTTPException(403, str(error))
+    except ValueError as error: raise HTTPException(400, str(error))
+
+
+@app.post('/rep-api/goals')
+async def goals(request: Request):
+    auth(request)
+    data = await payload(request)
+    try:
+        action = data.get('action')
+        if action == 'create': return community_goals.create(data)
+        if action == 'preview': return community_goals.preview(data)
+        if action == 'join': return community_goals.join(data)
+        if action == 'get':
+            room = community_goals.load(data.get('code', ''))
+            member_id = community_goals.member(room, data)
+            return community_goals.snapshot(room, member_id)
+        if action in ('sync', 'leave', 'close'): return community_goals.update(data)
+        raise ValueError('Unknown goal action.')
     except PermissionError as error: raise HTTPException(403, str(error))
     except ValueError as error: raise HTTPException(400, str(error))

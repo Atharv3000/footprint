@@ -52,7 +52,7 @@ export function WorkoutRoutineCarousel({ routines, onSelect }: {
         onPress={() => scroll.current?.scrollTo({ x: width * index, animated: true })} style={s.arrow}>
         <Ionicons name="chevron-back" size={18} color={colors.textMuted} />
       </TouchableOpacity>
-      <Text accessibilityLiveRegion="polite" style={{ color: colors.textMuted, fontSize: 11 }}>Swipe to choose · {index + 1} / {routines.length}</Text>
+      <Text accessibilityLiveRegion="polite" style={{ color: colors.textMuted, fontSize: 11 }}>{index + 1} / {routines.length}</Text>
       <TouchableOpacity accessibilityRole="button" accessibilityLabel="Next workout day" hitSlop={8}
         onPress={() => scroll.current?.scrollTo({ x: width * (index + 2), animated: true })} style={s.arrow}>
         <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />

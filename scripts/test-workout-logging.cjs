@@ -29,6 +29,7 @@ test('session batch saves together, preserves history, and propagates failed wri
   if(name==='@react-native-async-storage/async-storage')return storage;
   if(name==='react-native')return {DeviceEventEmitter:{emit:()=>events++}};
   if(name==='./exercisesData.json')return [];
+  if(name==='./accountRecords') { const records={}; vm.runInNewContext(ts.transpileModule(fs.readFileSync(__dirname+'/../constants/accountRecords.ts','utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS}}).outputText,{exports:records}); return records; }
   throw Error(name);
  }});
  const selected=entries(exercise([row(true),row(false)]),'kg','Arms');

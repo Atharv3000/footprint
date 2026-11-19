@@ -1,3 +1,5 @@
+import { TutorialAnchor } from "@/components/FirstRunTutorial";
+import { WalkGoalSummary } from '@/components/WalkGoalSummary';
 import { useScreenInsets } from '@/constants/useScreenInsets';
 import { AppModal as Modal } from '@/components/AppModal';
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
@@ -807,6 +809,10 @@ export default function TrackScreen() {
   const [tempGender, setTempGender] = useState<GenderOption>('na');
 
   const [completedSummary, setCompletedSummary] = useState<WalkStats | null>(null);
+  const [savedSummaryWalk, setSavedSummaryWalk] = useState<WalkRecord | null>(null);
+  const [savingSummaryWalk, setSavingSummaryWalk] = useState(false);
+  const [summarySaveError, setSummarySaveError] = useState('');
+  const summaryRun = useRef(0);
 
   // Global App Color Scheme & Map Appearance
   const {
@@ -934,9 +940,8 @@ export default function TrackScreen() {
 
   // Load past recorded workouts to display on the map
   const fetchPastWalks = useCallback(async () => {
-    if (!user) return;
     try {
-      const records = await loadWalks(user.id);
+      const records = await loadWalks(user?.id || 'guest_user');
       setPastWalks(records || []);
     } catch (e) {
       console.warn('Failed to load past walks for map overlay:', e);
@@ -1675,6 +1680,8 @@ export default function TrackScreen() {
   }, [selectedRoute, location]);
 
   const stopActiveRecording = () => {
+    const finishId = ++summaryRun.current;
+    setSavedSummaryWalk(null); setSummarySaveError(''); setSavingSummaryWalk(false);
     setIsRecording(false);
     try { Speech.stop(); } catch (_) {}
     const mins = elapsedSeconds / 60;
@@ -1703,8 +1710,9 @@ export default function TrackScreen() {
       steps: estimatedSteps,
     });
 
-    if (user && (totalDistanceMeters > 5 || elapsedSeconds > 10)) {
-      saveWalk(user.id, {
+    if (totalDistanceMeters > 5 || elapsedSeconds > 10) {
+      setSavingSummaryWalk(true);
+      saveWalk(user?.id || 'guest_user', {
         durationSeconds: elapsedSeconds,
         distanceMeters: totalDistanceMeters,
         calories: burnedCalories,
@@ -1713,8 +1721,13 @@ export default function TrackScreen() {
         activityType,
         routeCoordinates: [...routeCoordinates],
       })
-        .then(() => fetchPastWalks())
-        .catch((e) => console.warn('Failed to auto-save workout record:', e));
+        .then(record => {
+          if (summaryRun.current === finishId) { setSavedSummaryWalk(record); setSavingSummaryWalk(false); }
+          void fetchPastWalks();
+        })
+        .catch(() => {
+          if (summaryRun.current === finishId) { setSavingSummaryWalk(false); setSummarySaveError('Could not save this walk. Goal progress has not been added.'); }
+        });
     }
   };
 
@@ -2899,7 +2912,7 @@ export default function TrackScreen() {
         ]}
       >
         {/* Map Controls */}
-        <View style={styles.topActionsRow}>
+        <TutorialAnchor tutorialId="map-controls" style={styles.topActionsRow}>
           {/* 3D Perspective Button */}
           <Animated.View
             style={[
@@ -3014,7 +3027,7 @@ export default function TrackScreen() {
               />
             </TouchableOpacity>
           </Animated.View>
-        </View>
+        </TutorialAnchor>
       </View>
 
       {/* Full Turn-by-Turn Directions Panel (Modal list when requested) */}
@@ -3958,7 +3971,7 @@ animationType="fade"
 onRequestClose={() => setCompletedSummary(null)}
 >
 <View style={styles.summaryModalBackdrop}>
-<View style={[styles.summaryCard, { backgroundColor: themeColors.surface, borderColor: themeColors.border }]}>
+<ScrollView style={{ width: '100%', maxWidth: 380, maxHeight: '88%' }} contentContainerStyle={[styles.summaryCard, { backgroundColor: themeColors.surface, borderColor: themeColors.border }]} showsVerticalScrollIndicator={false}>
 <View style={[styles.summaryCheckmark, { backgroundColor: themeColors.surfaceElevated, borderColor: themeColors.border }]}>
 <Ionicons name="trophy" size={28} color={themeColors.primary} />
 </View>
@@ -3991,14 +4004,17 @@ onRequestClose={() => setCompletedSummary(null)}
 </View>
 </View>
 )}
+{savingSummaryWalk && <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center', marginVertical: 12 }}><ActivityIndicator size="small" color={themeColors.primary} /><Text style={{ color: themeColors.textMuted, fontSize: 12 }}>Saving activity and updating goals…</Text></View>}
+{!!summarySaveError && <Text style={{ color: '#f87171', fontSize: 12, marginVertical: 10 }}>{summarySaveError}</Text>}
+{savedSummaryWalk && <WalkGoalSummary walk={savedSummaryWalk} userId={savedSummaryWalk.userId} />}
 
 <TouchableOpacity
 style={[styles.summaryCloseBtn, { backgroundColor: themeColors.primary }]}
 onPress={() => setCompletedSummary(null)}
 >
-<Text style={[styles.summaryCloseBtnText, { color: '#ffffff' }]}>Save to History</Text>
+<Text style={[styles.summaryCloseBtnText, { color: '#ffffff' }]}>Done</Text>
 </TouchableOpacity>
-</View>
+</ScrollView>
 </View>
 </Modal>
 

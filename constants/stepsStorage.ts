@@ -1,3 +1,4 @@
+import { isDemoAccount } from './accountRecords';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export interface DailyStepData {
@@ -124,6 +125,7 @@ function generateMockData(stepsGoal: number, days: number = 28): DailyStepData[]
 
 /** Seed mock data for a user if not already done */
 export async function ensureMockDataSeeded(userId: string, stepsGoal: number = 8000): Promise<void> {
+  if (!isDemoAccount(userId)) return;
   const seedKey = MOCK_SEEDED_KEY(userId);
   const alreadySeeded = await AsyncStorage.getItem(seedKey);
   if (alreadySeeded) return;
@@ -144,6 +146,7 @@ export async function ensureMockDataSeeded(userId: string, stepsGoal: number = 8
 
 /** Load step data for a specific date. Returns null if no data. */
 export async function loadDaySteps(userId: string, date: string): Promise<DailyStepData | null> {
+  await repairLegacyStepSeeds(userId);
   const raw = await AsyncStorage.getItem(STEPS_KEY(userId));
   if (!raw) return null;
   const map: Record<string, DailyStepData> = JSON.parse(raw);
@@ -152,6 +155,7 @@ export async function loadDaySteps(userId: string, date: string): Promise<DailyS
 
 /** Load step data for a week given the week's date strings (7 days Mon-Sun) */
 export async function loadWeekSteps(userId: string, dates: string[]): Promise<DailyStepData[]> {
+  await repairLegacyStepSeeds(userId);
   const raw = await AsyncStorage.getItem(STEPS_KEY(userId));
   const map: Record<string, DailyStepData> = raw ? JSON.parse(raw) : {};
   return dates.map(date => map[date] ?? { date, totalSteps: 0, hourlySteps: new Array(24).fill(0) });
@@ -159,6 +163,7 @@ export async function loadWeekSteps(userId: string, dates: string[]): Promise<Da
 
 /** Load all recorded daily step data for a user */
 export async function loadAllStepData(userId: string): Promise<Record<string, DailyStepData>> {
+  await repairLegacyStepSeeds(userId);
   const raw = await AsyncStorage.getItem(STEPS_KEY(userId));
   if (!raw) return {};
   try {
@@ -181,6 +186,7 @@ export async function addStepsToUserHistory(
   const dateStr = formatLocalDate(d);
   const hour = d.getHours();
 
+  await repairLegacyStepSeeds(userId);
   const key = STEPS_KEY(userId);
   const raw = await AsyncStorage.getItem(key);
   const map: Record<string, DailyStepData> = raw ? JSON.parse(raw) : {};
@@ -209,4 +215,33 @@ export async function addStepsToUserHistory(
   map[dateStr] = updatedDay;
   await AsyncStorage.setItem(key, JSON.stringify(map));
   return updatedDay;
+}
+
+const repairs = new Map<string, Promise<void>>();
+/** Previous versions generated 35 days of unlabelled steps. Archive those values before rebuilding from real saved walks. */
+async function repairLegacyStepSeeds(userId: string): Promise<void> {
+  if (isDemoAccount(userId)) return;
+  if (repairs.has(userId)) return repairs.get(userId);
+  const work = (async () => {
+    const marker = `@footprint_step_seed_repaired_v1_${userId}`;
+    if (await AsyncStorage.getItem(marker)) return;
+    if (await AsyncStorage.getItem(MOCK_SEEDED_KEY(userId))) {
+      const raw = await AsyncStorage.getItem(STEPS_KEY(userId));
+      if (raw !== null && !(await AsyncStorage.getItem(`${marker}_backup`)))
+        await AsyncStorage.setItem(`${marker}_backup`, raw);
+      const { loadWalks } = await import('./walkStorage');
+      const rebuilt: Record<string, DailyStepData> = {};
+      for (const walk of await loadWalks(userId)) {
+        const date = new Date(walk.date);
+        if (!Number.isFinite(date.getTime())) continue;
+        const day = formatLocalDate(date), steps = Math.max(0, Math.round(walk.steps || 0));
+        const entry = rebuilt[day] ?? { date: day, totalSteps: 0, hourlySteps: new Array(24).fill(0) };
+        entry.totalSteps += steps; entry.hourlySteps[date.getHours()] += steps; rebuilt[day] = entry;
+      }
+      await AsyncStorage.setItem(STEPS_KEY(userId), JSON.stringify(rebuilt));
+    }
+    await AsyncStorage.setItem(marker, '1');
+  })();
+  repairs.set(userId, work);
+  try { await work; } finally { repairs.delete(userId); }
 }

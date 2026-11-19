@@ -1,3 +1,4 @@
+import { TutorialAnchor, TutorialButton, TutorialScrollView, useTutorialTargetId } from '@/components/FirstRunTutorial';
 import { AppModal as Modal } from '@/components/AppModal';
 import { NutritionPet } from '@/components/NutritionPet';
 import { useFocusEffect } from 'expo-router';
@@ -57,6 +58,11 @@ export default function NutritionScreen() {
   const isDark = themeContext?.isDark ?? colors?.isDark ?? true;
   const { profile, user } = useAuth();
   const [activeTab, setActiveTab] = useState<'tracker' | 'pet'>('tracker');
+  const tutorialTarget = useTutorialTargetId();
+  useEffect(() => {
+    if (tutorialTarget === 'pet-care') setActiveTab('pet');
+    else if (tutorialTarget === 'nutrition' || tutorialTarget === 'calorie-overview' || tutorialTarget === 'meal-logging') setActiveTab('tracker');
+  }, [tutorialTarget]);
   const [screenActive, setScreenActive] = useState(false);
   const [foreground, setForeground] = useState(AppState.currentState === 'active');
   const [nutritionReady, setNutritionReady] = useState(false);
@@ -355,7 +361,7 @@ export default function NutritionScreen() {
 
   return (
     <SafeAreaView style={[styles.safeArea, { backgroundColor: colors.background }]} edges={['top']}>
-      <ScrollView
+      <TutorialScrollView
         ref={mainScroll}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
@@ -384,10 +390,10 @@ export default function NutritionScreen() {
         </View>
 
         <View accessibilityRole="tablist" style={{ flexDirection: 'row', overflow: 'hidden', marginHorizontal: -16, paddingVertical: 0, paddingHorizontal: 0, borderRadius: 18, backgroundColor: colors.surfaceElevated, gap: 4 }}>
-          {(['tracker', 'pet'] as const).map(tab => <TouchableOpacity key={tab} accessibilityRole="tab" accessibilityState={{ selected: activeTab === tab }} onPress={() => { setActiveTab(tab); mainScroll.current?.scrollTo({ y: 0, animated: false }); Haptics.selectionAsync().catch(() => {}); }} style={{ flex: 1, paddingVertical: 11, borderRadius: 18, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7, backgroundColor: activeTab === tab ? colors.primaryBg : 'transparent' }}>
+          {(['tracker', 'pet'] as const).map(tab => <TutorialButton tutorialId={tab === 'pet' ? 'nutrition-pet' : 'nutrition-tracker'} key={tab} accessibilityRole="tab" accessibilityState={{ selected: activeTab === tab }} onPress={() => { setActiveTab(tab); mainScroll.current?.scrollTo({ y: 0, animated: false }); Haptics.selectionAsync().catch(() => {}); }} style={{ flex: 1, paddingVertical: 11, borderRadius: 18, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7, backgroundColor: activeTab === tab ? colors.primaryBg : 'transparent' }}>
             <Ionicons name={tab === 'tracker' ? 'stats-chart-outline' : 'paw-outline'} size={18} color={activeTab === tab ? colors.primary : colors.textMuted} />
             <Text style={{ fontFamily: BRAND_ROUNDED_FONT_EXTRA, fontSize: 13, color: activeTab === tab ? colors.primary : colors.textMuted }}>{tab === 'tracker' ? 'Tracker' : 'Pet'}</Text>
-          </TouchableOpacity>)}
+          </TutorialButton>)}
         </View>
         <View style={{ gap: 14, display: activeTab === 'tracker' ? 'flex' : 'none' }}>
         {/* INTEGRATED DATE SELECTOR BAR: Isolated directly on the background (no bubble container around row) */}
@@ -513,7 +519,7 @@ export default function NutritionScreen() {
           const barFillColor = colors.primary;
 
           return (
-            <View
+            <TutorialAnchor tutorialId="calorie-overview"
               style={[
                 styles.calorieHeroBoxStandalone,
                 {
@@ -603,7 +609,7 @@ export default function NutritionScreen() {
               <View style={{ borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border }}>
                 <CalorieChallenges compact embedded />
               </View>
-            </View>
+            </TutorialAnchor>
           );
         })()}
 
@@ -799,12 +805,12 @@ export default function NutritionScreen() {
 
         {/* YOUR ESSENTIALS: Meals & Daily Hydration Progression */}
         <View style={styles.mealsVerticalSection}>
-          <View style={styles.mealsHeaderRow}>
+          <TutorialAnchor tutorialId="meal-logging" style={styles.mealsHeaderRow}>
             <Text style={[styles.sectionTitle, { color: colors.text }]}>Your Essentials</Text>
             <Text style={[styles.mealCountBadge, { color: colors.textMuted }]}>
               {meals.length} {meals.length === 1 ? 'item' : 'items'} logged
             </Text>
-          </View>
+          </TutorialAnchor>
 
           {/* Meal Category Cards (Clean modern typography) */}
           {MEAL_CATEGORIES.map((cat) => {
@@ -946,7 +952,7 @@ export default function NutritionScreen() {
           active={screenActive && foreground && !showLogModal && !showQuizModal && !showCustomizerModal && !showWaterModal && !showHistoryModal}
           onLogMeal={() => { setSelectedDateKey(todayKey); const hour = new Date().getHours(); openLogChoice(hour < 11 ? 'breakfast' : hour < 16 ? 'lunch' : hour < 21 ? 'dinner' : 'snack'); }}
           onAdjustGoal={() => setShowQuizModal(true)} onRetry={() => { void loadAllNutritionData(selectedDateKey); }} />}
-      </ScrollView>
+      </TutorialScrollView>
 
       {/* Full-Page Food Logging Screen */}
       <FoodLoggingModal
