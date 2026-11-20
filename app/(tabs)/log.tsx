@@ -1,5 +1,7 @@
+import { buildWorkoutRoutine } from '@/constants/workoutRoutineDraft';
 import { TutorialAnchor, TutorialScrollView } from "@/components/FirstRunTutorial";
 import { WorkoutStartPanel } from '@/components/WorkoutStartPanel';
+import { WorkoutRankProgress } from '@/components/WorkoutRankProgress';
 import { ExerciseDemo, ExerciseDemoProvider } from '@/components/ExerciseDemo';
 import { useScreenInsets } from '@/constants/useScreenInsets';
 import { AppModal as Modal } from '@/components/AppModal';
@@ -39,7 +41,6 @@ import {
   RoutineExercise,
   loadCustomRoutines,
   saveCustomRoutines,
-  DEFAULT_CUSTOM_ROUTINES,
   deleteWorkoutLogsByIds,
   loadManualMuscleSoreness,
   saveManualMuscleSoreness,
@@ -221,6 +222,7 @@ const ModalExerciseCheckItem = React.memo(function ModalExerciseCheckItem({
 
 interface RoutineBuilderModalProps {
   visible: boolean;
+  saving: boolean;
   editingRoutine: CustomRoutine | null;
   isDark: boolean;
   colors: any;
@@ -236,6 +238,7 @@ interface RoutineBuilderModalProps {
 
 const RoutineBuilderModal = React.memo(function RoutineBuilderModal({
   visible,
+  saving,
   editingRoutine,
   isDark,
   colors,
@@ -246,10 +249,7 @@ const RoutineBuilderModal = React.memo(function RoutineBuilderModal({
   const [title, setTitle] = useState('');
   const [color, setColor] = useState('#3b82f6');
   const [category, setCategory] = useState<CustomRoutine['category']>('chest');
-  const [selectedIds, setSelectedIds] = useState<string[]>([
-    'bench_press',
-    'incline_dumbbell_press',
-  ]);
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
 
   useEffect(() => {
@@ -264,7 +264,7 @@ const RoutineBuilderModal = React.memo(function RoutineBuilderModal({
       setTitle('');
       setColor('#3b82f6');
       setCategory('chest');
-      setSelectedIds(['bench_press', 'incline_dumbbell_press']);
+      setSelectedIds([]);
     }
   }, [visible, editingRoutine]);
 
@@ -287,7 +287,6 @@ const RoutineBuilderModal = React.memo(function RoutineBuilderModal({
       if (prev.includes(ex.id)) {
         return prev.filter((id) => id !== ex.id);
       }
-      setCategory(ex.category);
       return [...prev, ex.id];
     });
   }, []);
@@ -335,7 +334,7 @@ const RoutineBuilderModal = React.memo(function RoutineBuilderModal({
             {editingRoutine ? 'Edit Workout Day' : 'New Workout Day'}
           </Text>
           <Text style={[styles.modalSub, { color: colors.textMuted }]}>
-            Create a preset with exercises that logs in one tap
+            {selectedIds.length} exercise{selectedIds.length === 1 ? '' : 's'} selected
           </Text>
         </View>
         <TouchableOpacity
@@ -430,7 +429,7 @@ const RoutineBuilderModal = React.memo(function RoutineBuilderModal({
       </View>
 
       <FlatList
-        data={filteredModalExercises}
+        data={visible ? filteredModalExercises : []}
         keyExtractor={keyExtractor}
         renderItem={renderExerciseItem}
         getItemLayout={getItemLayout}
@@ -448,23 +447,25 @@ const RoutineBuilderModal = React.memo(function RoutineBuilderModal({
         {editingRoutine && (
           <TouchableOpacity
             style={[styles.deleteRoutineBtn, { borderColor: '#ef4444' }]}
+            disabled={saving}
             onPress={() => onDelete(editingRoutine.id)}
           >
             <Ionicons name="trash-outline" size={16} color="#ef4444" />
           </TouchableOpacity>
         )}
         <TouchableOpacity
-          style={[styles.saveRoutineBtn, { backgroundColor: color }]}
+          disabled={saving || selectedIds.length === 0}
+          style={[styles.saveRoutineBtn, { backgroundColor: color, opacity: saving || selectedIds.length === 0 ? .5 : 1 }]}
           onPress={() =>
             onSave({
               title,
               color,
-              category,
+              category: DEFAULT_EXERCISES.find(exercise => exercise.id === selectedIds[0])?.category ?? category,
               selectedIds,
             })
           }
         >
-          <Text style={styles.saveRoutineBtnText}>Save Workout Day</Text>
+          <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={.75} style={styles.saveRoutineBtnText}>{saving ? 'Saving...' : 'Save Workout Day'}</Text>
         </TouchableOpacity>
       </View>
     </InteractiveBottomModal>
@@ -534,6 +535,9 @@ export default function LogScreen() {
   // Custom Routine / Workout Day Presets state
   const [routines, setRoutines] = useState<CustomRoutine[]>([]);
   const [routineModalVisible, setRoutineModalVisible] = useState<boolean>(false);
+  const [savingRoutine, setSavingRoutine] = useState(false);
+  const routineWriteLock = useRef(false);
+  const routineRevision = useRef(0);
   const [editingRoutine, setEditingRoutine] = useState<CustomRoutine | null>(null);
   const [newRoutineTitle, setNewRoutineTitle] = useState<string>('');
   const [newRoutineCategory, setNewRoutineCategory] = useState<CustomRoutine['category']>('chest');
@@ -580,13 +584,14 @@ export default function LogScreen() {
   }, [recoveryMap]);
 
   const loadData = useCallback(async () => {
+    const revision = routineRevision.current;
     const [logs, loadedRoutines, loadedOverrides] = await Promise.all([
       loadWorkoutLogs(userId),
       loadCustomRoutines(userId),
       loadManualMuscleSoreness(userId),
     ]);
     setAllLogs(logs);
-    setRoutines(loadedRoutines);
+    if (revision === routineRevision.current) setRoutines(loadedRoutines);
     setManualMuscleOverrides(loadedOverrides);
   }, [userId]);
 
@@ -620,7 +625,7 @@ export default function LogScreen() {
     setNewRoutineTitle('');
     setNewRoutineCategory('chest');
     setNewRoutineColor('#3b82f6');
-    setSelectedExIdsForRoutine(['bench_press', 'incline_dumbbell_press']);
+    setSelectedExIdsForRoutine([]);
     setRoutineModalVisible(true);
   };
 
@@ -654,42 +659,39 @@ export default function LogScreen() {
         return;
       }
 
-      const newExList: RoutineExercise[] = selectedIds.map((id) => {
-        const def = DEFAULT_EXERCISES.find((e) => e.id === id);
-        return {
-          exerciseId: id,
-          reps: def?.defaultReps || 10,
-          weight: def?.defaultWeight || 50,
-        };
-      });
-
-      const newRoutine: CustomRoutine = {
-        id: editingRoutine ? editingRoutine.id : `routine_${Date.now()}`,
-        title: title.trim(),
-        color,
-        category,
-        exercises: newExList,
-      };
-
-      const updated = editingRoutine
-        ? routines.map((r) => (r.id === editingRoutine.id ? newRoutine : r))
-        : [...routines, newRoutine];
-
-      setRoutines(updated);
-      if (activeSessionRoutine?.id === newRoutine.id) setActiveSessionRoutine(newRoutine);
-      await saveCustomRoutines(userId, updated);
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
-      setRoutineModalVisible(false);
+      if (routineWriteLock.current) return;
+      routineWriteLock.current = true; setSavingRoutine(true); routineRevision.current++;
+      try {
+        const newRoutine = buildWorkoutRoutine({
+          id: `routine_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`, title, color, category, selectedIds,
+        }, DEFAULT_EXERCISES, editingRoutine);
+        const updated = editingRoutine
+          ? routines.map(routine => routine.id === editingRoutine.id ? newRoutine : routine)
+          : [...routines, newRoutine];
+        await saveCustomRoutines(userId, updated);
+        setRoutines(updated);
+        if (activeSessionRoutine?.id === newRoutine.id) setActiveSessionRoutine(newRoutine);
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+        setRoutineModalVisible(false);
+      } catch (error) {
+        Alert.alert('Workout day not saved', error instanceof Error ? error.message : 'Please try again. Your selections are still here.');
+      } finally { routineWriteLock.current = false; setSavingRoutine(false); }
     },
     [activeSessionRoutine, editingRoutine, newRoutineCategory, newRoutineColor, newRoutineTitle, routines, selectedExIdsForRoutine, userId]
   );
   const handleDeleteRoutine = useCallback(
     async (routineId: string) => {
-      const updated = routines.filter((r) => r.id !== routineId);
-      setRoutines(updated);
-      if (activeSessionRoutine?.id === routineId) setActiveSessionRoutine(null);
-      await saveCustomRoutines(userId, updated);
-      setRoutineModalVisible(false);
+      if (routineWriteLock.current) return;
+      routineWriteLock.current = true; setSavingRoutine(true); routineRevision.current++;
+      try {
+        const updated = routines.filter(routine => routine.id !== routineId);
+        await saveCustomRoutines(userId, updated);
+        setRoutines(updated);
+        if (activeSessionRoutine?.id === routineId) setActiveSessionRoutine(null);
+        setRoutineModalVisible(false);
+      } catch (error) {
+        Alert.alert('Workout day not deleted', error instanceof Error ? error.message : 'Please try again.');
+      } finally { routineWriteLock.current = false; setSavingRoutine(false); }
     },
     [activeSessionRoutine, routines, userId]
   );
@@ -969,8 +971,69 @@ export default function LogScreen() {
     });
   }, [exerciseSearchQuery, selectedMuscleFilter, selectedDifficultyFilter, selectedTypeFilter]);
 
+  const cameraTrackerModal = useMemo(() => (
+    <CameraFormTrackerModal
+        visible={showCameraTracker}
+        weightUnit={effectiveWeightUnit}
+        onClose={() => setShowCameraTracker(false)}
+        onSaveTrackedWorkout={async (trackingData) => {
+          const exerciseMap: Record<string, { id: string; name: string }> = {
+            boxing: { id: 'boxing', name: 'Shadowboxing' },
+            pushups: { id: 'pushups', name: 'Pushups' },
+            squats: { id: 'squats', name: trackingData.confirmedWeight === 0 ? 'Bodyweight Squat' : 'Squats' },
+            bicep_curls: { id: 'bicep_curls', name: 'Bicep Curls' },
+          };
+          const meta = exerciseMap[trackingData.exerciseType] || { id: 'pushups', name: 'Pushups' };
+          const confirmedWeight = trackingData.confirmedWeight;
+          if (confirmedWeight === undefined || !Number.isFinite(confirmedWeight) || confirmedWeight < 0) {
+            throw new Error('Camera workout needs a confirmed weight.');
+          }
+
+          const created = await saveWorkoutLogBatch(userId, [{
+            exerciseId: meta.id,
+            exerciseName: meta.name,
+            reps: trackingData.repCount,
+            weight: confirmedWeight,
+            weightUnit: trackingData.confirmedWeightUnit || effectiveWeightUnit,
+            notes: trackingData.exerciseType === 'boxing' ? `Boxing: ${trackingData.boxingScore || 0} points, ${trackingData.repCount} hits, ${trackingData.boxingMisses || 0} misses; best combo ${trackingData.boxingBestCombo || 0}.` : trackingData.averageFormScore > 0 ? `AI Form Score: ${trackingData.averageFormScore}%` : 'Camera-counted reps; form score not assessed.',
+            aiTracked: true,
+            trackingData,
+          }]);
+
+          loadData();
+          setLastLoggedIds(created.map(log => log.id));
+          setBatchSuccessMsg(`Logged ${trackingData.repCount} camera-tracked ${meta.id === 'boxing' ? 'hits' : 'reps'}.`);
+          if (undoTimer) clearTimeout(undoTimer);
+          setUndoTimer(setTimeout(() => { setBatchSuccessMsg(null); setLastLoggedIds([]); }, 4500));
+        }}
+      />
+  ), [showCameraTracker, effectiveWeightUnit, userId, loadData, undoTimer]);
+
+  const sorenessModal = useMemo(() => (
+    <MuscleSorenessModal
+        visible={showMuscleRecoveryModal}
+        onClose={() => setShowMuscleRecoveryModal(false)}
+        recoveryMap={recoveryMap}
+        selectedMuscle={selectedMuscle}
+        onSelectMuscle={(m) => setSelectedMuscle(m)}
+        onSetMuscleRecovery={handleSetMuscleRecovery}
+      />
+  ), [showMuscleRecoveryModal, recoveryMap, selectedMuscle, manualMuscleOverrides, userId]);
+
+  const bodyFatModal = useMemo(() => (
+    <BodyFatScannerModal
+        visible={showBodyFatModal}
+        onClose={() => setShowBodyFatModal(false)}
+        userId={userId}
+        profile={profile}
+        onScanSaved={() => {
+          loadData();
+        }}
+      />
+  ), [showBodyFatModal, userId, profile, loadData]);
+
   return (
-    <ExerciseDemoProvider>
+    <ExerciseDemoProvider paused={routineModalVisible || showCameraTracker || showMuscleRecoveryModal || showBodyFatModal}>
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       <TutorialScrollView
         contentContainerStyle={styles.scrollContent}
@@ -1009,7 +1072,7 @@ export default function LogScreen() {
           decelerationRate="fast"
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={styles.routinesSliderTrack}
-          onScroll={(e) => {
+          onMomentumScrollEnd={(e) => {
             const offsetX = e.nativeEvent.contentOffset.x;
             const pageIndex = Math.min(
               routinePageCount - 1,
@@ -1017,7 +1080,6 @@ export default function LogScreen() {
             );
             setActiveRoutinePage(pageIndex);
           }}
-          scrollEventThrottle={16}
         >
           {routinePages.map((pageGroup, pIdx) => (
             <View key={`routine_page_${pIdx}`} style={styles.routinePageGroup}>
@@ -1167,6 +1229,7 @@ export default function LogScreen() {
           <Text style={[styles.loggedTextPlain, { color: colors.text }]}>{batchSuccessMsg}</Text>
           {lastLoggedIds.length > 0 && <TouchableOpacity onPress={triggerUndo}><Text style={styles.blueUndoTextOnly}>Undo</Text></TouchableOpacity>}
         </View>}
+        <WorkoutRankProgress userId={userId} logIds={lastLoggedIds} weightUnit={effectiveWeightUnit} />
         {!activeSessionRoutine && <WorkoutStartPanel routines={routines} logs={allLogs}
           onSelectRoutine={setActiveSessionRoutine} onCreateRoutine={openCreateRoutineModal} />}
         {activeSessionRoutine && (
@@ -1200,71 +1263,23 @@ export default function LogScreen() {
       {/* Custom Routine / Workout Day Creation Modal */}
       <RoutineBuilderModal
         visible={routineModalVisible}
+        saving={savingRoutine}
         editingRoutine={editingRoutine}
         isDark={isDark}
         colors={colors}
-        onClose={() => setRoutineModalVisible(false)}
+        onClose={() => { if (!routineWriteLock.current) setRoutineModalVisible(false); }}
         onSave={handleSaveCustomRoutine}
         onDelete={handleDeleteRoutine}
       />
 
       {/* AI Camera Form Tracker Modal (in Fitness / Workouts Tab) */}
-      <CameraFormTrackerModal
-        visible={showCameraTracker}
-        weightUnit={effectiveWeightUnit}
-        onClose={() => setShowCameraTracker(false)}
-        onSaveTrackedWorkout={async (trackingData) => {
-          const exerciseMap: Record<string, { id: string; name: string }> = {
-            boxing: { id: 'boxing', name: 'Shadowboxing' },
-            pushups: { id: 'pushups', name: 'Pushups' },
-            squats: { id: 'squats', name: trackingData.confirmedWeight === 0 ? 'Bodyweight Squat' : 'Squats' },
-            bicep_curls: { id: 'bicep_curls', name: 'Bicep Curls' },
-          };
-          const meta = exerciseMap[trackingData.exerciseType] || { id: 'pushups', name: 'Pushups' };
-          const confirmedWeight = trackingData.confirmedWeight;
-          if (confirmedWeight === undefined || !Number.isFinite(confirmedWeight) || confirmedWeight < 0) {
-            throw new Error('Camera workout needs a confirmed weight.');
-          }
-
-          const created = await saveWorkoutLogBatch(userId, [{
-            exerciseId: meta.id,
-            exerciseName: meta.name,
-            reps: trackingData.repCount,
-            weight: confirmedWeight,
-            weightUnit: trackingData.confirmedWeightUnit || effectiveWeightUnit,
-            notes: trackingData.exerciseType === 'boxing' ? `Boxing: ${trackingData.boxingScore || 0} points, ${trackingData.repCount} hits, ${trackingData.boxingMisses || 0} misses; best combo ${trackingData.boxingBestCombo || 0}.` : trackingData.averageFormScore > 0 ? `AI Form Score: ${trackingData.averageFormScore}%` : 'Camera-counted reps; form score not assessed.',
-            aiTracked: true,
-            trackingData,
-          }]);
-
-          loadData();
-          setLastLoggedIds(created.map(log => log.id));
-          setBatchSuccessMsg(`Logged ${trackingData.repCount} camera-tracked ${meta.id === 'boxing' ? 'hits' : 'reps'}.`);
-          if (undoTimer) clearTimeout(undoTimer);
-          setUndoTimer(setTimeout(() => { setBatchSuccessMsg(null); setLastLoggedIds([]); }, 4500));
-        }}
-      />
+      {cameraTrackerModal}
 
       {/* Standalone Muscle Soreness & Recovery Modal */}
-      <MuscleSorenessModal
-        visible={showMuscleRecoveryModal}
-        onClose={() => setShowMuscleRecoveryModal(false)}
-        recoveryMap={recoveryMap}
-        selectedMuscle={selectedMuscle}
-        onSelectMuscle={(m) => setSelectedMuscle(m)}
-        onSetMuscleRecovery={handleSetMuscleRecovery}
-      />
+      {sorenessModal}
 
       {/* Standalone Body Fat % Scanner Modal */}
-      <BodyFatScannerModal
-        visible={showBodyFatModal}
-        onClose={() => setShowBodyFatModal(false)}
-        userId={userId}
-        profile={profile}
-        onScanSaved={() => {
-          loadData();
-        }}
-      />
+      {bodyFatModal}
 
 
     </View>

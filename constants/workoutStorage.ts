@@ -271,6 +271,7 @@ export async function saveCustomRoutines(userId: string, routines: CustomRoutine
     await AsyncStorage.setItem(key, JSON.stringify(routines));
   } catch (e) {
     console.error('Failed to save custom routines', e);
+    throw e;
   }
 }
 

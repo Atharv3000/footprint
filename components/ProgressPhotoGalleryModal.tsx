@@ -616,9 +616,9 @@ export function ProgressPhotoGalleryModal({
                   resizeMode="cover"
                 />
                 <View style={styles.compareLabelBadgeRight}>
-                  <Text style={styles.compareLabelText}>B: {photoB.date}</Text>
+                  <Text numberOfLines={1} ellipsizeMode="clip" style={styles.compareLabelText}>B: {photoB.date}</Text>
                   {showWeightOverlay && photoB.weightKg !== undefined && photoB.weightKg !== null && (
-                    <Text style={styles.compareWeightText}>⚖️ {photoB.weightKg} kg</Text>
+                    <Text numberOfLines={1} ellipsizeMode="clip" style={styles.compareWeightText}>⚖️ {photoB.weightKg} kg</Text>
                   )}
                 </View>
               </View>
@@ -635,16 +635,19 @@ export function ProgressPhotoGalleryModal({
                   },
                 ]}
               >
+                {/* Keep photo and labels on one fixed-size canvas. Only its parent mask changes width. */}
+                <View style={[StyleSheet.absoluteFill, { width: SCREEN_WIDTH }]}>
                 <Image
                   source={{ uri: photoA.uri }}
                   style={[styles.fullScreenImage, { width: SCREEN_WIDTH }]}
                   resizeMode="cover"
                 />
                 <View style={styles.compareLabelBadgeLeft}>
-                  <Text style={styles.compareLabelText}>A: {photoA.date}</Text>
+                  <Text numberOfLines={1} ellipsizeMode="clip" style={styles.compareLabelText}>A: {photoA.date}</Text>
                   {showWeightOverlay && photoA.weightKg !== undefined && photoA.weightKg !== null && (
-                    <Text style={styles.compareWeightText}>⚖️ {photoA.weightKg} kg</Text>
+                    <Text numberOfLines={1} ellipsizeMode="clip" style={styles.compareWeightText}>⚖️ {photoA.weightKg} kg</Text>
                   )}
+                </View>
                 </View>
               </Animated.View>
             )}

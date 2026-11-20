@@ -3,20 +3,33 @@ import { Animated } from 'react-native';
 import Svg, { Circle, Ellipse, Line, Polygon, Rect } from 'react-native-svg';
 import type { VectorExercise } from '@/constants/exerciseVector';
 
-const ALine = Animated.createAnimatedComponent(Line);
-const ACircle = Animated.createAnimatedComponent(Circle);
-const APolygon = Animated.createAnimatedComponent(Polygon);
-const ARect = Animated.createAnimatedComponent(Rect);
+const AnimatedLine = Animated.createAnimatedComponent(Line);
+const AnimatedCircle = Animated.createAnimatedComponent(Circle);
+const AnimatedPolygon = Animated.createAnimatedComponent(Polygon);
+const AnimatedRect = Animated.createAnimatedComponent(Rect);
 
 /** Rounded vector limbs are driven by the same joints in each exercise's two source poses. */
-export function ExerciseFigure({ demo, progress, size, color }: { demo: VectorExercise; progress: Animated.Value; size: number; color: string }) {
+export const ExerciseFigure = React.memo(function ExerciseFigure({ demo, progress, size, color, animate = true }: { demo: VectorExercise; progress: Animated.Value; size: number; color: string; animate?: boolean }) {
+  // Static geometry below contains plain numbers/strings; expose the animated superset to JSX.
+  const ALine = (animate ? AnimatedLine : Line) as typeof AnimatedLine;
+  const ACircle = (animate ? AnimatedCircle : Circle) as typeof AnimatedCircle;
+  const APolygon = (animate ? AnimatedPolygon : Polygon) as typeof AnimatedPolygon;
+  const ARect = (animate ? AnimatedRect : Rect) as typeof AnimatedRect;
   const geometry = useMemo(() => {
+    if (!animate) {
+      const frame = demo.frames[0];
+      return {
+        coordinate: (i: number, axis: number, offset = 0) => frame[i][axis] + offset,
+        pairMean: (indices: number[], axis: number) => indices.reduce((sum, i) => sum + frame[i][axis], 0) / indices.length,
+        torso: [3,4,10,9].map(i => frame[i].join(',')).join(' '),
+      };
+    }
     const inputRange = demo.frames.map((_,i) => i/(demo.frames.length-1));
     const coordinate = (i: number, axis: number, offset = 0) => progress.interpolate({ inputRange, outputRange: demo.frames.map(pose => pose[i][axis]+offset), extrapolate: 'clamp' });
     const pairMean = (indices: number[], axis: number) => progress.interpolate({ inputRange, outputRange: demo.frames.map(pose => indices.reduce((sum,i) => sum+pose[i][axis],0)/indices.length) });
     const torso = progress.interpolate({ inputRange, outputRange: demo.frames.map(pose => [3,4,10,9].map(i => pose[i].join(',')).join(' ')) });
     return { coordinate, pairMean, torso };
-  }, [demo, progress]);
+  }, [demo, progress, animate]);
   const { coordinate: c, pairMean, torso } = geometry;
   const muscles = demo.muscles.join(' ');
   const armFocus = /biceps|triceps|forearms|shoulders/.test(muscles);
@@ -64,4 +77,4 @@ export function ExerciseFigure({ demo, progress, size, color }: { demo: VectorEx
     </>}
     {demo.support === 'skates' && [13,14,15,16].map(i => <ACircle key={`wheel${i}`} cx={c(i,0)} cy={c(i,1,3)} r={1.5} fill="#7F8D85" />)}
   </Svg>;
-}
+});

@@ -61,6 +61,7 @@ export function tierForVolume(volumeLbs: number): MuscleRank['tier'] {
 }
 
 export function rankForPart(part: BodyPart, volumeLbs: number, days: number = 0, lastTrained: string | null = null): MuscleRank {
+  volumeLbs = Number.isFinite(volumeLbs) ? Math.max(0, volumeLbs) : 0;
   const tier = tierForVolume(volumeLbs);
   const next = MUSCLE_TIERS[MUSCLE_TIERS.indexOf(tier) + 1] || null;
   const progress = next
@@ -92,8 +93,8 @@ export function computeMuscleRanks(
 
   for (const log of logs) {
     if (!log || typeof log.id !== 'string' || seen.has(log.id)) continue;
-    // The existing app can migrate guest history into the user's own storage key.
-    if (log.userId !== userId && log.userId !== 'guest_user') continue;
+    if (log.userId !== userId || /^demo_/.test(log.id)) continue;
+    if (log.weightUnit !== 'kg' && log.weightUnit !== 'lb') continue;
     if (!Number.isInteger(log.reps) || log.reps <= 0 || !Number.isFinite(log.weight) || log.weight < 0) continue;
     if (typeof log.date !== 'string' || typeof log.exerciseId !== 'string' || typeof log.exerciseName !== 'string') continue;
     const dateOnly = /^\d{4}-\d{2}-\d{2}$/.test(log.date);
@@ -116,12 +117,12 @@ export function computeMuscleRanks(
 
     // Convert weight to lbs if logged in kg
     const weightInLbs = log.weightUnit === 'kg' ? log.weight * 2.20462 : log.weight;
-    // For bodyweight exercises with 0 external weight, use estimated effective resistance (~100 lbs)
-    const effectiveWeightLbs = weightInLbs > 0 ? weightInLbs : 100;
-    const setVolumeLbs = log.reps * effectiveWeightLbs;
+    // Only saved external resistance earns weight volume; zero never invents body weight.
+    const setVolumeLbs = log.reps * weightInLbs;
+    if (!Number.isFinite(setVolumeLbs)) continue;
 
     for (const part of parts) {
-      volumeByPart[part] += Math.round(setVolumeLbs);
+      volumeByPart[part] += setVolumeLbs;
       days[part].add(day);
       if (!latest[part] || date.getTime() > new Date(latest[part]!).getTime()) latest[part] = date.toISOString();
     }
@@ -130,4 +131,18 @@ export function computeMuscleRanks(
   return BODY_PARTS.map(part =>
     rankForPart(part.id, volumeByPart[part.id], days[part.id].size, latest[part.id] || null)
   );
+}
+
+export type MuscleRankGain = { part: BodyPart; addedVolumeLbs: number; before: MuscleRank; after: MuscleRank; rankedUp: boolean };
+/** Derive the contribution of actual persisted IDs; no second score store can drift from the log. */
+export function workoutRankGains(logs: readonly WorkoutLogEntry[], savedIds: readonly string[], exercises: readonly ExerciseDefinition[], userId: string, now = new Date()): MuscleRankGain[] {
+  const ids = new Set(savedIds);
+  if (!ids.size) return [];
+  const before = computeMuscleRanks(logs.filter(log => !ids.has(log.id)), exercises, userId, now);
+  const after = computeMuscleRanks(logs, exercises, userId, now);
+  return after.flatMap((rank, index) => {
+    const previous = before[index];
+    const addedVolumeLbs = Math.round((rank.volumeLbs - previous.volumeLbs) * 10) / 10;
+    return addedVolumeLbs > 0 ? [{ part: rank.part, addedVolumeLbs, before: previous, after: rank, rankedUp: rank.tier.volumeLbs > previous.tier.volumeLbs }] : [];
+  });
 }

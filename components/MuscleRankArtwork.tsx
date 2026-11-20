@@ -1,26 +1,97 @@
-import React, { useId } from 'react';
-import Svg, { Circle, Defs, Ellipse, G, LinearGradient, Path, Polygon, Stop } from 'react-native-svg';
+import React, { useCallback, useEffect, useId, useState } from 'react';
+import { AccessibilityInfo, AppState } from 'react-native';
+import { useFocusEffect } from 'expo-router';
+import Animated, { cancelAnimation, Easing, useAnimatedProps, useReducedMotion, useSharedValue, withRepeat, withTiming } from 'react-native-reanimated';
+import Svg, { Circle, ClipPath, Defs, Ellipse, G, LinearGradient, Path, Polygon, Rect, Stop } from 'react-native-svg';
 import { BodyPart, MuscleRank, MuscleTier, MUSCLE_TIERS } from '@/constants/muscleRanks';
 import type { MusclePalette } from '@/constants/personalRankPalette';
 
-export function RankEmblem({ tier, size = 46 }: { tier: MuscleTier; size?: number }) {
+const AnimatedShine = Animated.createAnimatedComponent(Rect);
+const AnimatedGlint = Animated.createAnimatedComponent(Circle);
+const SHIELD = 'M32 4 L53 15 L51 40 L32 59 L13 40 L11 15 Z';
+const WINGS = 'M18 23 L1 16 L5 28 L17 37 Z M46 23 L63 16 L59 28 L47 37 Z M16 36 L5 32 L10 44 L22 46 Z M48 36 L59 32 L54 44 L42 46 Z';
+const CROWN = 'M20 10 L20 2 L27 7 L32 0 L37 7 L44 2 L44 10 Z';
+
+export function RankEmblem({ tier, size = 46, active = true }: { tier: MuscleTier; size?: number; active?: boolean }) {
   const id = `emblem${useId().replace(/[^a-zA-Z0-9]/g, '')}`;
   const level = MUSCLE_TIERS.findIndex(value => value.id === tier.id);
+  const [focused, setFocused] = useState(false);
+  const [foreground, setForeground] = useState(AppState.currentState !== 'background' && AppState.currentState !== 'inactive');
+  const [reduceMotion, setReduceMotion] = useState(useReducedMotion());
+  const phase = useSharedValue(0);
+  const playing = active && focused && foreground && !reduceMotion;
+  useFocusEffect(useCallback(() => { setFocused(true); return () => setFocused(false); }, []));
+  useEffect(() => {
+    const app = AppState.addEventListener('change', value => setForeground(value === 'active'));
+    const motion = AccessibilityInfo.addEventListener('reduceMotionChanged', setReduceMotion);
+    return () => { app.remove(); motion.remove(); };
+  }, []);
+  useEffect(() => {
+    cancelAnimation(phase); phase.value = 0;
+    if (!playing) return;
+    // Bold, continuous foil motion stays visible even on the smallest rank badges.
+    phase.value = withRepeat(withTiming(1, { duration: 2200 + Math.max(0, level) * 40, easing: Easing.linear }), -1, false);
+    return () => { cancelAnimation(phase); phase.value = 0; };
+  }, [playing, level, phase]);
+  const shineProps = useAnimatedProps(() => {
+    const angle = phase.value * Math.PI * 2 + level * .43;
+    return { x: 8 + Math.sin(angle) * 48, width: 32 + Math.cos(angle * 2) * 8, opacity: .8 + (.5 + .5 * Math.cos(angle)) * .2 };
+  });
+  const foilProps = useAnimatedProps(() => {
+    const angle = phase.value * Math.PI * 2 + level * .43;
+    return { x: -35 + Math.sin(angle + .8) * 30, width: 88 + Math.sin(angle * 2) * 20, opacity: .75 + (.5 + .5 * Math.sin(angle)) * .25 };
+  });
+  const reflectionProps = useAnimatedProps(() => {
+    const angle = phase.value * Math.PI * 2 + level * .43;
+    return { x: 5 + Math.cos(angle + 1.7) * 44, width: 28 + Math.sin(angle) * 8, opacity: .55 + (.5 + .5 * Math.sin(angle + 2)) * .4 };
+  });
+  const glintProps = useAnimatedProps(() => {
+    const angle = phase.value * Math.PI * 2 + level * .43;
+    return { cx: 32 + Math.sin(angle) * 19, cy: 29 + Math.cos(angle * 2) * 18, r: 1.4 + (.5 + .5 * Math.cos(angle * 2)) * 1.8, opacity: .35 + Math.pow(.5 + .5 * Math.sin(angle + .8), 2) * .65 };
+  });
   return <Svg width={size} height={size} viewBox="0 0 64 64" accessibilityLabel={`${tier.name} rank`}>
-    <Defs><LinearGradient id={id} x1="0" y1="0" x2="1" y2="1">
-      <Stop offset="0" stopColor={tier.light} /><Stop offset=".48" stopColor={tier.color} /><Stop offset="1" stopColor={tier.dark} />
-    </LinearGradient></Defs>
-    {level >= 4 && <Path d="M18 23 L1 16 L5 28 L17 37 M46 23 L63 16 L59 28 L47 37 M16 36 L5 32 L10 44 L22 46 M48 36 L59 32 L54 44 L42 46"
-      fill={tier.dark} stroke={tier.color} strokeWidth="1.5" />}
-    <Path d="M32 4 L53 15 L51 40 L32 59 L13 40 L11 15 Z" fill={`url(#${id})`} stroke={tier.light} strokeWidth="1.3" />
-    <Path d="M32 11 L46 19 L45 37 L32 50 L19 37 L18 19 Z" fill={tier.dark} fillOpacity=".8" stroke={tier.light} strokeOpacity=".7" />
+    <Defs>
+      <LinearGradient id={id} x1="0" y1="0" x2="1" y2="1">
+        <Stop offset="0" stopColor={tier.light} /><Stop offset=".18" stopColor={tier.color} />
+        <Stop offset=".36" stopColor={tier.dark} /><Stop offset=".47" stopColor={tier.light} />
+        <Stop offset=".5" stopColor="#FFFFFF" stopOpacity=".85" /><Stop offset=".55" stopColor={tier.light} />
+        <Stop offset=".7" stopColor={tier.color} /><Stop offset=".86" stopColor={tier.dark} /><Stop offset="1" stopColor={tier.light} />
+      </LinearGradient>
+      <LinearGradient id={`${id}inset`} x1="0" y1="0" x2="1" y2="1">
+        <Stop offset="0" stopColor={tier.dark} /><Stop offset=".4" stopColor={tier.color} /><Stop offset=".52" stopColor={tier.dark} /><Stop offset="1" stopColor={tier.color} />
+      </LinearGradient>
+      <LinearGradient id={`${id}shine`} x1="0" y1="0" x2="1" y2="0">
+        <Stop offset="0" stopColor="#FFFFFF" stopOpacity="0" /><Stop offset=".22" stopColor="#FFFFFF" stopOpacity=".3" />
+        <Stop offset=".38" stopColor="#FFFFFF" stopOpacity=".92" /><Stop offset=".5" stopColor="#FFFFFF" stopOpacity="1" />
+        <Stop offset=".64" stopColor="#FFFFFF" stopOpacity=".8" /><Stop offset="1" stopColor="#FFFFFF" stopOpacity="0" />
+      </LinearGradient>
+      <LinearGradient id={`${id}foil`} x1="0" y1="0" x2="1" y2="0">
+        <Stop offset="0" stopColor="#86F5FF" stopOpacity="0" /><Stop offset=".15" stopColor="#64F5FF" stopOpacity=".65" />
+        <Stop offset=".3" stopColor="#AD88FF" stopOpacity=".82" /><Stop offset=".43" stopColor="#FF83E2" stopOpacity=".9" />
+        <Stop offset=".55" stopColor="#FFF39A" stopOpacity=".85" /><Stop offset=".7" stopColor="#7AFFC4" stopOpacity=".8" />
+        <Stop offset=".85" stopColor="#77D2FF" stopOpacity=".65" /><Stop offset="1" stopColor="#B5A0FF" stopOpacity="0" />
+      </LinearGradient>
+      <ClipPath id={`${id}clip`}><Path d={SHIELD} />{level >= 4 && <Path d={WINGS} />}{level >= 6 && <Path d={CROWN} />}</ClipPath>
+    </Defs>
+    {level >= 4 && <Path d={WINGS} fill={`url(#${id})`} stroke="#FFFFFF" strokeOpacity=".8" strokeWidth="2.3" strokeLinejoin="round" strokeLinecap="round" />}
+    <Path d={SHIELD} fill={`url(#${id})`} stroke="#FFFFFF" strokeOpacity=".8" strokeWidth="2.6" strokeLinejoin="round" />
+    <Path d="M32 11 L46 19 L45 37 L32 50 L19 37 L18 19 Z" fill={`url(#${id}inset)`} stroke="#FFFFFF" strokeOpacity=".8" strokeWidth="2.2" strokeLinejoin="round" />
     {level < 3 ? <>
-      <Path d="M24 29 L32 23 L40 29 M24 36 L32 30 L40 36" fill="none" stroke={tier.light} strokeWidth="3" strokeLinejoin="round" />
-      {level === 2 && <Path d="M24 43 L32 37 L40 43" fill="none" stroke={tier.light} strokeWidth="3" />}
-    </> : <Polygon points="32,18 36,27 46,28 38,35 40,45 32,40 24,45 26,35 18,28 28,27" fill={`url(#${id})`} stroke={tier.light} strokeWidth="1" />}
-    {level >= 6 && <Path d="M20 10 L20 2 L27 7 L32 0 L37 7 L44 2 L44 10 Z" fill={tier.color} stroke={tier.light} strokeWidth="1" />}
+      <Path d="M24 29 L32 23 L40 29 M24 36 L32 30 L40 36" fill="none" stroke="#FFFFFF" strokeOpacity=".8" strokeWidth="4.5" strokeLinejoin="round" />
+      {level === 2 && <Path d="M24 43 L32 37 L40 43" fill="none" stroke="#FFFFFF" strokeOpacity=".8" strokeWidth="4.5" />}
+    </> : <Polygon points="32,18 36,27 46,28 38,35 40,45 32,40 24,45 26,35 18,28 28,27" fill={`url(#${id})`} stroke="#FFFFFF" strokeOpacity=".8" strokeWidth="2.3" strokeLinejoin="round" />}
+    {level >= 6 && <Path d={CROWN} fill={`url(#${id})`} stroke="#FFFFFF" strokeOpacity=".8" strokeWidth="2.3" strokeLinejoin="round" />}
+    {playing && <G clipPath={`url(#${id}clip)`} pointerEvents="none">
+      <G transform="rotate(35 32 32)">
+        <AnimatedShine animatedProps={foilProps} y={-32} width={58} height={128} fill={`url(#${id}foil)`} />
+        <AnimatedShine animatedProps={shineProps} y={-32} width={25} height={128} fill={`url(#${id}shine)`} />
+      </G>
+      <G transform="rotate(-38 32 32)"><AnimatedShine animatedProps={reflectionProps} y={-32} width={18} height={128} fill={`url(#${id}shine)`} /></G>
+      <AnimatedGlint animatedProps={glintProps} fill="#FFFFFF" />
+    </G>}
   </Svg>;
 }
+
 
 const shoulders = ['M68 72 C57 73 48 82 47 94 L58 107 C66 100 72 89 74 78 Z',
   'M132 72 C143 73 152 82 153 94 L142 107 C134 100 128 89 126 78 Z'];

@@ -3,7 +3,7 @@ import { DEFAULT_PET_APPEARANCE, PetAppearance } from '@/constants/petAppearance
 import { loadNutritionPetProfile, saveNutritionPetProfile } from '@/constants/nutritionPetProfile';
 import { PetCustomizerModal } from './PetCustomizerModal';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { AccessibilityInfo, ActivityIndicator, Alert, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { AccessibilityInfo, AppState, ActivityIndicator, Alert, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import { Ionicons } from '@expo/vector-icons';
 import { BRAND_ROUNDED_FONT_EXTRA, useTheme } from '@/constants/ThemeContext';
@@ -16,7 +16,22 @@ export function NutritionPet({ userId, meals, target, goal, todayKey, active, re
   active: boolean; ready: boolean; error?: string; onLogMeal: () => void; onAdjustGoal: () => void; onRetry: () => void;
 }) {
   const { colors } = useTheme();
-  const pet = useMemo(() => computeNutritionPet(meals, target, goal, todayKey), [meals, target, goal, todayKey]);
+  const [clock, setClock] = useState(() => new Date());
+  useEffect(() => {
+    if (!active || !ready || error) return;
+    const refresh = () => setClock(new Date());
+    refresh();
+    let timer: ReturnType<typeof setInterval> | undefined;
+    const start = () => { if (timer) clearInterval(timer); timer = setInterval(refresh, 60000); };
+    if (AppState.currentState === 'active') start();
+    const listener = AppState.addEventListener('change', state => {
+      if (timer) clearInterval(timer);
+      if (state === 'active') { refresh(); start(); }
+    });
+    return () => { if (timer) clearInterval(timer); listener.remove(); };
+  }, [active, ready, error, todayKey]);
+  const petDay = `${clock.getFullYear()}-${String(clock.getMonth()+1).padStart(2, '0')}-${String(clock.getDate()).padStart(2, '0')}`;
+  const pet = useMemo(() => computeNutritionPet(meals, target, goal, petDay, clock), [meals, target, goal, petDay, clock]);
   const [name, setName] = useState('Pip'); const [draft, setDraft] = useState('Pip'); const [renaming, setRenaming] = useState(false);
   const [reduceMotion, setReduceMotion] = useState(false); const [celebration, setCelebration] = useState(0);
   const [appearance, setAppearance] = useState<PetAppearance>(DEFAULT_PET_APPEARANCE);
@@ -52,7 +67,7 @@ export function NutritionPet({ userId, meals, target, goal, todayKey, active, re
     const timer = setTimeout(() => setJustFed(false), 4000);
     return () => clearTimeout(timer);
   }, [justFed, celebration]);
-  useEffect(() => { setJustFed(false); setDialogueBeat(0); }, [userId, todayKey, active]);
+  useEffect(() => { setJustFed(false); setDialogueBeat(0); }, [userId, petDay, active]);
   const account = useRef(userId); account.current = userId;
   const previous = useRef<{ date: string; userId: string; ids: Set<string> } | null>(null);
   useEffect(() => {
@@ -75,13 +90,13 @@ export function NutritionPet({ userId, meals, target, goal, todayKey, active, re
     if (!ready || !active) return;
     const ids = new Set(pet.todayMealIds);
     const old = previous.current;
-    if (old && old.date === todayKey && old.userId === userId && pet.todayMealIds.some(id => !old.ids.has(id))) {
+    if (old && old.date === petDay && old.userId === userId && pet.todayMealIds.some(id => !old.ids.has(id))) {
       setCelebration(value => value+1);
       setJustFed(true);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
     }
-    previous.current = { date: todayKey, userId, ids };
-  }, [pet.todayMealIds, todayKey, userId, ready, active]);
+    previous.current = { date: petDay, userId, ids };
+  }, [pet.todayMealIds, petDay, userId, ready, active]);
   const saveName = async () => {
     const clean = draft.replace(/[\u0000-\u001f]/g, '').trim().slice(0,18) || 'Pip';
     try {
@@ -108,11 +123,15 @@ export function NutritionPet({ userId, meals, target, goal, todayKey, active, re
     </View>
     {renaming && <View style={s.row}><TextInput accessibilityLabel="Pet name" value={draft} onChangeText={setDraft} maxLength={18} autoFocus returnKeyType="done" onSubmitEditing={saveName} style={[s.input, text, { borderColor: colors.border, backgroundColor: colors.surfaceElevated }]} /><TouchableOpacity onPress={saveName} style={[s.save, { backgroundColor: colors.primary }]}><Text style={s.darkButton}>Save</Text></TouchableOpacity></View>}
     <View style={[s.petCard, { backgroundColor: colors.surfaceElevated, borderColor: colors.border }]}>
-      <View style={s.row}><View style={[s.mood, { backgroundColor: colors.primaryBg }]}><View style={[s.dot, { backgroundColor: accent }]} /><Text style={[s.small, text]}>{ready ? pet.label : 'Checking your diary'}</Text></View>
+      <View style={s.row}><View style={[s.mood, { backgroundColor: colors.primaryBg }]}><View style={[s.dot, { backgroundColor: accent }]} /><Text style={[s.small, text]}>{ready ? petted ? 'Feeling loved' : pet.label : 'Checking your diary'}</Text></View>
         <TouchableOpacity accessibilityLabel="Change nutrition goal" onPress={onAdjustGoal} style={[s.plan, { borderColor: colors.border }]}><Text style={[s.small, { color: accent }]}>{plan} plan</Text><Ionicons name="chevron-down" size={12} color={accent} /></TouchableOpacity>
       </View>
-      <View style={[s.dialogue, { backgroundColor: colors.background }]}><Text accessibilityLiveRegion="polite" style={[s.dialogueText, text]}>{error || (!ready ? 'Getting your latest food logs...' : petted ? pettingLines[celebration % pettingLines.length] : justFed ? 'Munch munch! New meal logged—my diary belly just updated!' : nutritionPetDialogue(pet, dialogueBeat))}</Text></View>
+      <View style={[s.dialogue, { backgroundColor: colors.background }]}><Text accessibilityLiveRegion="polite" style={[s.dialogueText, text]}>{error || (!ready ? 'Getting your latest food logs...' : petted ? pettingLines[celebration % pettingLines.length] : justFed ? 'Diary updated! Thanks for checking in with me.' : nutritionPetDialogue(pet, dialogueBeat))}</Text></View>
       <TutorialAnchor tutorialId="pet-care" style={s.artwork}><NutritionPetArtwork state={pet} appearance={appearance} active={active && ready && !error} reduceMotion={reduceMotion} celebration={celebration} petted={petted} onHeadRub={onHeadRub} /></TutorialAnchor>
+      {ready && !error && pet.rhythm && <View style={{ marginBottom: 10, gap: 3 }}>
+        <Text style={[s.small, text]}>{pet.rhythm.period} · {pet.rhythm.lastLogLabel}</Text>
+        <Text style={[s.caption, muted]}>{pet.rhythm.reason}</Text>
+      </View>}
       <Text style={[s.caption, muted, { textAlign: 'center', marginBottom: 12 }]}>Rub back and forth on my head.</Text>
       <TouchableOpacity accessibilityRole="button" accessibilityLabel={`Customize ${name}`} disabled={!profileReady}
         onPress={() => setCustomizing(true)} style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7, padding: 11, borderWidth: 1, borderRadius: 15, borderColor: colors.border, marginBottom: 14 }}>

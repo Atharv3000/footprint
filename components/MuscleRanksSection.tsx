@@ -68,13 +68,13 @@ export function MuscleRanksSection({ userId, active }: { userId: string; active:
         <View style={s.bodyStage}>
           <View pointerEvents="none" style={s.stageRing} />
           <MuscleRankBody ranks={ranks} selected={selected} onSelect={choosePart} back={back} />
-          <View pointerEvents="none" style={[s.heroChip, { borderColor: rank.tier.color + '70' }]}><RankEmblem tier={rank.tier} size={32} /><View><Text style={s.chipPart}>{part.label.toUpperCase()}</Text><Text style={[s.chipRank, { color: rank.tier.light }]}>{rank.tier.name}</Text></View></View>
+          <View pointerEvents="none" style={[s.heroChip, { borderColor: rank.tier.color + '70' }]}><RankEmblem active={active} tier={rank.tier} size={32} /><View><Text style={s.chipPart}>{part.label.toUpperCase()}</Text><Text style={[s.chipRank, { color: rank.tier.light }]}>{rank.tier.name}</Text></View></View>
         </View>
 
       </View>
 
       <View style={[s.detail, panel]}>
-        <View style={s.detailRow}><RankEmblem tier={rank.tier} size={54} />
+        <View style={s.detailRow}><RankEmblem active={active} tier={rank.tier} size={54} />
           <View style={{ flex: 1 }}><Text style={[s.caption, { color: colors.textMuted }]}>{part.label.toUpperCase()} / {part.description}</Text><Text style={[s.detailTitle, { color: colors.text }]}>{rank.tier.name}</Text></View>
           <View style={{ alignItems: 'flex-end' }}><Text style={[s.dayCount, { color: colors.text }]}>{rank.volumeLbs >= 10000 ? `${(rank.volumeLbs / 1000).toFixed(1)}k` : rank.volumeLbs.toLocaleString()}</Text><Text style={[s.caption, { color: colors.textMuted }]}>lbs lifted</Text></View>
         </View>
@@ -92,7 +92,7 @@ export function MuscleRanksSection({ userId, active }: { userId: string; active:
         const volText = item.volumeLbs >= 10000 ? `${(item.volumeLbs / 1000).toFixed(1)}k lbs` : `${item.volumeLbs} lbs`;
         return <TouchableOpacity key={item.part} accessibilityRole="button" accessibilityLabel={`${metadata.label}: ${item.tier.name}, ${item.volumeLbs} lbs lifted`} accessibilityState={{ selected: chosen }} onPress={() => choosePart(item.part)}
           style={[s.partCard, panel, chosen && { borderColor: isDark ? item.tier.color : colors.text, backgroundColor: isDark ? item.tier.dark + '25' : colors.surfaceSecondary }]}>
-          <RankEmblem tier={item.tier} size={34} /><View style={{ flex: 1 }}><Text style={[s.partName, { color: colors.text }]}>{metadata.label}</Text><Text style={[s.partTier, { color: colors.textMuted }]}>{item.tier.name} · {volText}</Text></View>
+          <RankEmblem active={active} tier={item.tier} size={34} /><View style={{ flex: 1 }}><Text style={[s.partName, { color: colors.text }]}>{metadata.label}</Text><Text style={[s.partTier, { color: colors.textMuted }]}>{item.tier.name} · {volText}</Text></View>
           {chosen && <Ionicons name="checkmark" size={14} color={colors.text} />}
         </TouchableOpacity>;
       })}</View>
@@ -108,7 +108,7 @@ export function MuscleRanksSection({ userId, active }: { userId: string; active:
             ? `${Math.round(tier.volumeLbs / 1000)}k lbs`
             : tier.volumeLbs === 0 ? 'Start here' : `${tier.volumeLbs} lbs`;
           return <View key={tier.id} style={[s.tierCell, tier.id === rank.tier.id && { backgroundColor: isDark ? tier.dark + '30' : colors.surfaceSecondary }]}>
-            <RankEmblem tier={tier} size={48} /><Text style={[s.tierName, { color: colors.text }]}>{tier.name}</Text><Text style={[s.caption, { color: colors.textMuted }]}>{volLabel}</Text>
+            <RankEmblem active={active} tier={tier} size={48} /><Text style={[s.tierName, { color: colors.text }]}>{tier.name}</Text><Text style={[s.caption, { color: colors.textMuted }]}>{volLabel}</Text>
           </View>;
         })}</View>
       </View>
@@ -116,7 +116,7 @@ export function MuscleRanksSection({ userId, active }: { userId: string; active:
         <TouchableOpacity accessibilityRole="button" accessibilityState={{ expanded: rulesOpen }} onPress={() => setRulesOpen(value => !value)} style={s.rulesToggle}>
           <Ionicons name="information-circle-outline" size={18} color={colors.textMuted} /><Text style={[s.rulesTitle, { color: colors.text }]}>How ranks are earned</Text><Ionicons name={rulesOpen ? 'chevron-up' : 'chevron-down'} size={16} color={colors.textMuted} />
         </TouchableOpacity>
-        {rulesOpen && <Text style={[s.rulesText, { color: colors.textMuted }]}>Each body part earns rank progress through total weight volume lifted (sets × reps × weight in lbs). Higher tiers scale exponentially to reflect progressive overload and long-term training dedication. Bodyweight movements also contribute resistance volume. Ranks update automatically whenever workouts are saved.</Text>}
+        {rulesOpen && <Text style={[s.rulesText, { color: colors.textMuted }]}>Each completed, saved set adds weight times reps to its trained muscle groups. Kilograms are converted to pounds for the rank ladder. For example, 10 reps at 100 lb adds 1,000 lb of volume. Zero-weight sets are tracked without inventing extra resistance. Draft and unchecked sets do not count. Undoing or deleting saved sets removes their volume automatically.</Text>}
       </View>
     </>}
   </View>;

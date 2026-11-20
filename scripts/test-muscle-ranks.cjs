@@ -1,100 +1,27 @@
-const assert = require('node:assert/strict');
-const fs = require('node:fs');
-const path = require('node:path');
-const vm = require('node:vm');
-const ts = require('typescript');
-const { test } = require('node:test');
-
-function load(relative, mocks = {}) {
-  const output = ts.transpileModule(fs.readFileSync(path.join(__dirname, '..', relative), 'utf8'), {
-    compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020, esModuleInterop: true },
-  }).outputText;
-  const exports = {};
-  vm.runInNewContext(output, { exports, Date, console, require: name => {
-    if (name in mocks) return mocks[name];
-    if (name === './accountRecords') return load('constants/accountRecords.ts');
-    throw new Error('Unexpected dependency: ' + name);
-  } });
-  return exports;
+const assert=require('node:assert/strict'),fs=require('fs'),path=require('path'),vm=require('vm'),ts=require('typescript'),{test}=require('node:test');
+function load(relative,mocks={}){
+ const code=ts.transpileModule(fs.readFileSync(path.join(__dirname,'..',relative),'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2020,esModuleInterop:true}}).outputText,exp={};
+ vm.runInNewContext(code,{exports:exp,Date,console,require:name=>{if(name in mocks)return mocks[name];if(name==='./accountRecords')return load('constants/accountRecords.ts');throw Error('Unexpected dependency: '+name)}});return exp;
 }
-const ranks = load('constants/muscleRanks.ts');
-const now = new Date(2026, 9, 29, 18);
-const log = (id, day, overrides = {}) => ({ id, userId: 'alice', date: new Date(2026, 9, day, 12).toISOString(),
-  exerciseId: 'bicep_curls', exerciseName: 'Bicep Curls', reps: 10, weight: 15, weightUnit: 'kg', ...overrides });
-const part = (logs, group = 'arms', exercises = []) => ranks.computeMuscleRanks(logs, exercises, 'alice', now).find(rank => rank.part === group);
-
-test('empty history starts every body part at Iron', () => {
-  const all = ranks.computeMuscleRanks([], [], 'alice', now);
-  assert.equal(all.length, 6); assert.ok(all.every(rank => rank.tier.id === 'iron' && rank.days === 0));
-});
-test('three arm-training days unlock Silver', () => {
-  const result = part([log('a', 20), log('b', 22), log('c', 24)]);
-  assert.equal(result.days, 3); assert.equal(result.tier.id, 'silver');
-  assert.equal(result.next.id, 'gold'); assert.equal(result.remaining, 4);
-});
-test('many sets and different arm exercises on one day count once', () => {
-  const result = part([log('a', 20), log('b', 20), log('c', 20, { exerciseId: 'hammer_curls' })]);
-  assert.equal(result.days, 1); assert.equal(result.tier.id, 'bronze');
-});
-test('local calendar days, rather than 24-hour spacing, determine credit', () => {
-  const result = part([log('a', 20, { date: new Date(2026, 9, 20, 23, 50).toISOString() }),
-    log('b', 21, { date: new Date(2026, 9, 21, 0, 10).toISOString() })]);
-  assert.equal(result.days, 2);
-});
-test('duplicate log IDs cannot award extra days', () => {
-  assert.equal(part([log('same', 20), log('same', 21), log('same', 22)]).days, 1);
-});
-test('primary muscles map compounds to each target body part without secondary inflation', () => {
-  const exercises = [{ id: 'compound', name: 'Compound', category: 'back', primaryMuscles: ['chest', 'triceps'] }];
-  const logs = [log('a', 20, { exerciseId: 'compound', exerciseName: 'Compound' })];
-  assert.equal(part(logs, 'arms', exercises).days, 1); assert.equal(part(logs, 'chest', exercises).days, 1);
-  assert.equal(part(logs, 'back', exercises).days, 0);
-});
-test('bodyweight and older camera push-up logs count', () => {
-  assert.equal(part([log('a', 20, { exerciseId: 'pushups', exerciseName: 'Pushups', weight: 0 })], 'chest').days, 1);
-});
-test('demo, invalid, future and other-user logs do not earn ranks', () => {
-  const invalid = [log('demo_1', 20), log('a', 20, { reps: 0 }), log('b', 20, { weight: -1 }),
-    log('c', 30), log('d', 20, { userId: 'bob' }), log('e', 20, { date: 'bad' }),
-    log('f', 20, { date: '2026-02-30' }), log('g', 20, { reps: NaN })];
-  assert.equal(part(invalid).days, 0);
-});
-test('recognized names and exercise category provide fallbacks; unknown exercises do not award arbitrary credit', () => {
-  const exercises = [{ id: 'new_arm', name: 'Arm Machine', category: 'arms', primaryMuscles: [] }];
-  assert.equal(part([log('a', 20, { exerciseId: 'old_alias', exerciseName: 'Arm Machine' })], 'arms', exercises).days, 1);
-  assert.equal(part([log('a', 20, { exerciseId: 'unknown', exerciseName: 'Unknown' })]).days, 0);
-});
-test('removing history recalculates the rank', () => {
-  const logs = [log('a', 20), log('b', 22), log('c', 24)];
-  assert.equal(part(logs).tier.id, 'silver'); assert.equal(part(logs.slice(1)).tier.id, 'bronze');
-});
-test('all thresholds are reachable and maximum rank has finite completed progress', () => {
-  for (const tier of ranks.MUSCLE_TIERS) assert.equal(ranks.tierForDays(tier.days).id, tier.id);
-  const top = ranks.rankForPart('legs', 250);
-  assert.equal(top.tier.id, 'olympian'); assert.equal(top.next, null); assert.equal(top.progress, 1); assert.equal(top.remaining, 0);
-});
-test('rank history loader never seeds demo data or migrates another storage key', async () => {
-  const reads = []; const writes = []; const events = [];
-  const storage = { getItem: async key => { reads.push(key); return null; }, setItem: async (...args) => writes.push(args) };
-  const api = load('constants/workoutStorage.ts', {
-    '@react-native-async-storage/async-storage': { __esModule: true, default: storage },
-    'react-native': { DeviceEventEmitter: { emit: (...args) => events.push(args) } },
-    './exercisesData.json': [],
-  });
-  assert.equal((await api.loadRankableWorkoutLogs('alice')).length, 0);
-  assert.equal(reads.length, 1); assert.equal(reads[0], '@stridetrack_workout_logs_alice');
-  assert.equal(writes.length, 0); assert.equal(events.length, 0);
-});
-test('successful save and delete notify rank views for the correct user', async () => {
-  let saved = null; const events = [];
-  const storage = { getItem: async () => saved, setItem: async (key, data) => { saved = data; } };
-  const api = load('constants/workoutStorage.ts', {
-    '@react-native-async-storage/async-storage': { __esModule: true, default: storage },
-    'react-native': { DeviceEventEmitter: { emit: (...args) => events.push(args) } },
-    './exercisesData.json': [],
-  });
-  const result = await api.saveWorkoutLog('alice', log('ignored', 20));
-  await api.deleteWorkoutLogsByIds('alice', [result.id]);
-  assert.equal(events.length, 2); assert.ok(events.every(event => event[1].userId === 'alice'));
-  assert.equal(JSON.parse(saved).length, 0);
-});
+const ranks=load('constants/muscleRanks.ts'),now=new Date(2026,9,29,18);
+const log=(id,weight=100,overrides={})=>({id,userId:'alice',date:new Date(2026,9,20,12).toISOString(),exerciseId:'bicep_curls',exerciseName:'Bicep Curls',reps:10,weight,weightUnit:'lb',...overrides});
+const part=(logs,group='arms',exercises=[])=>ranks.computeMuscleRanks(logs,exercises,'alice',now).find(r=>r.part===group);
+test('empty history starts every muscle at Wood with zero lifted volume',()=>{const result=ranks.computeMuscleRanks([],[],'alice',now);assert.equal(result.length,6);assert.ok(result.every(r=>r.tier.name==='Wood'&&r.volumeLbs===0&&r.days===0))});
+test('logged weight times reps sets the rank; heavier saved sets earn more volume',()=>{assert.equal(part([log('a',50)]).volumeLbs,500);const r=part([log('a',100)]);assert.equal(r.volumeLbs,1000);assert.equal(r.tier.id,'bronze');assert.equal(r.remaining,4000);assert.equal(r.progress,0)});
+test('saved sets accumulate on the same day rather than requiring extra training days',()=>{const r=part([log('a'),log('b'),log('c')]);assert.equal(r.days,1);assert.equal(r.volumeLbs,3000);assert.equal(r.tier.id,'bronze');assert.equal(r.progress,.5)});
+test('kilograms and equivalent pounds receive the same credit',()=>{const kg=part([log('kg',50,{weightUnit:'kg'})]),lb=part([log('lb',110.231)]);assert.ok(Math.abs(kg.volumeLbs-lb.volumeLbs)<1e-6);assert.equal(kg.tier.id,lb.tier.id)});
+test('more repetitions increase weight volume',()=>assert.equal(part([log('a',100,{reps:20})]).volumeLbs,2000));
+test('duplicate IDs never duplicate weight credit',()=>{const r=part([log('same'),log('same')]);assert.equal(r.volumeLbs,1000);assert.equal(r.days,1)});
+test('zero external weight tracks training without invented resistance',()=>{assert.equal(part([log('a',0)]).volumeLbs,0);const r=part([log('a',0,{exerciseId:'pushups',exerciseName:'Pushups'})],'chest');assert.equal(r.days,1);assert.equal(r.volumeLbs,0);assert.equal(r.tier.name,'Wood')});
+test('foreign, guest, demo, invalid and future logs do not earn rank credit',()=>{const invalid=[log('demo_1'),log('a',100,{userId:'bob'}),log('guest',100,{userId:'guest_user'}),log('b',-1),log('c',NaN),log('d',100,{reps:0}),log('e',100,{reps:1.5}),log('f',100,{weightUnit:'oz'}),log('g',100,{date:'bad'}),log('h',100,{date:'2026-02-30'}),log('i',100,{date:new Date(2026,9,30).toISOString()})];assert.equal(part(invalid).volumeLbs,0);assert.equal(part(invalid).days,0)});
+test('primary muscle groups receive compound credit; secondary groups are excluded',()=>{const ex=[{id:'compound',name:'Compound',category:'back',primaryMuscles:['chest','triceps','triceps']}],logs=[log('a',100,{exerciseId:'compound',exerciseName:'Compound'})];assert.equal(part(logs,'arms',ex).volumeLbs,1000);assert.equal(part(logs,'chest',ex).volumeLbs,1000);assert.equal(part(logs,'back',ex).volumeLbs,0)});
+test('recognized names and categories map legacy IDs; unknown exercise gets no credit',()=>{const ex=[{id:'new',name:'Arm Machine',category:'arms',primaryMuscles:[]}];assert.equal(part([log('a',100,{exerciseId:'old',exerciseName:'Arm Machine'})],'arms',ex).volumeLbs,1000);assert.equal(part([log('a',100,{exerciseId:'unknown',exerciseName:'Unknown'})]).volumeLbs,0)});
+test('all volume thresholds and maximum progress are reachable',()=>{for(const tier of ranks.MUSCLE_TIERS)assert.equal(ranks.tierForVolume(tier.volumeLbs).id,tier.id);const top=ranks.rankForPart('legs',1500000);assert.equal(top.tier.id,'olympian');assert.equal(top.progress,1);assert.equal(top.remaining,0);assert.equal(top.next,null);assert.equal(ranks.rankForPart('arms',NaN).volumeLbs,0)});
+test('fractional volume below a threshold cannot round into a promotion',()=>{assert.equal(ranks.rankForPart('arms',999.99).tier.name,'Wood');assert.equal(ranks.rankForPart('arms',1000).tier.id,'bronze')});
+test('rank gain reports only persisted sets and the actual promotion',()=>{const history=[log('old',90),log('new',10)];const gain=ranks.workoutRankGains(history,['new','new'],[],'alice',now)[0];assert.equal(gain.addedVolumeLbs,100);assert.equal(gain.before.tier.name,'Wood');assert.equal(gain.after.tier.id,'bronze');assert.equal(gain.rankedUp,true);assert.equal(ranks.workoutRankGains(history,['missing'],[],'alice',now).length,0)});
+test('removing a saved set recalculates rank downward',()=>{const logs=[log('a',400),log('b',100)];assert.equal(part(logs).tier.id,'silver');assert.equal(part(logs.slice(0,1)).tier.id,'bronze')});
+test('checked sets and multipliers produce exactly the saved weighted rank volume',()=>{const session=load('constants/workoutSessionLogging.ts');const entries=session.completedWorkoutEntries([{exerciseId:'bicep_curls',name:'Bicep Curls',sets:[{completed:true,reps:10,weight:100,multiplier:3},{completed:false,reps:100,weight:999,multiplier:1}]}],'lb','Arms');const logs=entries.map((entry,i)=>log('set'+i,entry.weight,entry));assert.equal(logs.length,3);assert.equal(part(logs).volumeLbs,3000)});
+function storageApi(){const data=new Map(),events=[];let fail=false;return {data,events,setFail:v=>fail=v,api:load('constants/workoutStorage.ts',{'@react-native-async-storage/async-storage':{getItem:async key=>data.get(key)??null,setItem:async(key,value)=>{if(fail)throw Error('Disk full');data.set(key,value)}},'react-native':{DeviceEventEmitter:{emit:(...args)=>events.push(args)}},'./exercisesData.json':[]})}}
+test('fitness-log save -> persisted rank gain -> undo recomputes to zero',async()=>{const h=storageApi(),entry={exerciseId:'bench_press',exerciseName:'Bench Press',reps:10,weight:100,weightUnit:'lb'};const saved=await h.api.saveWorkoutLogBatch('alice',[entry]);const history=await h.api.loadRankableWorkoutLogs('alice');const gains=ranks.workoutRankGains(history,saved.map(s=>s.id),[],'alice',new Date(Date.now()+1000));assert.equal(gains[0].part,'chest');assert.equal(gains[0].after.tier.id,'bronze');assert.equal(gains[0].addedVolumeLbs,1000);await h.api.deleteWorkoutLogsByIds('alice',[saved[0].id]);assert.equal((await h.api.loadRankableWorkoutLogs('alice')).length,0);assert.equal(h.events.length,2);assert.ok(h.events.every(e=>e[1].userId==='alice'))});
+test('failed session writes cannot award rank progress or emit a success update',async()=>{const h=storageApi();h.setFail(true);await assert.rejects(h.api.saveWorkoutLogBatch('alice',[{exerciseId:'bicep_curls',exerciseName:'Curls',reps:10,weight:100,weightUnit:'lb'}]));assert.equal((await h.api.loadRankableWorkoutLogs('alice')).length,0);assert.equal(h.events.length,0)});
+test('rank history reads never seed demonstrations or migrate guest workouts',async()=>{const h=storageApi();h.data.set('@stridetrack_workout_logs_guest_user',JSON.stringify([log('guest',100,{userId:'guest_user'})]));assert.equal((await h.api.loadRankableWorkoutLogs('alice')).length,0);assert.equal(h.data.size,1);assert.equal(h.events.length,0)});

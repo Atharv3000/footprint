@@ -24,7 +24,8 @@ export function NutritionPetArtwork({ state, active, reduceMotion, celebration, 
   const hop = useRef(new Animated.Value(0)).current;
   const [blink, setBlink] = useState(false);
   const expression = nutritionPetExpression(state, petted);
-  const relaxed = !petted && (expression === 'hungry' || expression === 'full');
+  const sleepy = !petted && state.mood === 'sleepy';
+  const relaxed = !petted && (sleepy || expression === 'hungry' || expression === 'full');
   const happy = expression === 'happy';
   const headResponder = useMemo(() => {
     const tracker = createHeadRubTracker(14*size/300);
@@ -117,7 +118,7 @@ export function NutritionPetArtwork({ state, active, reduceMotion, celebration, 
       <Svg width={300} height={280} viewBox="0 0 300 280">
         <Defs><LinearGradient id={id} x1="0" y1="0" x2="0.8" y2="1"><Stop offset="0" stopColor={palette.light} /><Stop offset="0.5" stopColor={palette.mid} /><Stop offset="1" stopColor={palette.dark} /></LinearGradient></Defs>
         <PetSpeciesBody appearance={appearance} state={state} gradient={id} bow={false} petted={petted}
-          blink={blink} relaxed={relaxed} happy={happy} ribbon={ribbon} />
+          blink={blink || sleepy} relaxed={relaxed} happy={happy} ribbon={ribbon} />
       </Svg>
     </Animated.View>
     {fox && <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, { opacity: playBow,
@@ -136,7 +137,7 @@ export function NutritionPetArtwork({ state, active, reduceMotion, celebration, 
       </Svg>
     </Animated.View>}
     </Animated.View>
-    <View {...headResponder.panHandlers} style={{ position: 'absolute', left: fox && petted ? 22 : 60, top: fox && petted ? 115 : 35, width: 180, height: 145 }} accessible accessibilityRole="image" accessibilityLabel={petted ? (bunny ? 'Your bunny is happy and hopping from head rubs' : fox ? 'Your fox is happy and wagging its tail from head rubs' : 'Your cat is happy and purring from head rubs') : `A ${palette.label.toLowerCase()} ${appearance.species} with ${expression === 'hungry' ? 'sad, hungry' : expression === 'full' ? 'sad, overfull' : expression} expression`} accessibilityHint="Rub left and right across the head to make your pet happy" accessibilityActions={[{ name: 'pet', label: 'Rub pet head' }]} onAccessibilityAction={event => { if (active && event.nativeEvent.actionName === 'pet') onHeadRub(); }} />
+    <View {...headResponder.panHandlers} style={{ position: 'absolute', left: fox && petted ? 22 : 60, top: fox && petted ? 115 : 35, width: 180, height: 145 }} accessible accessibilityRole="image" accessibilityLabel={petted ? (bunny ? 'Your bunny is happy and hopping from head rubs' : fox ? 'Your fox is happy and wagging its tail from head rubs' : 'Your cat is happy and purring from head rubs') : `A ${palette.label.toLowerCase()} ${appearance.species} with ${sleepy ? 'sleepy' : expression === 'hungry' ? 'sad, hungry' : expression === 'full' ? 'sad, overfull' : expression} expression`} accessibilityHint="Rub left and right across the head to make your pet happy" accessibilityActions={[{ name: 'pet', label: 'Rub pet head' }]} onAccessibilityAction={event => { if (active && event.nativeEvent.actionName === 'pet') onHeadRub(); }} />
     <Animated.View pointerEvents="none" style={[s.hearts, { opacity: hearts.interpolate({inputRange:[0,1,2],outputRange:[0,1,0]}), transform:[{translateY:hearts.interpolate({inputRange:[0,2],outputRange:[0,-62]})}] }]}>
       <Svg width={90} height={70} viewBox="0 0 90 70"><Path d="M 45 43 C 10 23 26 4 45 20 C 65 3 80 24 45 43 Z" fill="#F3A4B3" /><Path d="M 14 63 C -2 52 4 43 14 50 C 24 42 30 53 14 63 Z M 75 61 C 59 50 65 41 75 48 C 85 40 91 51 75 61 Z" fill="#C4E8A6" /></Svg>
     </Animated.View>

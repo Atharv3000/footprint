@@ -1777,7 +1777,8 @@ const styles = StyleSheet.create({
   subTabBtn: {
     flex: 1,
     flexDirection: 'row',
-    paddingVertical: 11,
+    minHeight: 50,
+    paddingVertical: 16,
     borderRadius: 18,
     gap: 4,
     alignItems: 'center',

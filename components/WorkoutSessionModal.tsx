@@ -1,13 +1,15 @@
+import { DEFAULT_REST_SECONDS, MAX_REST_SECONDS, REST_PRESETS, formatRestInterval, loadRestInterval, normalizeRestSeconds, saveRestInterval } from '@/constants/workoutRest';
 import { completedWorkoutEntries } from '@/constants/workoutSessionLogging';
 import { ExerciseDemo } from '@/components/ExerciseDemo';
 import { AppModal as Modal } from '@/components/AppModal';
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import {
   StyleSheet,
   View,
   Text,
   TouchableOpacity,
   ScrollView,
+  FlatList,
   TextInput,
   Platform,
   Alert,
@@ -60,654 +62,54 @@ function SessionSurface({ embedded, visible, onClose, children }: {
     presentationStyle="pageSheet" onRequestClose={onClose}>{children}</Modal>;
 }
 
-export function WorkoutSessionModal({
-  visible,
-  embedded = false,
-  routine,
-  allLogs,
-  userId,
-  weightUnit,
-  onClose,
-  onFinishSession,
-}: WorkoutSessionModalProps) {
-  const themeContext = useTheme();
-  const colors = themeContext?.colors;
-  const isDark = themeContext?.isDark ?? colors?.isDark ?? true;
 
-  // Active workout timer
-  const [elapsedSeconds, setElapsedSeconds] = useState<number>(0);
-  const [isTimerRunning, setIsTimerRunning] = useState<boolean>(true);
-
-  // Set rest timer
-  const [restSeconds, setRestSeconds] = useState<number>(0);
-  const [isResting, setIsResting] = useState<boolean>(false);
-
-  // Exercise items state inside session
-  const [exerciseStates, setExerciseStates] = useState<ActiveExerciseState[]>([]);
-
-  // Add Exercise to active session state (with matching main workout page filters and preview)
-  const [showAddExerciseModal, setShowAddExerciseModal] = useState<boolean>(false);
-  const [exerciseSearchText, setExerciseSearchText] = useState<string>('');
-  const [selectedCategoryFilter, setSelectedCategoryFilter] = useState<string>('all');
-  const [selectedDifficultyFilter, setSelectedDifficultyFilter] = useState<string>('all');
-  const [selectedTypeFilter, setSelectedTypeFilter] = useState<string>('all');
-  const [activeDropdown, setActiveDropdown] = useState<'muscle' | 'difficulty' | 'type' | null>(null);
-  const [previewingExercise, setPreviewingExercise] = useState<ExerciseDefinition>(DEFAULT_EXERCISES[0]);
-  const [isPreviewHeroExpanded, setIsPreviewHeroExpanded] = useState<boolean>(false);
-  const [isPastWorkoutExpanded, setIsPastWorkoutExpanded] = useState<boolean>(false);
-  const [repeatStatusMsg, setRepeatStatusMsg] = useState<string | null>(null);
-  const [previousExerciseSnapshot, setPreviousExerciseSnapshot] = useState<ActiveExerciseState[] | null>(null);
-  const [repeatTimer, setRepeatTimer] = useState<ReturnType<typeof setTimeout> | null>(null);
-  const [isFinishing, setIsFinishing] = useState<boolean>(false);
-  const finishing = useRef(false);
-  const finishScale = useRef(new Animated.Value(1)).current;
-  const finishFill = useRef(new Animated.Value(0)).current;
-  const finishCheckScale = useRef(new Animated.Value(1)).current;
-
-  // Find last workout log specifically for this workout day/routine (or its exercises) and any other logs from that exact calendar day
-  const lastSessionSummary = useMemo(() => {
-    if (!routine || allLogs.length === 0) return null;
-    const routineExIds = routine.exercises.map((e) => e.exerciseId);
-
-    // 1. Sort allLogs newest-first by date
-    const sortedLogs = [...allLogs].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-
-    // 2. Find the most recent log belonging to this routine's exercises (or category)
-    const latestRoutineLog = sortedLogs.find((l) => routineExIds.includes(l.exerciseId));
-    if (!latestRoutineLog) return null;
-
-    // 3. Extract the target day string (YYYY-MM-DD) of that specific past session
-    const targetDayStr = latestRoutineLog.date.split('T')[0];
-
-    // 4. Gather ALL workouts logged on that day ("the last workout of that day and anything else that day")
-    const dayLogs = sortedLogs.filter((l) => l.date.split('T')[0] === targetDayStr);
-
-    const latestDate = new Date(latestRoutineLog.date).toLocaleDateString(undefined, {
-      month: 'short',
-      day: 'numeric',
-    });
-
-    return {
-      date: latestDate,
-      dateKey: targetDayStr,
-      logs: dayLogs,
-      routineLogs: dayLogs.filter((l) => routineExIds.includes(l.exerciseId)),
+export const RestCountdown = React.memo(function RestCountdown({ endAt, onFinish, color }: {
+  endAt: number; onFinish: () => void; color: string;
+}) {
+  const [seconds, setSeconds] = useState(() => Math.max(0, Math.ceil((endAt-Date.now())/1000)));
+  useEffect(() => {
+    let finished = false;
+    const tick = () => {
+      const remaining = Math.max(0, Math.ceil((endAt-Date.now())/1000));
+      setSeconds(remaining);
+      if (!remaining && !finished) {
+        finished = true; onFinish();
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning).catch(() => {});
+      }
     };
-  }, [routine, allLogs]);
-
-  // Initialize exercises when routine opens
-  useEffect(() => {
-    if (!routine || !visible) {
-      setElapsedSeconds(0);
-      setRestSeconds(0);
-      setIsResting(false);
-      return;
-    }
-
-    setElapsedSeconds(0);
-    setIsTimerRunning(true);
-    setRestSeconds(0);
-    setIsResting(false);
-
-    const initialStates: ActiveExerciseState[] = routine.exercises.map((item) => {
-      const def = DEFAULT_EXERCISES.find((e) => e.id === item.exerciseId);
-      // Check last log for this exercise
-      const prevLog = allLogs.find((l) => l.exerciseId === item.exerciseId);
-      let initWeight = item.weight;
-      let initReps = item.reps;
-
-      if (prevLog) {
-        initReps = prevLog.reps;
-        initWeight = prevLog.weightUnit === weightUnit
-          ? prevLog.weight
-          : weightUnit === 'kg'
-            ? Math.round(prevLog.weight * 0.453592)
-            : Math.round(prevLog.weight * 2.20462);
-      } else if (weightUnit === 'kg') {
-        initWeight = Math.round(initWeight * 0.453592);
-      }
-
-      return {
-        exerciseId: item.exerciseId,
-        name: def?.name || item.exerciseId,
-        category: def?.category || routine.category,
-        imageUrl: def?.imageUrl,
-        targetMuscles: def?.primaryMuscles,
-        sets: [
-          {
-            id: `set_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
-            reps: initReps,
-            weight: initWeight,
-            multiplier: 1,
-            completed: false,
-          },
-        ],
-      };
-    });
-
-    setExerciseStates(initialStates);
-  }, [routine, visible]);
-
-  // Main session timer interval
-  useEffect(() => {
-    if (!visible || !isTimerRunning) return;
-    const timer = setInterval(() => {
-      setElapsedSeconds((prev) => prev + 1);
-    }, 1000);
+    tick();
+    const timer = setInterval(tick, 1000);
     return () => clearInterval(timer);
-  }, [visible, isTimerRunning]);
+  }, [endAt, onFinish]);
+  return <Text testID="rest-countdown" style={[styles.restTimerText, { color }]}>{seconds}s</Text>;
+});
 
-  // Rest timer interval
+const SessionClock = React.memo(function SessionClock({ running, session, clock }: {
+  running: boolean; session: CustomRoutine | null; clock: React.MutableRefObject<number>;
+}) {
+  const [seconds, setSeconds] = useState(0);
   useEffect(() => {
-    if (!visible || !isResting) return;
-    const timer = setInterval(() => {
-      setRestSeconds((prev) => {
-        if (prev <= 1) {
-          setIsResting(false);
-          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning).catch(() => { });
-          return 0;
-        }
-        return prev - 1;
-      });
-    }, 1000);
+    clock.current = 0; setSeconds(0);
+    if (!running) return;
+    const started = Date.now();
+    const timer = setInterval(() => { const value = Math.floor((Date.now() - started) / 1000); clock.current = value; setSeconds(value); }, 1000);
     return () => clearInterval(timer);
-  }, [visible, isResting]);
+  }, [running, session, clock]);
+  return <Text style={styles.islandTimerText}>{`${Math.floor(seconds / 60).toString().padStart(2, '0')}:${(seconds % 60).toString().padStart(2, '0')}`}</Text>;
+});
 
-  const formatTime = (secs: number) => {
-    const m = Math.floor(secs / 60);
-    const s = secs % 60;
-    return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
-  };
 
-  // Direct input for reps or weight
-  const setDirectReps = (exIndex: number, setIndex: number, valStr: string) => {
-    const num = parseInt(valStr.replace(/[^0-9]/g, ''), 10);
-    setExerciseStates((prev) => {
-      const copy = [...prev];
-      const ex = { ...copy[exIndex] };
-      const sets = [...ex.sets];
-      sets[setIndex] = {
-        ...sets[setIndex],
-        reps: isNaN(num) ? 0 : Math.max(0, num),
-      };
-      ex.sets = sets;
-      copy[exIndex] = ex;
-      return copy;
-    });
-  };
-
-  const setDirectWeight = (exIndex: number, setIndex: number, valStr: string) => {
-    const num = parseFloat(valStr.replace(/[^0-9.]/g, ''));
-    setExerciseStates((prev) => {
-      const copy = [...prev];
-      const ex = { ...copy[exIndex] };
-      const sets = [...ex.sets];
-      sets[setIndex] = {
-        ...sets[setIndex],
-        weight: isNaN(num) ? 0 : Math.max(0, num),
-      };
-      ex.sets = sets;
-      copy[exIndex] = ex;
-      return copy;
-    });
-  };
-
-  // Adjust reps or weight of a specific set within an exercise
-  const adjustReps = (exIndex: number, setIndex: number, delta: number) => {
-    setExerciseStates((prev) => {
-      const copy = [...prev];
-      const ex = { ...copy[exIndex] };
-      const sets = [...ex.sets];
-      sets[setIndex] = {
-        ...sets[setIndex],
-        reps: Math.max(1, sets[setIndex].reps + delta),
-      };
-      ex.sets = sets;
-      copy[exIndex] = ex;
-      return copy;
-    });
-  };
-
-  const adjustWeight = (exIndex: number, setIndex: number, delta: number) => {
-    setExerciseStates((prev) => {
-      const copy = [...prev];
-      const ex = { ...copy[exIndex] };
-      const sets = [...ex.sets];
-      sets[setIndex] = {
-        ...sets[setIndex],
-        weight: Math.max(0, sets[setIndex].weight + delta),
-      };
-      ex.sets = sets;
-      copy[exIndex] = ex;
-      return copy;
-    });
-  };
-
-  // Cycle multiplier: x1 -> x2 -> x3 -> x4 -> x1
-  const cycleMultiplier = (exIndex: number, setIndex: number) => {
-    setExerciseStates((prev) => {
-      const copy = [...prev];
-      const ex = { ...copy[exIndex] };
-      const sets = [...ex.sets];
-      const curMult = sets[setIndex].multiplier || 1;
-      const nextMult = curMult >= 4 ? 1 : curMult + 1;
-      sets[setIndex] = {
-        ...sets[setIndex],
-        multiplier: nextMult,
-      };
-      ex.sets = sets;
-      copy[exIndex] = ex;
-      return copy;
-    });
-  };
-
-  // Add a new set row with customized or differing weight/reps
-  const addSetRow = (exIndex: number) => {
-    setExerciseStates((prev) => {
-      const copy = [...prev];
-      const ex = { ...copy[exIndex] };
-      const lastSet = ex.sets[ex.sets.length - 1];
-      const newSet: ExerciseSetRow = {
-        id: `set_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
-        reps: lastSet ? lastSet.reps : 10,
-        weight: lastSet ? lastSet.weight : 50,
-        multiplier: 1,
-        completed: false,
-      };
-      ex.sets = [...ex.sets, newSet];
-      copy[exIndex] = ex;
-      return copy;
-    });
-  };
-
-  // Remove a set row (supports removing down to 0 sets)
-  const removeSetRow = (exIndex: number, setIndex: number) => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => { });
-    setExerciseStates((prev) => {
-      const copy = [...prev];
-      const ex = { ...copy[exIndex] };
-      ex.sets = ex.sets.filter((_, idx) => idx !== setIndex);
-      copy[exIndex] = ex;
-      return copy;
-    });
-  };
-
-  const toggleComplete = (exIndex: number, setIndex: number) => {
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => { });
-    setExerciseStates((prev) => {
-      const copy = [...prev];
-      const ex = { ...copy[exIndex] };
-      const sets = [...ex.sets];
-      const nextCompleted = !sets[setIndex].completed;
-      sets[setIndex] = { ...sets[setIndex], completed: nextCompleted };
-      ex.sets = sets;
-      copy[exIndex] = ex;
-      return copy;
-    });
-
-    // Start 60s rest timer on completing set
-    setRestSeconds(60);
-    setIsResting(true);
-  };
-
-  // Add exercise to active session
-  const handleAddExerciseToSession = (exercise: ExerciseDefinition) => {
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => { });
-
-    // Check if exercise already exists in this session
-    const existingIndex = exerciseStates.findIndex((e) => e.exerciseId === exercise.id);
-    if (existingIndex >= 0) {
-      addSetRow(existingIndex);
-      setShowAddExerciseModal(false);
-      return;
-    }
-
-    // Default weight conversion if kg
-    let initWeight = exercise.defaultWeight || 45;
-    if (weightUnit === 'kg') {
-      initWeight = Math.round(initWeight * 0.453592);
-    }
-    const initReps = exercise.defaultReps || 10;
-
-    const newExerciseState: ActiveExerciseState = {
-      exerciseId: exercise.id,
-      name: exercise.name,
-      category: exercise.category,
-      imageUrl: exercise.imageUrl,
-      targetMuscles: exercise.primaryMuscles,
-      sets: [
-        {
-          id: `set_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
-          reps: initReps,
-          weight: initWeight,
-          multiplier: 1,
-          completed: false,
-        },
-      ],
-    };
-
-    setExerciseStates((prev) => [...prev, newExerciseState]);
-    setShowAddExerciseModal(false);
-    setExerciseSearchText('');
-  };
-
-  // Filtered available exercises matching main workout page
-  const filteredAvailableExercises = useMemo(() => {
-    const q = exerciseSearchText.trim().toLowerCase();
-
-    return DEFAULT_EXERCISES.filter((e) => {
-      // 1. Text Query Filter
-      if (q) {
-        const matchesName = e.name.toLowerCase().includes(q);
-        const matchesCat = e.category.toLowerCase().includes(q);
-        const matchesEquip = (e.equipment || '').toLowerCase().includes(q);
-        const matchesMuscles = (e.primaryMuscles || []).some((m) => m.toLowerCase().includes(q));
-        if (!matchesName && !matchesCat && !matchesEquip && !matchesMuscles) {
-          return false;
-        }
-      }
-
-      // 2. Muscle Group Filter
-      if (selectedCategoryFilter !== 'all' && e.category.toLowerCase() !== selectedCategoryFilter.toLowerCase()) {
-        return false;
-      }
-
-      // 3. Difficulty Filter
-      if (selectedDifficultyFilter !== 'all') {
-        const exName = e.name.toLowerCase();
-        let diff = 'intermediate';
-        if (
-          exName.includes('deadlift') ||
-          exName.includes('squat') ||
-          exName.includes('clean') ||
-          exName.includes('snatch') ||
-          exName.includes('overhead press')
-        ) {
-          diff = 'advanced';
-        } else if (
-          exName.includes('curl') ||
-          exName.includes('pushdown') ||
-          exName.includes('crunch') ||
-          exName.includes('calf') ||
-          exName.includes('lateral raise') ||
-          exName.includes('extension')
-        ) {
-          diff = 'beginner';
-        }
-        if (diff !== selectedDifficultyFilter) return false;
-      }
-
-      // 4. Equipment Type Filter
-      if (selectedTypeFilter !== 'all') {
-        const equip = (e.equipment || '').toLowerCase();
-        if (selectedTypeFilter === 'barbell' && !equip.includes('barbell')) return false;
-        if (selectedTypeFilter === 'dumbbell' && !equip.includes('dumbbell')) return false;
-        if (selectedTypeFilter === 'cable' && !equip.includes('cable')) return false;
-        if (selectedTypeFilter === 'machine' && !equip.includes('machine')) return false;
-        if (selectedTypeFilter === 'bodyweight' && !equip.includes('body only')) return false;
-      }
-
-      return true;
-    }).slice(0, 50);
-  }, [exerciseSearchText, selectedCategoryFilter, selectedDifficultyFilter, selectedTypeFilter]);
-
-  // Apply previous workout's weights and reps in-place without auto-logging
-  const handleApplyPastWorkout = () => {
-    if (!lastSessionSummary || !routine) return;
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => { });
-
-    // Save snapshot for Undo
-    setPreviousExerciseSnapshot(JSON.parse(JSON.stringify(exerciseStates)));
-
-    setExerciseStates((prev) => {
-      return prev.map((exState) => {
-        // Find matching logs from lastSessionSummary
-        const matchingLogs = lastSessionSummary.logs.filter((l) => l.exerciseId === exState.exerciseId);
-        if (matchingLogs.length === 0) return exState;
-
-        const updatedSets: ExerciseSetRow[] = matchingLogs.map((logItem, idx) => {
-          let convertedW = logItem.weight;
-          if (logItem.weightUnit !== weightUnit) {
-            convertedW = weightUnit === 'kg' ? Math.round(logItem.weight * 0.453592) : Math.round(logItem.weight * 2.20462);
-          }
-          return {
-            id: `set_past_${idx}_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
-            reps: logItem.reps || 10,
-            weight: convertedW,
-            multiplier: 1,
-            completed: false,
-          };
-        });
-
-        return {
-          ...exState,
-          sets: updatedSets.length > 0 ? updatedSets : exState.sets,
-        };
-      });
-    });
-
-    setRepeatStatusMsg(`Applied reps and weights from ${lastSessionSummary.date}. Ready for your session.`);
-    if (repeatTimer) clearTimeout(repeatTimer);
-    const t = setTimeout(() => {
-      setRepeatStatusMsg(null);
-    }, 6000);
-    setRepeatTimer(t);
-  };
-
-  const handleUndoRepeatPastWorkout = () => {
-    Haptics.selectionAsync().catch(() => { });
-    if (previousExerciseSnapshot) {
-      setExerciseStates(previousExerciseSnapshot);
-      setPreviousExerciseSnapshot(null);
-    }
-    setRepeatStatusMsg(null);
-    if (repeatTimer) clearTimeout(repeatTimer);
-  };
-
-  // Persist only checked rows; validate every row before the single storage write.
-  const handleFinishAll = async () => {
-    if (finishing.current) return;
-    try {
-      const entries = completedWorkoutEntries(exerciseStates, weightUnit,
-        `${routine?.title || 'Workout'} (${formatTime(elapsedSeconds)})`);
-      if (!entries.length) {
-        Alert.alert('No completed sets', 'Check off the sets you actually completed before logging.');
-        return;
-      }
-      finishing.current = true;
-      setIsFinishing(true);
-      const logs = await saveWorkoutLogBatch(userId, entries);
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
-      onFinishSession(logs.length, logs.map(log => log.id));
-    } catch (error) {
-      Alert.alert('Workout not saved', error instanceof Error ? error.message : 'Please try again.');
-    } finally {
-      finishing.current = false;
-      setIsFinishing(false);
-    }
-  };
-
-  if (!routine) return null;
-
-  const totalSetsCount = exerciseStates.reduce((acc, ex) => {
-    return acc + ex.sets.reduce((sAcc, s) => sAcc + (s.multiplier || 1), 0);
-  }, 0);
-
-  const completedSetsCount = exerciseStates.reduce((acc, ex) => {
-    return acc + ex.sets.reduce((sAcc, s) => sAcc + (s.completed ? (s.multiplier || 1) : 0), 0);
-  }, 0);
-
-  return (
-    <SessionSurface embedded={embedded} visible={visible} onClose={onClose}>
-      <View style={[styles.container, { backgroundColor: colors.background }, embedded && { flex: 0, marginHorizontal: -16 }]}>
-        {/* Apple Dynamic Island / Top Widget Bar */}
-        <View style={[styles.dynamicIslandBar, { backgroundColor: '#000000' }]}>
-          <View style={styles.islandIndicator}>
-            <View style={styles.islandDot} />
-            <Text style={styles.islandTitle}>{routine.title}</Text>
-          </View>
-          <View style={styles.islandRight}>
-            <Ionicons name="timer-outline" size={15} color="#a3e635" />
-            <Text style={styles.islandTimerText}>{formatTime(elapsedSeconds)}</Text>
-          </View>
-        </View>
-
-        {/* Header with Title and Close */}
-        <View style={styles.modalHeader}>
-          <View style={{ flex: 1 }}>
-            <Text style={[styles.sessionTitle, { color: colors.text }]}>{routine.title}</Text>
-            <Text style={[styles.sessionSubtitle, { color: colors.textMuted }]}>
-              {completedSetsCount} of {totalSetsCount} sets checked off
-            </Text>
-          </View>
-          <TouchableOpacity
-            onPress={onClose}
-            style={[styles.closeCircleBtn, { backgroundColor: colors.surfaceElevated }]}
-            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-          >
-            <Ionicons name="close" size={20} color={colors.text} />
-          </TouchableOpacity>
-        </View>
-
-        {/* Rest Timer Widget if resting */}
-        {isResting && (
-          <View style={[styles.restBar, { backgroundColor: colors.surfaceElevated }]}>
-            <View style={styles.restLeft}>
-              <Ionicons name="hourglass-outline" size={16} color={colors.primary} />
-              <Text style={[styles.restTitle, { color: colors.text }]}>Rest Interval</Text>
-            </View>
-            <View style={styles.restRight}>
-              <Text style={[styles.restTimerText, { color: colors.primary }]}>
-                {restSeconds}s
-              </Text>
-              <TouchableOpacity
-                onPress={() => setIsResting(false)}
-                style={styles.restSkipBtn}
-              >
-                <Text style={[styles.restSkipText, { color: colors.textMuted }]}>Skip</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        )}
-
-        {/* Past Workout Banner with Dropdown Miniview & Undo */}
-        {lastSessionSummary && (
-          <View style={styles.pastWorkoutSectionWrap}>
-            <View
-              style={[
-                styles.pastWorkoutBanner,
-                { backgroundColor: colors.surfaceElevated, borderColor: colors.border || 'rgba(255,255,255,0.06)' },
-              ]}
-            >
-              <TouchableOpacity
-                style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 14 }}
-                onPress={handleApplyPastWorkout}
-                activeOpacity={0.75}
-              >
-                <View style={[styles.pastIconWrap, { backgroundColor: (routine.color || colors.primary) + '18' }]}>
-                  <Ionicons name="sync" size={20} color={routine.color || colors.primary} />
-                </View>
-                <View style={{ flex: 1, justifyContent: 'center' }}>
-                  <View style={styles.pastTitleBadgeRow}>
-                    <Text style={[styles.pastTitle, { color: colors.text }]}>
-                      Repeat Past Workout
-                    </Text>
-                    <View style={[styles.pastDatePill, { backgroundColor: (routine.color || colors.primary) + '22' }]}>
-                      <Text style={[styles.pastDatePillText, { color: routine.color || colors.primary }]}>
-                        {lastSessionSummary.date}
-                      </Text>
-                    </View>
-                  </View>
-                  <Text style={[styles.pastSubtitle, { color: colors.textMuted }]}>
-                    Tap to auto-fill your previous weights & reps for this session
-                  </Text>
-                </View>
-              </TouchableOpacity>
-
-              {/* Right dropdown chevron to expand and drop down miniview */}
-              <TouchableOpacity
-                style={styles.pastDropdownChevronBtn}
-                onPress={() => {
-                  Haptics.selectionAsync().catch(() => { });
-                  setIsPastWorkoutExpanded((prev) => !prev);
-                }}
-                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-              >
-                <Ionicons
-                  name={isPastWorkoutExpanded ? 'chevron-up' : 'chevron-down'}
-                  size={19}
-                  color={colors.textSecondary}
-                />
-              </TouchableOpacity>
-            </View>
-
-            {/* Notification line below saying what happened with Undo link */}
-            {repeatStatusMsg && (
-              <View style={styles.repeatStatusRowBelow}>
-                <Ionicons name="checkmark-circle" size={14} color="#10b981" />
-                <Text style={[styles.repeatStatusText, { color: colors.text }]} numberOfLines={1}>
-                  {repeatStatusMsg}
-                </Text>
-                <TouchableOpacity
-                  onPress={handleUndoRepeatPastWorkout}
-                  activeOpacity={0.65}
-                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                  style={{ marginLeft: 6 }}
-                >
-                  <Text style={styles.repeatUndoText}>Undo</Text>
-                </TouchableOpacity>
-              </View>
-            )}
-
-            {/* Dropdown Mini-view of everything done that day */}
-            {isPastWorkoutExpanded && (
-              <View style={[styles.pastWorkoutDropdownCard, { backgroundColor: colors.surfaceElevated }]}>
-                <View style={styles.pastDropdownHeader}>
-                  <Text style={[styles.pastDropdownTitle, { color: colors.text }]}>
-                    Logged on {lastSessionSummary.date}
-                  </Text>
-                  <TouchableOpacity
-                    style={[styles.applyPastMiniBtn, { backgroundColor: colors.primary }]}
-                    onPress={handleApplyPastWorkout}
-                  >
-                    <Text style={[styles.applyPastMiniBtnText, { color: isDark ? '#000000' : '#ffffff' }]}>
-                      Apply All
-                    </Text>
-                  </TouchableOpacity>
-                </View>
-                <View style={styles.pastMiniList}>
-                  {lastSessionSummary.logs.map((logItem) => (
-                    <View key={logItem.id} style={styles.pastMiniItemRow}>
-                      <View style={{ flex: 1 }}>
-                        <Text style={[styles.pastMiniExName, { color: colors.text }]} numberOfLines={1}>
-                          {logItem.exerciseName}
-                        </Text>
-                        <Text style={[styles.pastMiniExDetail, { color: colors.textMuted }]}>
-                          {logItem.reps} reps · {logItem.weight} {logItem.weightUnit}
-                          {logItem.notes ? ` (${logItem.notes})` : ''}
-                        </Text>
-                      </View>
-                      <View style={[styles.pastMiniBadge, { backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : '#f1f5f9' }]}>
-                        <Text style={[styles.pastMiniBadgeText, { color: colors.textSecondary }]}>
-                          {logItem.weight} {logItem.weightUnit}
-                        </Text>
-                      </View>
-                    </View>
-                  ))}
-                </View>
-              </View>
-            )}
-          </View>
-        )}
-
-        {/* Exercises Scroll List */}
-        <ScrollView
-          scrollEnabled={!embedded}
-          style={[styles.scrollList, embedded && { flex: 0 }]}
-          contentContainerStyle={styles.scrollContent}
-          showsVerticalScrollIndicator={false}
-        >
-          {exerciseStates.map((item, exIndex) => {
+const SessionExerciseCard = React.memo(function SessionExerciseCard({item, exIndex, colors, isDark, weightUnit, visible, showAddExerciseModal, isFinishing, setDirectReps, setDirectWeight, adjustReps, adjustWeight, cycleMultiplier, addSetRow, removeSetRow, toggleComplete}: {
+  item: ActiveExerciseState; exIndex: number; colors: ReturnType<typeof useTheme>['colors'];
+  isDark: boolean; weightUnit: 'kg' | 'lb'; visible: boolean; showAddExerciseModal: boolean; isFinishing: boolean;
+  setDirectReps: (exercise: number, set: number, value: string) => void;
+  setDirectWeight: (exercise: number, set: number, value: string) => void;
+  adjustReps: (exercise: number, set: number, delta: number) => void;
+  adjustWeight: (exercise: number, set: number, delta: number) => void;
+  cycleMultiplier: (exercise: number, set: number) => void;
+  addSetRow: (exercise: number) => void; removeSetRow: (exercise: number, set: number) => void;
+  toggleComplete: (exercise: number, set: number) => void;
+}) {
             const allSetsCompleted = item.sets.every((s) => s.completed);
             return (
               <View
@@ -1052,6 +454,22 @@ export function WorkoutSessionModal({
                               </TouchableOpacity>
                             </View>
                           </View>
+                          <TouchableOpacity
+                            testID={`complete-set-${exIndex}-${setIndex}`}
+                            accessibilityRole="checkbox"
+                            accessibilityLabel={`${item.name}, ${setRangeLabel.toLowerCase()}, ${set.completed ? 'completed' : 'mark complete'}`}
+                            accessibilityState={{ checked: set.completed, disabled: isFinishing }}
+                            accessibilityHint="Checked sets are saved when you log the workout."
+                            disabled={isFinishing}
+                            onPress={() => toggleComplete(exIndex, setIndex)}
+                            activeOpacity={0.8}
+                            style={[styles.completeSetButton, { backgroundColor: set.completed ? colors.primary : colors.surfaceElevated, borderColor: set.completed ? colors.primary : colors.border, opacity: isFinishing ? .5 : 1 }]}
+                          >
+                            <Ionicons name={set.completed ? 'checkmark-circle' : 'ellipse-outline'} size={20} color={set.completed ? (isDark ? '#000000' : '#ffffff') : colors.primary} />
+                            <Text style={{ fontSize: 13, fontWeight: '800', color: set.completed ? (isDark ? '#000000' : '#ffffff') : colors.text }}>
+                              {set.completed ? `${mult > 1 ? `${mult} sets` : 'Set'} complete` : `Mark ${mult > 1 ? `${mult} sets` : 'set'} complete`}
+                            </Text>
+                          </TouchableOpacity>
                         </View>
                       );
                     });
@@ -1059,7 +477,708 @@ export function WorkoutSessionModal({
                 </View>
               </View>
             );
-          })}
+});
+
+export function WorkoutSessionModal({
+  visible,
+  embedded = false,
+  routine,
+  allLogs,
+  userId,
+  weightUnit,
+  onClose,
+  onFinishSession,
+}: WorkoutSessionModalProps) {
+  const themeContext = useTheme();
+  const colors = themeContext?.colors;
+  const isDark = themeContext?.isDark ?? colors?.isDark ?? true;
+
+  // Active workout timer
+  const elapsedSeconds = useRef(0);
+  const [isTimerRunning, setIsTimerRunning] = useState<boolean>(true);
+
+  // Set rest timer
+  const [restEndsAt, setRestEndsAt] = useState(0);
+  const setRestSeconds = (seconds: number) => setRestEndsAt(seconds > 0 ? Date.now()+seconds*1000 : 0);
+  const finishRest = useCallback(() => { setIsResting(false); setRestEndsAt(0); }, []);
+  const [isResting, setIsResting] = useState<boolean>(false);
+
+  const [restInterval, setRestInterval] = useState(DEFAULT_REST_SECONDS);
+  const [restSettingsOpen, setRestSettingsOpen] = useState(false);
+  const restPreferenceRevision = useRef(0);
+  const restAccount = useRef(userId); restAccount.current = userId;
+  useEffect(() => {
+    let alive = true;
+    const revision = ++restPreferenceRevision.current;
+    setRestInterval(DEFAULT_REST_SECONDS);
+    setRestSettingsOpen(false);
+    setIsResting(false); setRestSeconds(0);
+    loadRestInterval(userId).then(value => {
+      if (alive && restAccount.current === userId && revision === restPreferenceRevision.current) setRestInterval(value);
+    }).catch(() => {});
+    return () => { alive = false; };
+  }, [userId]);
+
+  const changeRestInterval = (seconds: number) => {
+    const value = normalizeRestSeconds(seconds);
+    const owner = userId;
+    const revision = ++restPreferenceRevision.current;
+    setRestInterval(value);
+    if (!value) { setIsResting(false); setRestSeconds(0); }
+    saveRestInterval(owner, value).catch(() => {
+      if (restAccount.current === owner && revision === restPreferenceRevision.current)
+        Alert.alert('Rest interval not saved', 'Your selection works for this session. Try changing it again to save it for future workouts.');
+    });
+  };
+  const adjustCurrentRest = (amount: number) => {
+    const seconds = Math.max(0, Math.min(MAX_REST_SECONDS, Math.max(0, Math.ceil((restEndsAt-Date.now())/1000)) + amount));
+    setRestSeconds(seconds); setIsResting(seconds > 0);
+  };
+
+  // Exercise items state inside session
+  const [exerciseStates, setExerciseStates] = useState<ActiveExerciseState[]>([]);
+
+  const exerciseStatesRef = useRef(exerciseStates); exerciseStatesRef.current = exerciseStates;
+
+  // Add Exercise to active session state (with matching main workout page filters and preview)
+  const [showAddExerciseModal, setShowAddExerciseModal] = useState<boolean>(false);
+  const [exerciseSearchText, setExerciseSearchText] = useState<string>('');
+  const [selectedCategoryFilter, setSelectedCategoryFilter] = useState<string>('all');
+  const [selectedDifficultyFilter, setSelectedDifficultyFilter] = useState<string>('all');
+  const [selectedTypeFilter, setSelectedTypeFilter] = useState<string>('all');
+  const [activeDropdown, setActiveDropdown] = useState<'muscle' | 'difficulty' | 'type' | null>(null);
+  const [previewingExercise, setPreviewingExercise] = useState<ExerciseDefinition>(DEFAULT_EXERCISES[0]);
+  const [isPreviewHeroExpanded, setIsPreviewHeroExpanded] = useState<boolean>(false);
+  const [isPastWorkoutExpanded, setIsPastWorkoutExpanded] = useState<boolean>(false);
+  const [repeatStatusMsg, setRepeatStatusMsg] = useState<string | null>(null);
+  const [previousExerciseSnapshot, setPreviousExerciseSnapshot] = useState<ActiveExerciseState[] | null>(null);
+  const [repeatTimer, setRepeatTimer] = useState<ReturnType<typeof setTimeout> | null>(null);
+  const [isFinishing, setIsFinishing] = useState<boolean>(false);
+  const finishing = useRef(false);
+  const finishScale = useRef(new Animated.Value(1)).current;
+  const finishFill = useRef(new Animated.Value(0)).current;
+  const finishCheckScale = useRef(new Animated.Value(1)).current;
+
+  // Find last workout log specifically for this workout day/routine (or its exercises) and any other logs from that exact calendar day
+  const lastSessionSummary = useMemo(() => {
+    if (!routine || allLogs.length === 0) return null;
+    const routineExIds = routine.exercises.map((e) => e.exerciseId);
+
+    // 1. Sort allLogs newest-first by date
+    const sortedLogs = [...allLogs].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+
+    // 2. Find the most recent log belonging to this routine's exercises (or category)
+    const latestRoutineLog = sortedLogs.find((l) => l.userId === userId && routineExIds.includes(l.exerciseId));
+    if (!latestRoutineLog) return null;
+
+    // 3. Extract the target day string (YYYY-MM-DD) of that specific past session
+    const targetDayStr = latestRoutineLog.date.split('T')[0];
+
+    // The repeat preview must contain only this workout's exercises, not unrelated sets that day.
+    const dayLogs = sortedLogs.filter((l) => l.userId === userId && routineExIds.includes(l.exerciseId) && l.date.split('T')[0] === targetDayStr);
+
+    const latestDate = new Date(latestRoutineLog.date).toLocaleDateString(undefined, {
+      month: 'short',
+      day: 'numeric',
+    });
+
+    return {
+      date: latestDate,
+      dateKey: targetDayStr,
+      logs: dayLogs,
+      routineLogs: dayLogs.filter((l) => routineExIds.includes(l.exerciseId)),
+    };
+  }, [routine, allLogs, userId]);
+
+  // Initialize exercises when routine opens
+  useEffect(() => {
+    if (!routine || !visible) {
+      elapsedSeconds.current = 0;
+      setRestSeconds(0);
+      setIsResting(false);
+      return;
+    }
+
+    elapsedSeconds.current = 0;
+    setIsTimerRunning(true);
+    setRestSeconds(0);
+    setIsResting(false);
+
+    const initialStates: ActiveExerciseState[] = routine.exercises.map((item) => {
+      const def = DEFAULT_EXERCISES.find((e) => e.id === item.exerciseId);
+      // Use the saved plan. Past values are copied only through Repeat Past Workout.
+      let initWeight = item.weight ?? def?.defaultWeight ?? 0;
+      const initReps = item.reps ?? def?.defaultReps ?? 10;
+      if (weightUnit === 'kg') {
+        initWeight = Math.round(initWeight * 0.453592);
+      }
+
+      return {
+        exerciseId: item.exerciseId,
+        name: def?.name || item.exerciseId,
+        category: def?.category || routine.category,
+        imageUrl: def?.imageUrl,
+        targetMuscles: def?.primaryMuscles,
+        sets: [
+          {
+            id: `set_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+            reps: initReps,
+            weight: initWeight,
+            multiplier: 1,
+            completed: false,
+          },
+        ],
+      };
+    });
+
+    setExerciseStates(initialStates);
+  }, [routine, visible]);
+
+  const formatTime = (secs: number) => {
+    const m = Math.floor(secs / 60);
+    const s = secs % 60;
+    return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+  };
+
+  // Direct input for reps or weight
+  const setDirectReps = useCallback((exIndex: number, setIndex: number, valStr: string) => {
+    const num = parseInt(valStr.replace(/[^0-9]/g, ''), 10);
+    setExerciseStates((prev) => {
+      const copy = [...prev];
+      const ex = { ...copy[exIndex] };
+      const sets = [...ex.sets];
+      sets[setIndex] = {
+        ...sets[setIndex],
+        reps: isNaN(num) ? 0 : Math.max(0, num),
+      };
+      ex.sets = sets;
+      copy[exIndex] = ex;
+      return copy;
+    });
+  }, []);
+
+  const setDirectWeight = useCallback((exIndex: number, setIndex: number, valStr: string) => {
+    const num = parseFloat(valStr.replace(/[^0-9.]/g, ''));
+    setExerciseStates((prev) => {
+      const copy = [...prev];
+      const ex = { ...copy[exIndex] };
+      const sets = [...ex.sets];
+      sets[setIndex] = {
+        ...sets[setIndex],
+        weight: isNaN(num) ? 0 : Math.max(0, num),
+      };
+      ex.sets = sets;
+      copy[exIndex] = ex;
+      return copy;
+    });
+  }, []);
+
+  // Adjust reps or weight of a specific set within an exercise
+  const adjustReps = useCallback((exIndex: number, setIndex: number, delta: number) => {
+    setExerciseStates((prev) => {
+      const copy = [...prev];
+      const ex = { ...copy[exIndex] };
+      const sets = [...ex.sets];
+      sets[setIndex] = {
+        ...sets[setIndex],
+        reps: Math.max(1, sets[setIndex].reps + delta),
+      };
+      ex.sets = sets;
+      copy[exIndex] = ex;
+      return copy;
+    });
+  }, []);
+
+  const adjustWeight = useCallback((exIndex: number, setIndex: number, delta: number) => {
+    setExerciseStates((prev) => {
+      const copy = [...prev];
+      const ex = { ...copy[exIndex] };
+      const sets = [...ex.sets];
+      sets[setIndex] = {
+        ...sets[setIndex],
+        weight: Math.max(0, sets[setIndex].weight + delta),
+      };
+      ex.sets = sets;
+      copy[exIndex] = ex;
+      return copy;
+    });
+  }, []);
+
+  // Cycle multiplier: x1 -> x2 -> x3 -> x4 -> x1
+  const cycleMultiplier = useCallback((exIndex: number, setIndex: number) => {
+    setExerciseStates((prev) => {
+      const copy = [...prev];
+      const ex = { ...copy[exIndex] };
+      const sets = [...ex.sets];
+      const curMult = sets[setIndex].multiplier || 1;
+      const nextMult = curMult >= 4 ? 1 : curMult + 1;
+      sets[setIndex] = {
+        ...sets[setIndex],
+        multiplier: nextMult,
+      };
+      ex.sets = sets;
+      copy[exIndex] = ex;
+      return copy;
+    });
+  }, []);
+
+  // Add a new set row with customized or differing weight/reps
+  const addSetRow = useCallback((exIndex: number) => {
+    setExerciseStates((prev) => {
+      const copy = [...prev];
+      const ex = { ...copy[exIndex] };
+      const lastSet = ex.sets[ex.sets.length - 1];
+      const newSet: ExerciseSetRow = {
+        id: `set_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+        reps: lastSet ? lastSet.reps : 10,
+        weight: lastSet ? lastSet.weight : 0,
+        multiplier: 1,
+        completed: false,
+      };
+      ex.sets = [...ex.sets, newSet];
+      copy[exIndex] = ex;
+      return copy;
+    });
+  }, []);
+
+  // Remove a set row (supports removing down to 0 sets)
+  const removeSetRow = useCallback((exIndex: number, setIndex: number) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => { });
+    setExerciseStates((prev) => {
+      const copy = [...prev];
+      const ex = { ...copy[exIndex] };
+      ex.sets = ex.sets.filter((_, idx) => idx !== setIndex);
+      copy[exIndex] = ex;
+      return copy;
+    });
+  }, []);
+
+  const toggleComplete = useCallback((exIndex: number, setIndex: number) => {
+    if (finishing.current) return;
+    const completing = !exerciseStatesRef.current[exIndex]?.sets[setIndex]?.completed;
+    Haptics.selectionAsync().catch(() => { });
+    setExerciseStates((prev) => {
+      const copy = [...prev];
+      const ex = { ...copy[exIndex] };
+      const sets = [...ex.sets];
+      const nextCompleted = !sets[setIndex].completed;
+      sets[setIndex] = { ...sets[setIndex], completed: nextCompleted };
+      ex.sets = sets;
+      copy[exIndex] = ex;
+      return copy;
+    });
+
+    // Unchecking a set must not start another rest interval.
+    if (completing && restInterval > 0) { setRestSeconds(restInterval); setIsResting(true); }
+  }, [restInterval]);
+
+  // Add exercise to active session
+  const handleAddExerciseToSession = (exercise: ExerciseDefinition) => {
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => { });
+
+    // Check if exercise already exists in this session
+    const existingIndex = exerciseStates.findIndex((e) => e.exerciseId === exercise.id);
+    if (existingIndex >= 0) {
+      setShowAddExerciseModal(false);
+      return;
+    }
+
+    // Default weight conversion if kg
+    let initWeight = exercise.defaultWeight ?? 0;
+    if (weightUnit === 'kg') {
+      initWeight = Math.round(initWeight * 0.453592);
+    }
+    const initReps = exercise.defaultReps || 10;
+
+    const newExerciseState: ActiveExerciseState = {
+      exerciseId: exercise.id,
+      name: exercise.name,
+      category: exercise.category,
+      imageUrl: exercise.imageUrl,
+      targetMuscles: exercise.primaryMuscles,
+      sets: [
+        {
+          id: `set_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+          reps: initReps,
+          weight: initWeight,
+          multiplier: 1,
+          completed: false,
+        },
+      ],
+    };
+
+    setExerciseStates((prev) => [...prev, newExerciseState]);
+    setShowAddExerciseModal(false);
+    setExerciseSearchText('');
+  };
+
+  // Filtered available exercises matching main workout page
+  const filteredAvailableExercises = useMemo(() => {
+    const q = exerciseSearchText.trim().toLowerCase();
+
+    return DEFAULT_EXERCISES.filter((e) => {
+      // 1. Text Query Filter
+      if (q) {
+        const matchesName = e.name.toLowerCase().includes(q);
+        const matchesCat = e.category.toLowerCase().includes(q);
+        const matchesEquip = (e.equipment || '').toLowerCase().includes(q);
+        const matchesMuscles = (e.primaryMuscles || []).some((m) => m.toLowerCase().includes(q));
+        if (!matchesName && !matchesCat && !matchesEquip && !matchesMuscles) {
+          return false;
+        }
+      }
+
+      // 2. Muscle Group Filter
+      if (selectedCategoryFilter !== 'all' && e.category.toLowerCase() !== selectedCategoryFilter.toLowerCase()) {
+        return false;
+      }
+
+      // 3. Difficulty Filter
+      if (selectedDifficultyFilter !== 'all') {
+        const exName = e.name.toLowerCase();
+        let diff = 'intermediate';
+        if (
+          exName.includes('deadlift') ||
+          exName.includes('squat') ||
+          exName.includes('clean') ||
+          exName.includes('snatch') ||
+          exName.includes('overhead press')
+        ) {
+          diff = 'advanced';
+        } else if (
+          exName.includes('curl') ||
+          exName.includes('pushdown') ||
+          exName.includes('crunch') ||
+          exName.includes('calf') ||
+          exName.includes('lateral raise') ||
+          exName.includes('extension')
+        ) {
+          diff = 'beginner';
+        }
+        if (diff !== selectedDifficultyFilter) return false;
+      }
+
+      // 4. Equipment Type Filter
+      if (selectedTypeFilter !== 'all') {
+        const equip = (e.equipment || '').toLowerCase();
+        if (selectedTypeFilter === 'barbell' && !equip.includes('barbell')) return false;
+        if (selectedTypeFilter === 'dumbbell' && !equip.includes('dumbbell')) return false;
+        if (selectedTypeFilter === 'cable' && !equip.includes('cable')) return false;
+        if (selectedTypeFilter === 'machine' && !equip.includes('machine')) return false;
+        if (selectedTypeFilter === 'bodyweight' && !equip.includes('body only')) return false;
+      }
+
+      return true;
+    });
+  }, [exerciseSearchText, selectedCategoryFilter, selectedDifficultyFilter, selectedTypeFilter]);
+
+  // Apply previous workout's weights and reps in-place without auto-logging
+  const handleApplyPastWorkout = () => {
+    if (!lastSessionSummary || !routine) return;
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => { });
+
+    // Save snapshot for Undo
+    setPreviousExerciseSnapshot(JSON.parse(JSON.stringify(exerciseStates)));
+
+    setExerciseStates((prev) => {
+      return prev.map((exState) => {
+        // Find matching logs from lastSessionSummary
+        const matchingLogs = lastSessionSummary.logs.filter((l) => l.exerciseId === exState.exerciseId);
+        if (matchingLogs.length === 0) return exState;
+
+        const updatedSets: ExerciseSetRow[] = matchingLogs.map((logItem, idx) => {
+          let convertedW = logItem.weight;
+          if (logItem.weightUnit !== weightUnit) {
+            convertedW = weightUnit === 'kg' ? Math.round(logItem.weight * 0.453592) : Math.round(logItem.weight * 2.20462);
+          }
+          return {
+            id: `set_past_${idx}_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+            reps: logItem.reps || 10,
+            weight: convertedW,
+            multiplier: 1,
+            completed: false,
+          };
+        });
+
+        return {
+          ...exState,
+          sets: updatedSets.length > 0 ? updatedSets : exState.sets,
+        };
+      });
+    });
+
+    setRepeatStatusMsg(`Applied reps and weights from ${lastSessionSummary.date}. Ready for your session.`);
+    if (repeatTimer) clearTimeout(repeatTimer);
+    const t = setTimeout(() => {
+      setRepeatStatusMsg(null);
+    }, 6000);
+    setRepeatTimer(t);
+  };
+
+  const handleUndoRepeatPastWorkout = () => {
+    Haptics.selectionAsync().catch(() => { });
+    if (previousExerciseSnapshot) {
+      setExerciseStates(previousExerciseSnapshot);
+      setPreviousExerciseSnapshot(null);
+    }
+    setRepeatStatusMsg(null);
+    if (repeatTimer) clearTimeout(repeatTimer);
+  };
+
+  // Persist only checked rows; validate every row before the single storage write.
+  const handleFinishAll = async () => {
+    if (finishing.current) return;
+    try {
+      const entries = completedWorkoutEntries(exerciseStates, weightUnit,
+        `${routine?.title || 'Workout'} (${formatTime(elapsedSeconds.current)})`);
+      if (!entries.length) {
+        Alert.alert('No completed sets', 'Check off the sets you actually completed before logging.');
+        return;
+      }
+      finishing.current = true;
+      setIsFinishing(true);
+      const logs = await saveWorkoutLogBatch(userId, entries);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+      onFinishSession(logs.length, logs.map(log => log.id));
+    } catch (error) {
+      Alert.alert('Workout not saved', error instanceof Error ? error.message : 'Please try again.');
+    } finally {
+      finishing.current = false;
+      setIsFinishing(false);
+    }
+  };
+
+  if (!routine) return null;
+
+  const totalSetsCount = exerciseStates.reduce((acc, ex) => {
+    return acc + ex.sets.reduce((sAcc, s) => sAcc + (s.multiplier || 1), 0);
+  }, 0);
+
+  const completedSetsCount = exerciseStates.reduce((acc, ex) => {
+    return acc + ex.sets.reduce((sAcc, s) => sAcc + (s.completed ? (s.multiplier || 1) : 0), 0);
+  }, 0);
+
+  return (
+    <SessionSurface embedded={embedded} visible={visible} onClose={onClose}>
+      <View style={[styles.container, { backgroundColor: colors.background }, embedded && { flex: 0, marginHorizontal: -16 }]}>
+        {/* Apple Dynamic Island / Top Widget Bar */}
+        <View style={[styles.dynamicIslandBar, { backgroundColor: '#000000' }]}>
+          <View style={styles.islandIndicator}>
+            <View style={styles.islandDot} />
+            <Text style={styles.islandTitle}>{routine.title}</Text>
+          </View>
+          <View style={styles.islandRight}>
+            <Ionicons name="timer-outline" size={15} color="#a3e635" />
+            <SessionClock running={visible && isTimerRunning} session={routine} clock={elapsedSeconds} />
+          </View>
+        </View>
+
+        {/* Header with Title and Close */}
+        <View style={styles.modalHeader}>
+          <View style={{ flex: 1 }}>
+            <Text style={[styles.sessionTitle, { color: colors.text }]}>{routine.title}</Text>
+            <Text style={[styles.sessionSubtitle, { color: colors.textMuted }]}>
+              {completedSetsCount} of {totalSetsCount} sets checked off
+            </Text>
+          </View>
+          <TouchableOpacity
+            onPress={onClose}
+            style={[styles.closeCircleBtn, { backgroundColor: colors.surfaceElevated }]}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          >
+            <Ionicons name="close" size={20} color={colors.text} />
+          </TouchableOpacity>
+        </View>
+
+        <Text style={{ color: colors.textMuted, fontSize: 12, lineHeight: 18, marginHorizontal: 18, marginBottom: 12 }}>
+          Enter your reps and weight, then mark each finished set complete. Save your checked sets below.
+        </Text>
+
+        <View style={{ marginHorizontal: 18, marginBottom: 12 }}>
+          <TouchableOpacity testID="rest-interval-settings" accessibilityRole="button"
+            accessibilityLabel={`Automatic rest ${formatRestInterval(restInterval)}. Adjust rest interval`}
+            accessibilityState={{ expanded: restSettingsOpen }} onPress={() => setRestSettingsOpen(value => !value)}
+            style={{ flexDirection: 'row', alignItems: 'center', gap: 8, minHeight: 44 }}>
+            <Ionicons name="timer-outline" size={17} color={colors.primary} />
+            <Text style={{ color: colors.text, flex: 1, fontSize: 13, fontWeight: '600' }}>Auto rest · {formatRestInterval(restInterval)}</Text>
+            <Text style={{ color: colors.primary, fontSize: 12 }}>Adjust</Text>
+            <Ionicons name={restSettingsOpen ? 'chevron-up' : 'chevron-down'} size={15} color={colors.textMuted} />
+          </TouchableOpacity>
+          {restSettingsOpen && <View style={{ backgroundColor: colors.surfaceElevated, padding: 12, borderRadius: 14, gap: 10 }}>
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
+              {REST_PRESETS.map(seconds => <TouchableOpacity key={seconds} testID={`rest-preset-${seconds}`}
+                accessibilityRole="radio" accessibilityState={{ selected: restInterval === seconds }}
+                accessibilityLabel={seconds ? `${seconds} seconds rest` : 'Turn automatic rest off'}
+                onPress={() => changeRestInterval(seconds)}
+                style={{ minWidth: 48, minHeight: 44, paddingHorizontal: 10, alignItems: 'center', justifyContent: 'center', borderRadius: 10,
+                  backgroundColor: restInterval === seconds ? colors.primary : colors.background }}>
+                <Text style={{ color: restInterval === seconds ? '#101609' : colors.text, fontWeight: '600' }}>{formatRestInterval(seconds)}</Text>
+              </TouchableOpacity>)}
+            </View>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+              <TouchableOpacity testID="rest-interval-less" accessibilityRole="button" accessibilityLabel="Decrease automatic rest by 15 seconds"
+                disabled={restInterval === 0} onPress={() => changeRestInterval(restInterval - 15)}
+                style={{ minHeight: 44, minWidth: 48, alignItems: 'center', justifyContent: 'center', opacity: restInterval === 0 ? .4 : 1 }}>
+                <Text style={{ color: colors.primary, fontWeight: '700' }}>−15s</Text>
+              </TouchableOpacity>
+              <Text style={{ flex: 1, textAlign: 'center', color: colors.text, fontWeight: '700' }}>{formatRestInterval(restInterval)}</Text>
+              <TouchableOpacity testID="rest-interval-more" accessibilityRole="button" accessibilityLabel="Increase automatic rest by 15 seconds"
+                disabled={restInterval === MAX_REST_SECONDS} onPress={() => changeRestInterval(restInterval + 15)}
+                style={{ minHeight: 44, minWidth: 48, alignItems: 'center', justifyContent: 'center', opacity: restInterval === MAX_REST_SECONDS ? .4 : 1 }}>
+                <Text style={{ color: colors.primary, fontWeight: '700' }}>+15s</Text>
+              </TouchableOpacity>
+            </View>
+            <Text style={{ color: colors.textMuted, fontSize: 11, lineHeight: 16 }}>Saved for your account. Applies after your next completed set. Off also stops the current countdown.</Text>
+          </View>}
+        </View>
+
+        {/* Rest Timer Widget if resting */}
+        {isResting && (
+          <View style={[styles.restBar, { backgroundColor: colors.surfaceElevated, flexWrap: 'wrap', gap: 6 }]}>
+            <View style={styles.restLeft}>
+              <Ionicons name="hourglass-outline" size={16} color={colors.primary} />
+              <Text style={[styles.restTitle, { color: colors.text }]}>Rest Interval</Text>
+            </View>
+            <View style={styles.restRight}>
+              <RestCountdown endAt={restEndsAt} onFinish={finishRest} color={colors.primary} />
+              <TouchableOpacity testID="rest-current-less" accessibilityRole="button" accessibilityLabel="Shorten current rest by 15 seconds"
+                onPress={() => adjustCurrentRest(-15)} style={[styles.restSkipBtn, { minHeight: 44, justifyContent: 'center' }]}>
+                <Text style={[styles.restSkipText, { color: colors.primary }]}>−15s</Text>
+              </TouchableOpacity>
+              <TouchableOpacity testID="rest-current-more" accessibilityRole="button" accessibilityLabel="Extend current rest by 15 seconds"
+                disabled={restEndsAt-Date.now() >= MAX_REST_SECONDS*1000} onPress={() => adjustCurrentRest(15)} style={[styles.restSkipBtn, { minHeight: 44, justifyContent: 'center' }]}>
+                <Text style={[styles.restSkipText, { color: colors.primary }]}>+15s</Text>
+              </TouchableOpacity>
+              <TouchableOpacity testID="rest-skip" accessibilityRole="button" accessibilityLabel="Skip current rest"
+                onPress={() => { setIsResting(false); setRestSeconds(0); }}
+                style={styles.restSkipBtn}
+              >
+                <Text style={[styles.restSkipText, { color: colors.textMuted }]}>Skip</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        )}
+
+        {/* Past Workout Banner with Dropdown Miniview & Undo */}
+        {lastSessionSummary && (
+          <View style={styles.pastWorkoutSectionWrap}>
+            <View
+              style={[
+                styles.pastWorkoutBanner,
+                { backgroundColor: colors.surfaceElevated, borderColor: colors.border || 'rgba(255,255,255,0.06)' },
+              ]}
+            >
+              <TouchableOpacity
+                style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 14 }}
+                onPress={handleApplyPastWorkout}
+                activeOpacity={0.75}
+              >
+                <View style={[styles.pastIconWrap, { backgroundColor: (routine.color || colors.primary) + '18' }]}>
+                  <Ionicons name="sync" size={20} color={routine.color || colors.primary} />
+                </View>
+                <View style={{ flex: 1, justifyContent: 'center' }}>
+                  <View style={styles.pastTitleBadgeRow}>
+                    <Text style={[styles.pastTitle, { color: colors.text }]}>
+                      Repeat Past Workout
+                    </Text>
+                    <View style={[styles.pastDatePill, { backgroundColor: (routine.color || colors.primary) + '22' }]}>
+                      <Text style={[styles.pastDatePillText, { color: routine.color || colors.primary }]}>
+                        {lastSessionSummary.date}
+                      </Text>
+                    </View>
+                  </View>
+                  <Text style={[styles.pastSubtitle, { color: colors.textMuted }]}>
+                    Tap to auto-fill your previous weights & reps for this session
+                  </Text>
+                </View>
+              </TouchableOpacity>
+
+              {/* Right dropdown chevron to expand and drop down miniview */}
+              <TouchableOpacity
+                style={styles.pastDropdownChevronBtn}
+                onPress={() => {
+                  Haptics.selectionAsync().catch(() => { });
+                  setIsPastWorkoutExpanded((prev) => !prev);
+                }}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              >
+                <Ionicons
+                  name={isPastWorkoutExpanded ? 'chevron-up' : 'chevron-down'}
+                  size={19}
+                  color={colors.textSecondary}
+                />
+              </TouchableOpacity>
+            </View>
+
+            {/* Notification line below saying what happened with Undo link */}
+            {repeatStatusMsg && (
+              <View style={styles.repeatStatusRowBelow}>
+                <Ionicons name="checkmark-circle" size={14} color="#10b981" />
+                <Text style={[styles.repeatStatusText, { color: colors.text }]} numberOfLines={1}>
+                  {repeatStatusMsg}
+                </Text>
+                <TouchableOpacity
+                  onPress={handleUndoRepeatPastWorkout}
+                  activeOpacity={0.65}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  style={{ marginLeft: 6 }}
+                >
+                  <Text style={styles.repeatUndoText}>Undo</Text>
+                </TouchableOpacity>
+              </View>
+            )}
+
+            {/* Dropdown Mini-view of everything done that day */}
+            {isPastWorkoutExpanded && (
+              <View style={[styles.pastWorkoutDropdownCard, { backgroundColor: colors.surfaceElevated }]}>
+                <View style={styles.pastDropdownHeader}>
+                  <Text style={[styles.pastDropdownTitle, { color: colors.text }]}>
+                    Logged on {lastSessionSummary.date}
+                  </Text>
+                  <TouchableOpacity
+                    style={[styles.applyPastMiniBtn, { backgroundColor: colors.primary }]}
+                    onPress={handleApplyPastWorkout}
+                  >
+                    <Text style={[styles.applyPastMiniBtnText, { color: isDark ? '#000000' : '#ffffff' }]}>
+                      Apply All
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+                <View style={styles.pastMiniList}>
+                  {lastSessionSummary.logs.map((logItem) => (
+                    <View key={logItem.id} style={styles.pastMiniItemRow}>
+                      <View style={{ flex: 1 }}>
+                        <Text style={[styles.pastMiniExName, { color: colors.text }]} numberOfLines={1}>
+                          {logItem.exerciseName}
+                        </Text>
+                        <Text style={[styles.pastMiniExDetail, { color: colors.textMuted }]}>
+                          {logItem.reps} reps · {logItem.weight} {logItem.weightUnit}
+                          {logItem.notes ? ` (${logItem.notes})` : ''}
+                        </Text>
+                      </View>
+                      <View style={[styles.pastMiniBadge, { backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : '#f1f5f9' }]}>
+                        <Text style={[styles.pastMiniBadgeText, { color: colors.textSecondary }]}>
+                          {logItem.weight} {logItem.weightUnit}
+                        </Text>
+                      </View>
+                    </View>
+                  ))}
+                </View>
+              </View>
+            )}
+          </View>
+        )}
+
+        {/* Exercises Scroll List */}
+        <ScrollView
+          keyboardShouldPersistTaps="handled"
+          scrollEnabled={!embedded}
+          style={[styles.scrollList, embedded && { flex: 0 }]}
+          contentContainerStyle={styles.scrollContent}
+          showsVerticalScrollIndicator={false}
+        >
+          {exerciseStates.map((item, exIndex) => <SessionExerciseCard key={item.exerciseId}
+            item={item} exIndex={exIndex} colors={colors} isDark={isDark} weightUnit={weightUnit} visible={visible} showAddExerciseModal={showAddExerciseModal} isFinishing={isFinishing} setDirectReps={setDirectReps} setDirectWeight={setDirectWeight} adjustReps={adjustReps} adjustWeight={adjustWeight} cycleMultiplier={cycleMultiplier} addSetRow={addSetRow} removeSetRow={removeSetRow} toggleComplete={toggleComplete} />)}
 
           {/* Add Exercise to Session Button */}
           <TouchableOpacity
@@ -1091,6 +1210,7 @@ export function WorkoutSessionModal({
 
         {/* Finish & Log Workout Button with satisfying fill & check animation */}
         <View style={[styles.footerBar, { backgroundColor: colors.background }]}>
+          <Text style={{ color: colors.textMuted, fontSize: 11, lineHeight: 16, textAlign: 'center', marginBottom: 8 }}>{completedSetsCount ? 'Only checked sets will be saved and added to your ranks.' : 'Mark a set complete above to enable logging.'}</Text>
           {(() => {
             const btnBg = finishFill.interpolate({
               inputRange: [0, 1],
@@ -1100,6 +1220,9 @@ export function WorkoutSessionModal({
             return (
               <Animated.View style={{ transform: [{ scale: finishScale }] }}>
                 <TouchableOpacity
+                  testID="save-completed-sets"
+                  accessibilityRole="button"
+                  accessibilityLabel={completedSetsCount ? `Log ${completedSetsCount} completed sets` : 'Mark a set complete to enable logging'}
                   disabled={isFinishing || completedSetsCount === 0}
                   accessibilityState={{ disabled: isFinishing || completedSetsCount === 0 }}
                   style={{ opacity: isFinishing || completedSetsCount === 0 ? 0.5 : 1 }}
@@ -1117,7 +1240,7 @@ export function WorkoutSessionModal({
                     <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.75} style={[styles.finishBtnText, { flexShrink: 1, color: isDark ? '#000000' : '#ffffff' }]}>
                       {isFinishing
                         ? `Saving…`
-                        : `Log ${completedSetsCount} Completed Set${completedSetsCount === 1 ? '' : 's'}`}
+                        : completedSetsCount === 0 ? 'Mark a set complete to log' : `Log ${completedSetsCount} Completed Set${completedSetsCount === 1 ? '' : 's'}`}
                     </Text>
                   </Animated.View>
                 </TouchableOpacity>
@@ -1127,7 +1250,7 @@ export function WorkoutSessionModal({
         </View>
 
         {/* Modal Sheet for Adding Exercise to Active Session */}
-        <Modal
+        {showAddExerciseModal && <Modal
           visible={showAddExerciseModal}
           animationType="slide"
           presentationStyle="pageSheet"
@@ -1151,12 +1274,18 @@ export function WorkoutSessionModal({
               </TouchableOpacity>
             </View>
 
-            <ScrollView
+            <FlatList
+              testID="session-exercise-catalog"
               style={{ flex: 1 }}
               contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 40 }}
-              showsVerticalScrollIndicator={false}
+              data={filteredAvailableExercises}
+              keyExtractor={item => item.id}
+              initialNumToRender={8}
+              maxToRenderPerBatch={8}
+              windowSize={3}
               keyboardShouldPersistTaps="handled"
-            >
+              showsVerticalScrollIndicator={false}
+              ListHeaderComponent={<>
               {/* ── STICKMAN HERO CARD (Exact preview from main workout page) ── */}
               {previewingExercise && (
                 <View style={[styles.stickmanHeroCard, { backgroundColor: colors.surfaceElevated }]}>
@@ -1527,17 +1656,9 @@ export function WorkoutSessionModal({
                 )}
               </View>
 
-              {/* Exercises List Card (Exact design from main workout page) */}
-              <View style={[styles.exerciseResultsCard, { backgroundColor: colors.surfaceElevated }]}>
-                {filteredAvailableExercises.length === 0 ? (
-                  <View style={styles.noExercisesFoundBox}>
-                    <Ionicons name="search-outline" size={24} color={colors.textMuted} style={{ marginBottom: 6 }} />
-                    <Text style={[styles.noExercisesFoundText, { color: colors.textMuted }]}>
-                      No exercises matching "{exerciseSearchText}"
-                    </Text>
-                  </View>
-                ) : (
-                  filteredAvailableExercises.map((item, index) => {
+              </>}
+              ListEmptyComponent={<View style={styles.noExercisesFoundBox}><Ionicons name="search-outline" size={24} color={colors.textMuted} /><Text style={[styles.noExercisesFoundText, { color: colors.textMuted }]}>No exercises matching "{exerciseSearchText}"</Text></View>}
+              renderItem={({ item, index }) => {
                     const isSelected = previewingExercise?.id === item.id;
                     const alreadyInSession = exerciseStates.some((s) => s.exerciseId === item.id);
                     const isLast = index === filteredAvailableExercises.length - 1;
@@ -1625,12 +1746,10 @@ export function WorkoutSessionModal({
                         </View>
                       </TouchableOpacity>
                     );
-                  })
-                )}
-              </View>
-            </ScrollView>
+              }}
+            />
           </View>
-        </Modal>
+        </Modal>}
       </View>
     </SessionSurface>
   );
@@ -2261,6 +2380,18 @@ const styles = StyleSheet.create({
   },
   deleteSetBtn: {
     padding: 6,
+  },
+  completeSetButton: {
+    minHeight: 44,
+    borderRadius: 14,
+    borderWidth: 1,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    marginTop: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
   },
   checkSetBtn: {
     width: 32,
