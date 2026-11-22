@@ -58,7 +58,13 @@
       "expo-secure-store",
       "expo-web-browser",
       "expo-sharing",
-      "expo-status-bar"
+      "expo-status-bar",
+      [
+        "expo-notifications",
+        {
+          "color": "#A3E635"
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true

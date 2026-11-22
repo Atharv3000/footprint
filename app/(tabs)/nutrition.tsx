@@ -1,7 +1,7 @@
 import { TutorialAnchor, TutorialButton, TutorialScrollView, useTutorialTargetId } from '@/components/FirstRunTutorial';
 import { AppModal as Modal } from '@/components/AppModal';
 import { NutritionPet } from '@/components/NutritionPet';
-import { useFocusEffect } from 'expo-router';
+import { useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { CalorieChallenges } from '@/components/CalorieChallenges';
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
@@ -58,6 +58,12 @@ export default function NutritionScreen() {
   const isDark = themeContext?.isDark ?? colors?.isDark ?? true;
   const { profile, user } = useAuth();
   const [activeTab, setActiveTab] = useState<'tracker' | 'pet'>('tracker');
+  const reminderParams=useLocalSearchParams<{section?:string;reminder?:string}>();
+  useEffect(()=>{
+    if(!reminderParams.reminder)return;
+    if(reminderParams.section==='pet')setActiveTab('pet');
+    else if(reminderParams.section==='tracker')setActiveTab('tracker');
+  },[reminderParams.section,reminderParams.reminder]);
   const tutorialTarget = useTutorialTargetId();
   useEffect(() => {
     if (tutorialTarget === 'pet-care') setActiveTab('pet');

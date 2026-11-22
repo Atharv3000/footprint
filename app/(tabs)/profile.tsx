@@ -1,3 +1,4 @@
+import { ReminderSettingsModal } from '@/components/ReminderSettingsModal';
 import { TutorialButton, TutorialScrollView } from "@/components/FirstRunTutorial";
 import { previewOnboardingTutorial } from '@/components/FirstRunTutorial';
 import { ProfileProgressSection } from '@/components/ProfileProgressSection';
@@ -77,6 +78,7 @@ export default function ProfileScreen() {
   const [, setProfileRefreshKey] = useState<number>(0);
   // Options 3-dots dropdown menu (with Sign Out + Set Steps Goal)
   const [showOptionsMenu, setShowOptionsMenu] = useState<boolean>(false);
+  const [showReminderSettings, setShowReminderSettings] = useState(false);
   // Steps & Distance Goal Modal
   const [showGoalModal, setShowGoalModal] = useState<boolean>(false);
   const [goalType, setGoalType] = useState<'steps' | 'distance'>('steps');
@@ -457,6 +459,13 @@ export default function ProfileScreen() {
             {/* Dropdown Menu */}
             {showOptionsMenu && (
               <View style={[styles.dotsDropdownCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+                <TouchableOpacity style={styles.dropdownMenuItem} accessibilityRole="button" testID="pip-reminder-settings" onPress={() => {
+                  setShowOptionsMenu(false); setShowReminderSettings(true);
+                }} activeOpacity={0.7}>
+                  <Ionicons name="notifications-outline" size={16} color={colors.primary} style={{ marginRight: 8 }} />
+                  <Text style={[styles.dropdownMenuItemText, { color: colors.text }]}>Pip reminders</Text>
+                </TouchableOpacity>
+                <View style={[styles.dropdownDivider, { backgroundColor: colors.border }]} />
                 <TouchableOpacity style={styles.dropdownMenuItem} testID="preview-tutorial" onPress={() => {
                   setShowOptionsMenu(false); previewOnboardingTutorial();
                 }} activeOpacity={0.7}>
@@ -1133,6 +1142,7 @@ export default function ProfileScreen() {
         </TouchableOpacity>
       </InteractiveBottomModal>
 
+      {showReminderSettings && user && <ReminderSettingsModal key={user.id} visible userId={user.id} onClose={() => setShowReminderSettings(false)} />}
       {/* Apple Health Sync Modal */}
       <AppleHealthSyncModal
         visible={showAppleHealthModal}

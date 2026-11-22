@@ -1,3 +1,4 @@
+import { EngagementNotifications } from '@/components/EngagementNotifications';
 import { useFonts } from 'expo-font';
 import {
   PlusJakartaSans_600SemiBold,
@@ -155,7 +156,7 @@ const webStyles = StyleSheet.create({
 
 function RootLayoutNav() {
   return (
-    <Stack>
+    <><EngagementNotifications /><Stack>
       <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
       <Stack.Screen
         name="sign-in"
@@ -174,6 +175,6 @@ function RootLayoutNav() {
         }}
       />
       <Stack.Screen name="modal" options={{ presentation: 'modal' }} />
-    </Stack>
+    </Stack></>
   );
 }
