@@ -15,7 +15,7 @@ import { useTheme, BRAND_ROUNDED_FONT, BRAND_ROUNDED_FONT_EXTRA } from '@/consta
 import { DragSlider } from '@/components/DragSlider';
 import { landmarkFrame, previewFrame } from '@/constants/cameraFraming';
 import { WorkoutTrackingData } from '@/constants/workoutStorage';
-import { BattleState, ownShare, PoseFrame, RepConnection, repServerUrl } from '@/constants/repTrackerProtocol';
+import { BattleState, getRepAuthToken, Joint, ownShare, PoseFrame, RepConnection, repServerUrl } from '@/constants/repTrackerProtocol';
 
 interface Props {
   visible: boolean;
@@ -78,7 +78,9 @@ export function CameraFormTrackerModal({ visible, onClose, onSaveTrackedWorkout,
   const [pose, setPose] = useState<PoseFrame | null>(null);
   const [battle, setBattle] = useState<BattleState | null>(null);
   const [opponentFrame, setOpponentFrame] = useState<string | null>(null);
+  const [opponentPose, setOpponentPose] = useState<{ keypoints: Record<string, Joint>; aspect: number } | null>(null);
   const [opponentAt, setOpponentAt] = useState(0);
+  const [shareBattleVideo, setShareBattleVideo] = useState(false);
   const [joinCode, setJoinCode] = useState('');
   const [pending, setPending] = useState(false);
   const [error, setError] = useState('');
@@ -116,7 +118,7 @@ export function CameraFormTrackerModal({ visible, onClose, onSaveTrackedWorkout,
   useEffect(() => {
     if (!visible) return;
     setRunning(false); setBattle(null); setPose(null); setMode('solo'); setExercise('pushups');
-    setError(''); setOpponentFrame(null); setJoinCode(''); setPending(false); saved.current = false;
+    setError(''); setOpponentFrame(null); setOpponentPose(null); setShareBattleVideo(false); setJoinCode(''); setPending(false); saved.current = false;
     ignoredRooms.current.clear();
     setCameraReady(false); setCameraError(''); setShowInfoModal(false); setShowZoomControls(false); setWeightUsed('');
   }, [visible]);
@@ -133,7 +135,7 @@ export function CameraFormTrackerModal({ visible, onClose, onSaveTrackedWorkout,
           ignoredRooms.current.add(current.current.battle.code);
           setError('You left the battle when the app moved to the background.');
         }
-        setBattle(null); setOpponentFrame(null);
+        setBattle(null); setOpponentFrame(null); setOpponentPose(null);
       }
     });
     return () => { clearInterval(timer); listener.remove(); };
@@ -142,7 +144,7 @@ export function CameraFormTrackerModal({ visible, onClose, onSaveTrackedWorkout,
   useEffect(() => {
     if (!visible) return;
     let alive = true;
-    let ws: RepConnection;
+    let ws: RepConnection | undefined;
     setConnected(false); setConnecting(true); setPlayerId(''); setPending(false);
     framePending.current = false; commandPending.current = false; resetting.current = false;
     const timeout = setTimeout(() => {
@@ -150,61 +152,68 @@ export function CameraFormTrackerModal({ visible, onClose, onSaveTrackedWorkout,
       setConnecting(false); setError('Rep server timed out. Start it with npm run start:reps:tunnel, then reconnect.');
       ws?.close();
     }, 12000);
-    try {
-      if (!process.env.EXPO_PUBLIC_REP_TOKEN) throw new Error('Start Expo with npm run start:reps:tunnel to enable rep tracking and battles.');
-      ws = new RepConnection(repServerUrl()); socket.current = ws;
-      ws.onopen = () => ws.send(JSON.stringify({ type: 'auth', token: process.env.EXPO_PUBLIC_REP_TOKEN }));
-      ws.onmessage = event => {
+    (async () => {
+      try {
+        const token = await getRepAuthToken();
         if (!alive) return;
-        try {
-          const message = JSON.parse(event.data);
-          if (message.type === 'connected') {
-            clearTimeout(timeout); setPlayerId(message.player_id); setConnected(true); setConnecting(false); setError('');
-          } else if (message.type === 'pose') {
-            framePending.current = false;
-            if (!resetting.current) {
-              lastPoseAt.current = Date.now(); setPose(message);
-              if (message.boxing?.finished) setRunning(false);
+        const conn = new RepConnection(repServerUrl());
+        ws = conn;
+        socket.current = conn;
+        conn.onopen = () => conn.send(JSON.stringify({ type: 'auth', token }));
+        conn.onmessage = event => {
+          if (!alive) return;
+          try {
+            const message = JSON.parse(event.data);
+            if (message.type === 'connected') {
+              clearTimeout(timeout); setPlayerId(message.player_id); setConnected(true); setConnecting(false); setError('');
+            } else if (message.type === 'pose') {
+              framePending.current = false;
+              if (!resetting.current) {
+                lastPoseAt.current = Date.now(); setPose(message);
+                if (message.boxing?.finished) setRunning(false);
+              }
+            } else if (message.type === 'frame_skipped') {
+              framePending.current = false;
+            } else if (message.type === 'reset') {
+              resetting.current = false; setPose(null); saved.current = false; startedAt.current = Date.now();
+            } else if (message.type === 'battle_state') {
+              if (ignoredRooms.current.has(message.code)) return;
+              const previous = current.current.battle;
+              if (previous && previous.code === message.code && previous.revision > message.revision) return;
+              current.current = { ...current.current, battle: message };
+              clearTimeout(commandTimer.current);
+              commandPending.current = false; setPending(false); setError('');
+              setBattle(message);
+              if (message.status === 'active' && previous?.status !== 'active') { saved.current = false; startedAt.current = Date.now(); }
+              if (message.status === 'finished' || message.status === 'cancelled') {
+                setRunning(false); setOpponentFrame(null); setOpponentPose(null);
+                Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+              }
+            } else if (message.type === 'opponent_frame') {
+              setOpponentFrame(`data:image/jpeg;base64,${message.image}`); setOpponentPose(null); setOpponentAt(Date.now());
+            } else if (message.type === 'opponent_pose') {
+              setOpponentFrame(null); setOpponentPose({ keypoints: message.keypoints || {}, aspect: message.aspect || .75 }); setOpponentAt(Date.now());
+            } else if (message.type === 'left') {
+              clearTimeout(commandTimer.current);
+              commandPending.current = false; setPending(false); setBattle(null); setOpponentFrame(null); setOpponentPose(null);
+              if (current.current.mode === 'battle') setPose(null);
+            } else if (message.type === 'error') {
+              clearTimeout(commandTimer.current);
+              framePending.current = false; commandPending.current = false; resetting.current = false;
+              setPending(false); setError(message.message);
+              if (current.current.mode === 'battle' && !current.current.battle) setRunning(false);
             }
-          } else if (message.type === 'frame_skipped') {
-            framePending.current = false;
-          } else if (message.type === 'reset') {
-            resetting.current = false; setPose(null); saved.current = false; startedAt.current = Date.now();
-          } else if (message.type === 'battle_state') {
-            if (ignoredRooms.current.has(message.code)) return;
-            const previous = current.current.battle;
-            if (previous && previous.code === message.code && previous.revision > message.revision) return;
-            current.current = { ...current.current, battle: message };
-            clearTimeout(commandTimer.current);
-            commandPending.current = false; setPending(false); setError('');
-            setBattle(message);
-            if (message.status === 'active' && previous?.status !== 'active') { saved.current = false; startedAt.current = Date.now(); }
-            if (message.status === 'finished' || message.status === 'cancelled') {
-              setRunning(false); setOpponentFrame(null);
-              Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
-            }
-          } else if (message.type === 'opponent_frame') {
-            setOpponentFrame(`data:image/jpeg;base64,${message.image}`); setOpponentAt(Date.now());
-          } else if (message.type === 'left') {
-            clearTimeout(commandTimer.current);
-            commandPending.current = false; setPending(false); setBattle(null); setOpponentFrame(null);
-            if (current.current.mode === 'battle') setPose(null);
-          } else if (message.type === 'error') {
-            clearTimeout(commandTimer.current);
-            framePending.current = false; commandPending.current = false; resetting.current = false;
-            setPending(false); setError(message.message);
-            if (current.current.mode === 'battle' && !current.current.battle) setRunning(false);
-          }
-        } catch { setError('The rep server sent an invalid response. Reconnect to start again.'); }
-      };
-      ws.onerror = () => setError('Cannot reach the rep server. Keep npm run start:reps:tunnel running.');
-      ws.onclose = () => {
-        if (!alive) return;
-        clearTimeout(timeout); setConnected(false); setConnecting(false); setRunning(false);
-        setBattle(null); setPose(null); setOpponentFrame(null); setPending(false);
-        setError('Connection closed. Reconnect to begin a new session.');
-      };
-    } catch (failure) { setConnecting(false); setError((failure as Error).message); clearTimeout(timeout); }
+          } catch { setError('The rep server sent an invalid response. Reconnect to start again.'); }
+        };
+        conn.onerror = () => setError('Cannot reach the rep server. Keep npm run start:reps:tunnel running.');
+        conn.onclose = () => {
+          if (!alive) return;
+          clearTimeout(timeout); setConnected(false); setConnecting(false); setRunning(false);
+          setBattle(null); setPose(null); setOpponentFrame(null); setOpponentPose(null); setPending(false);
+          setError('Connection closed. Reconnect to begin a new session.');
+        };
+      } catch (failure) { if (alive) { setConnecting(false); setError((failure as Error).message); clearTimeout(timeout); } }
+    })();
     const heartbeat = setInterval(() => { if (ws?.readyState === RepConnection.OPEN) ws.send(JSON.stringify({ type: 'ping' })); }, 15000);
     return () => {
       alive = false; clearTimeout(timeout); clearInterval(heartbeat);
@@ -263,14 +272,14 @@ export function CameraFormTrackerModal({ visible, onClose, onSaveTrackedWorkout,
       setError('Battle request timed out. Reconnect before trying again.');
       socket.current?.close();
     }, 10000);
-    if (send({ type, name: user?.name || 'Player', code: joinCode.trim().toUpperCase(), ready })) {
-      if (type !== 'ready') { setPose(null); setOpponentFrame(null); setRunning(true); saved.current = false; }
+    if (send({ type, name: user?.name || 'Player', code: joinCode.trim().toUpperCase(), ready, share_video: shareBattleVideo })) {
+      if (type !== 'ready') { setPose(null); setOpponentFrame(null); setOpponentPose(null); setRunning(true); saved.current = false; }
     } else { clearTimeout(commandTimer.current); commandPending.current = false; setPending(false); }
   }
 
   function leaveBattle() {
     if (battle) ignoredRooms.current.add(battle.code);
-    send({ type: 'leave' }); setRunning(false); setBattle(null); setPose(null); setOpponentFrame(null); setError('');
+    send({ type: 'leave' }); setRunning(false); setBattle(null); setPose(null); setOpponentFrame(null); setOpponentPose(null); setShareBattleVideo(false); setError('');
   }
 
   function changeMode(next: 'solo' | 'battle') {
@@ -519,8 +528,18 @@ export function CameraFormTrackerModal({ visible, onClose, onSaveTrackedWorkout,
 
       {opponent && !finished && <View style={s.friendPreview}>
         {opponentFrame && tick - opponentAt < 2500 ? <Image source={{ uri: opponentFrame }} style={StyleSheet.absoluteFill} resizeMode="contain" />
-          : <View style={s.center}><Ionicons name="videocam-outline" size={26} color="#a1a1aa" /><Text style={s.hint}>Waiting for camera...</Text></View>}
-        <View style={s.videoLabel}><Text numberOfLines={1} style={s.videoLabelText}>{opponentName} · {tick - opponentAt < 2500 ? 'LIVE' : 'WAITING'}</Text></View>
+          : opponentPose && tick - opponentAt < 2500 && Object.values(opponentPose.keypoints).some(pt => pt.visibility >= .4) ? <Svg viewBox="0 0 100 130" style={StyleSheet.absoluteFill}>
+            {bones.map(([a, b]) => {
+              const p = opponentPose.keypoints[a], q = opponentPose.keypoints[b];
+              if (!p || !q || p.visibility < .4 || q.visibility < .4) return null;
+              return <Line key={a + b} x1={p.x * 100} y1={p.y * 130} x2={q.x * 100} y2={q.y * 130} stroke="#22c55e" strokeWidth={2.5} strokeLinecap="round" />;
+            })}
+            {Object.values(opponentPose.keypoints).filter(pt => pt.visibility >= .4).map(pt => (
+              <Circle key={pt.id} cx={pt.x * 100} cy={pt.y * 130} r={2.8} fill="#fff" stroke="#22c55e" strokeWidth={1.2} />
+            ))}
+          </Svg>
+          : <View style={s.center}><Ionicons name="videocam-off-outline" size={26} color="#a1a1aa" /><Text style={s.hint}>Waiting for pose...</Text></View>}
+        <View style={s.videoLabel}><Text numberOfLines={1} style={s.videoLabelText}>{opponentName} · {tick - opponentAt < 2500 ? (opponentFrame ? 'VIDEO' : 'SKELETON') : 'WAITING'}</Text></View>
       </View>}
       {battle?.status === 'countdown' && <View pointerEvents="none" style={s.countdown}><Text style={[s.countdownNumber, { color: colors.primary }]}>{countdown || 'GO'}</Text><Text style={s.body}>Hold your plank. Start on GO.</Text></View>}
 
@@ -532,7 +551,15 @@ export function CameraFormTrackerModal({ visible, onClose, onSaveTrackedWorkout,
           <View style={s.row}><Action disabled={!ownReps} onPress={save}>Save my reps</Action><Action secondary onPress={leaveBattle}>New battle</Action></View>
         </> : mode === 'battle' && !battle ? <>
           <Text style={s.body}>Place your phone low beside you. Turn side-on and show a complete arm and your hips.</Text>
-          <Text style={s.hint}>Creating or joining shares live camera frames with your opponent through this server. No audio or recording.</Text>
+          <TouchableOpacity accessibilityRole="switch" accessibilityState={{ checked: shareBattleVideo }}
+            onPress={() => setShareBattleVideo(v => !v)} style={[s.row, { gap: 8 }]}>
+            <Ionicons name={shareBattleVideo ? 'videocam' : 'shield-checkmark-outline'} size={16} color={shareBattleVideo ? '#f59e0b' : '#22c55e'} />
+            <Text style={[s.hint, { flex: 1, color: shareBattleVideo ? '#fde68a' : '#a1a1aa' }]}>
+              {shareBattleVideo
+                ? 'Live camera preview ON: low-res frames shared during this battle (no audio or recording).'
+                : 'Privacy mode ON: opponent only sees your stick-figure pose skeleton. Tap to opt into video.'}
+            </Text>
+          </TouchableOpacity>
           <View style={s.row}><Action disabled={!connected || !cameraReady || pending} onPress={() => roomCommand('create')}>{pending ? 'Opening...' : 'Create battle'}</Action>
             <TextInput accessibilityLabel="Battle room code" autoCapitalize="characters" autoCorrect={false} maxLength={8} placeholder="ROOM CODE" placeholderTextColor="#71717a" value={joinCode} onChangeText={setJoinCode} style={s.input} />
             <Action secondary disabled={!connected || !cameraReady || pending || joinCode.trim().length !== 8} onPress={() => roomCommand('join')}>Join</Action>
@@ -541,6 +568,15 @@ export function CameraFormTrackerModal({ visible, onClose, onSaveTrackedWorkout,
           {battle.status === 'waiting' && <>
             <View style={s.between}><Text selectable style={s.roomCode}>{battle.code.slice(0, 4)} {battle.code.slice(4)}</Text>
               <TouchableOpacity onPress={() => Share.share({ message: `Push-up battle? Open Footprint > Activity > Rep tracker > Challenge a friend, then join ${battle.code}. First to a 10-rep lead wins!` }).catch(() => setError('Could not share. Send your friend the room code above.'))}><Text style={s.link}>Invite friend</Text></TouchableOpacity></View>
+            <TouchableOpacity accessibilityRole="switch" accessibilityState={{ checked: shareBattleVideo }}
+              onPress={() => {
+                const next = !shareBattleVideo;
+                setShareBattleVideo(next);
+                send({ type: 'privacy', share_video: next });
+              }} style={[s.row, { gap: 8 }]}>
+              <Ionicons name={shareBattleVideo ? 'videocam' : 'shield-checkmark-outline'} size={15} color={shareBattleVideo ? '#f59e0b' : '#22c55e'} />
+              <Text style={[s.hint, { flex: 1 }]}>{shareBattleVideo ? 'Video sharing ON (tap for skeleton-only)' : 'Skeleton-only privacy ON (tap to share video)'}</Text>
+            </TouchableOpacity>
             <Text style={s.body}>{pose && tick - lastPoseAt.current < 2000 ? pose.feedback : 'Hold a side-on straight-arm plank to calibrate.'}</Text>
             <View style={s.row}><Action disabled={pending || (!ready && !canReady)} onPress={() => roomCommand('ready', !ready)}>{ready ? 'Ready - tap to undo' : 'I am ready'}</Action><Action secondary onPress={leaveBattle}>Leave</Action></View>
             <Text style={s.hint}>{battle.ready.length}/2 ready. Both players must be in view; then a shared countdown begins.</Text>

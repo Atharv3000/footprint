@@ -16,7 +16,6 @@ import { saveMealLog, saveDailyWater, saveNutritionTargets } from './nutritionSt
 export const DEMO_ACCOUNT = {
   name: 'Alex Mercer',
   email: 'alex.mercer@stridetrack.app',
-  password: 'password123',
   avatarUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=400&auto=format&fit=crop',
 };
 

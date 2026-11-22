@@ -1,5 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { supabase } from './supabaseClient';
+import { supabase, isSupabaseConfigured } from './supabaseClient';
 
 export interface FriendUser {
   id: string;
@@ -145,6 +145,17 @@ export const DEFAULT_COMMUNITY_USERS: FriendUser[] = [
   },
 ];
 
+async function getAuthenticatedCloudUserId(userId: string): Promise<string | null> {
+  if (!isSupabaseConfigured || !userId || userId === 'guest_user') return null;
+  try {
+    const { data } = await supabase.auth.getSession();
+    const uid = data.session?.user?.id;
+    return uid && uid === userId ? uid : null;
+  } catch {
+    return null;
+  }
+}
+
 /**
  * Get the current user's unique username, or auto-assign one if not yet set.
  */
@@ -157,7 +168,7 @@ export async function getOrCreateMyUsername(userId: string, defaultName?: string
       .toLowerCase()
       .replace(/[^a-z0-9]/g, '')
       .slice(0, 12) || 'walker';
-    
+
     let candidate = base;
     const all = await getAllRegisteredUsernames();
     let counter = 1;
@@ -188,36 +199,80 @@ export async function getAllRegisteredUsernames(): Promise<string[]> {
 }
 
 /**
- * Sync the current user's profile and live status to Supabase so other users can discover them.
+ * Sync the current user's profile and live status to Supabase.
+ * Location coordinates live exclusively in `user_locations` and are wiped when privacy mode is enabled.
  */
 export async function syncMyProfileToSupabase(
   userId: string,
   data: Partial<FriendUser & { location_private?: boolean }>
 ): Promise<void> {
   try {
+    const authUid = await getAuthenticatedCloudUserId(userId);
+    if (!authUid) return;
+
     const username = (await AsyncStorage.getItem(USERNAME_KEY(userId))) || data.username;
     if (!username) return;
 
-    await supabase.from('profiles').upsert(
-      {
-        id: userId,
-        username,
+    const privacy = await getLocationPrivacy(userId);
+    const isPrivate = data.location_private ?? privacy.isPrivate;
+
+    const profileUpdates: Record<string, unknown> = {
+      id: authUid,
+      username,
+      location_private: isPrivate,
+      updated_at: new Date().toISOString(),
+    };
+    if (data.displayName !== undefined) profileUpdates.display_name = data.displayName || username;
+    if (data.avatarColor !== undefined) profileUpdates.avatar_color = data.avatarColor;
+    if (data.avatarUrl !== undefined) profileUpdates.avatar_url = data.avatarUrl || null;
+    if (data.dailySteps !== undefined) profileUpdates.daily_steps = data.dailySteps;
+    if (data.weeklySteps !== undefined) profileUpdates.weekly_steps = data.weeklySteps;
+    if (data.totalWorkouts !== undefined) profileUpdates.total_workouts = data.totalWorkouts;
+    if (data.isWalkingNow !== undefined) profileUpdates.is_walking_now = data.isWalkingNow;
+    if (data.currentActivity !== undefined) profileUpdates.current_activity = data.currentActivity;
+    if (data.lastActive !== undefined) profileUpdates.last_active = data.lastActive;
+
+    const { data: existing } = await supabase
+      .from('profiles')
+      .select('id')
+      .eq('id', authUid)
+      .maybeSingle();
+
+    if (existing) {
+      await supabase.from('profiles').update(profileUpdates).eq('id', authUid);
+    } else {
+      await supabase.from('profiles').insert({
         display_name: data.displayName || username,
         avatar_color: data.avatarColor || '#10b981',
         avatar_url: data.avatarUrl || null,
-        daily_steps: data.dailySteps || 0,
-        weekly_steps: data.weeklySteps || 0,
-        total_workouts: data.totalWorkouts || 0,
+        daily_steps: data.dailySteps ?? 0,
+        weekly_steps: data.weeklySteps ?? 0,
+        total_workouts: data.totalWorkouts ?? 0,
         is_walking_now: data.isWalkingNow ?? false,
         current_activity: data.currentActivity || 'walk',
-        current_location: data.currentLocation || null,
-        recent_trail: data.recentTrail || null,
-        location_private: data.location_private ?? false,
         last_active: data.lastActive || 'Just now',
-        updated_at: new Date().toISOString(),
-      },
-      { onConflict: 'id' }
-    );
+        ...profileUpdates,
+      });
+    }
+
+    // Location data is strictly stored in user_locations and nulled out when private.
+    const shouldSyncLocation =
+      data.location_private !== undefined ||
+      data.currentLocation !== undefined ||
+      data.recentTrail !== undefined;
+
+    if (shouldSyncLocation) {
+      await supabase.from('user_locations').upsert(
+        {
+          user_id: authUid,
+          location_private: isPrivate,
+          current_location: isPrivate ? null : data.currentLocation ?? null,
+          recent_trail: isPrivate ? null : data.recentTrail ?? null,
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: 'user_id' }
+      );
+    }
   } catch (e) {
     // Graceful offline fallback
     console.warn('Supabase profile sync note:', e);
@@ -235,20 +290,22 @@ export async function setMyUsername(userId: string, requestedUsername: string, d
   const current = await AsyncStorage.getItem(USERNAME_KEY(userId));
   if (current === clean) return clean;
 
-  // Check Supabase first for real cross-device collisions
-  try {
-    const { data: existingUser } = await supabase
-      .from('profiles')
-      .select('id, username')
-      .eq('username', clean)
-      .maybeSingle();
+  const authUid = await getAuthenticatedCloudUserId(userId);
+  if (authUid) {
+    try {
+      const { data: existingUser } = await supabase
+        .from('profiles')
+        .select('id, username')
+        .eq('username', clean)
+        .maybeSingle();
 
-    if (existingUser && existingUser.id !== userId) {
-      throw new Error(`Username @${clean} is already claimed by another user.`);
-    }
-  } catch (err: any) {
-    if (err.message && err.message.includes('already claimed')) {
-      throw err;
+      if (existingUser && existingUser.id !== authUid) {
+        throw new Error(`Username @${clean} is already claimed by another user.`);
+      }
+    } catch (err: any) {
+      if (err.message && err.message.includes('already claimed')) {
+        throw err;
+      }
     }
   }
 
@@ -273,40 +330,40 @@ export async function setMyUsername(userId: string, requestedUsername: string, d
 }
 
 /**
- * Find user by username from Supabase cloud database, falling back to local
+ * Find user profile by username (non-location metadata only; location is never exposed to non-friends).
  */
 export async function findUserByUsername(userId: string, username: string): Promise<FriendUser | null> {
   const clean = username.toLowerCase().trim().replace(/^@/, '');
   if (!clean) return null;
 
-  // 1. Query Supabase cloud profiles
-  try {
-    const { data: cloudProfile, error } = await supabase
-      .from('profiles')
-      .select('*')
-      .ilike('username', clean)
-      .maybeSingle();
+  const authUid = await getAuthenticatedCloudUserId(userId);
+  if (authUid) {
+    try {
+      const { data: cloudProfile, error } = await supabase
+        .from('profiles')
+        .select('id, username, display_name, avatar_color, avatar_url, daily_steps, weekly_steps, total_workouts, is_walking_now, current_activity, last_active')
+        .ilike('username', clean)
+        .maybeSingle();
 
-    if (cloudProfile && !error) {
-      const customColor = (await getFriendCustomColor(userId, cloudProfile.username)) || cloudProfile.avatar_color;
-      return {
-        id: cloudProfile.id,
-        username: cloudProfile.username,
-        displayName: cloudProfile.display_name,
-        avatarColor: customColor,
-        avatarUrl: cloudProfile.avatar_url || undefined,
-        dailySteps: cloudProfile.daily_steps || 0,
-        weeklySteps: cloudProfile.weekly_steps || 0,
-        totalWorkouts: cloudProfile.total_workouts || 0,
-        isWalkingNow: cloudProfile.is_walking_now || false,
-        currentActivity: cloudProfile.current_activity || 'walk',
-        currentLocation: cloudProfile.current_location || undefined,
-        recentTrail: cloudProfile.recent_trail || undefined,
-        lastActive: cloudProfile.last_active || 'Just now',
-      };
+      if (cloudProfile && !error) {
+        const customColor = (await getFriendCustomColor(userId, cloudProfile.username)) || cloudProfile.avatar_color;
+        return {
+          id: cloudProfile.id,
+          username: cloudProfile.username,
+          displayName: cloudProfile.display_name,
+          avatarColor: customColor,
+          avatarUrl: cloudProfile.avatar_url || undefined,
+          dailySteps: cloudProfile.daily_steps || 0,
+          weeklySteps: cloudProfile.weekly_steps || 0,
+          totalWorkouts: cloudProfile.total_workouts || 0,
+          isWalkingNow: cloudProfile.is_walking_now || false,
+          currentActivity: cloudProfile.current_activity || 'walk',
+          lastActive: cloudProfile.last_active || 'Just now',
+        };
+      }
+    } catch {
+      // Offline or network error, continue to local lookup
     }
-  } catch (err) {
-    // Offline or network error, continue to local lookup
   }
 
   // 2. Default community users
@@ -354,7 +411,7 @@ export async function setFriendCustomColor(userId: string, friendUsername: strin
 }
 
 /**
- * Load friends list with live Supabase cloud status and coordinates
+ * Load friends list with live Supabase cloud status and friend-scoped coordinates
  */
 export async function loadFriends(userId: string): Promise<FriendUser[]> {
   let localFriends: FriendUser[] = [];
@@ -370,59 +427,78 @@ export async function loadFriends(userId: string): Promise<FriendUser[]> {
     console.warn('Local friends read note:', e);
   }
 
-  // Sync with cloud friendships table
-  try {
-    const { data: cloudFriendships } = await supabase
-      .from('friendships')
-      .select('friend_username, custom_color')
-      .eq('user_id', userId);
+  const authUid = await getAuthenticatedCloudUserId(userId);
+  if (authUid) {
+    // Sync with cloud friendships table
+    try {
+      const { data: cloudFriendships } = await supabase
+        .from('friendships')
+        .select('friend_id, friend_username, custom_color')
+        .eq('user_id', authUid);
 
-    if (cloudFriendships && cloudFriendships.length > 0) {
-      for (const cf of cloudFriendships) {
-        if (!localFriends.some((f) => f.username === cf.friend_username)) {
-          const fetchedFriend = await findUserByUsername(userId, cf.friend_username);
-          if (fetchedFriend) {
-            localFriends.push(fetchedFriend);
+      if (cloudFriendships && cloudFriendships.length > 0) {
+        for (const cf of cloudFriendships) {
+          if (!localFriends.some((f) => f.username === cf.friend_username)) {
+            const fetchedFriend = await findUserByUsername(userId, cf.friend_username);
+            if (fetchedFriend) {
+              localFriends.push(fetchedFriend);
+            }
           }
         }
       }
+    } catch (err) {
+      console.warn('Supabase cloud friendships note:', err);
     }
-  } catch (err) {
-    console.warn('Supabase cloud friendships note:', err);
-  }
 
-  // Refresh live coordinates and activity for each friend from Supabase
-  try {
-    const friendHandles = localFriends.map((f) => f.username);
-    if (friendHandles.length > 0) {
-      const { data: liveProfiles } = await supabase
-        .from('profiles')
-        .select('*')
-        .in('username', friendHandles);
+    // Refresh friend profiles and friend-only live locations
+    try {
+      const friendHandles = localFriends.map((f) => f.username);
+      if (friendHandles.length > 0) {
+        const { data: liveProfiles } = await supabase
+          .from('profiles')
+          .select('id, username, display_name, daily_steps, weekly_steps, total_workouts, is_walking_now, current_activity, location_private, last_active')
+          .in('username', friendHandles);
 
-      if (liveProfiles) {
-        const liveMap = new Map(liveProfiles.map((p) => [p.username, p]));
-        localFriends = localFriends.map((f) => {
-          const live = liveMap.get(f.username);
-          if (live) {
-            return {
-              ...f,
-              displayName: live.display_name || f.displayName,
-              dailySteps: live.daily_steps ?? f.dailySteps,
-              weeklySteps: live.weekly_steps ?? f.weeklySteps,
-              isWalkingNow: live.is_walking_now ?? f.isWalkingNow,
-              currentActivity: live.current_activity || f.currentActivity,
-              currentLocation: !live.location_private ? (live.current_location || f.currentLocation) : undefined,
-              recentTrail: !live.location_private ? (live.recent_trail || f.recentTrail) : undefined,
-              lastActive: live.last_active || f.lastActive,
-            };
+        if (liveProfiles) {
+          const friendIds = liveProfiles.map((p) => p.id).filter(Boolean);
+          let locationMap = new Map<string, any>();
+          if (friendIds.length > 0) {
+            const { data: liveLocations } = await supabase
+              .from('user_locations')
+              .select('user_id, current_location, recent_trail, location_private')
+              .in('user_id', friendIds);
+            if (liveLocations) {
+              locationMap = new Map(liveLocations.map((loc) => [loc.user_id, loc]));
+            }
           }
-          return f;
-        });
+
+          const liveMap = new Map(liveProfiles.map((p) => [p.username, p]));
+          localFriends = localFriends.map((f) => {
+            const live = liveMap.get(f.username);
+            if (live) {
+              const loc = locationMap.get(live.id);
+              const canShareLocation = live.location_private === false && loc && loc.location_private === false;
+              return {
+                ...f,
+                id: live.id || f.id,
+                displayName: live.display_name || f.displayName,
+                dailySteps: live.daily_steps ?? f.dailySteps,
+                weeklySteps: live.weekly_steps ?? f.weeklySteps,
+                totalWorkouts: live.total_workouts ?? f.totalWorkouts,
+                isWalkingNow: live.is_walking_now ?? f.isWalkingNow,
+                currentActivity: live.current_activity || f.currentActivity,
+                currentLocation: canShareLocation ? (loc.current_location || undefined) : undefined,
+                recentTrail: canShareLocation ? (loc.recent_trail || undefined) : undefined,
+                lastActive: live.last_active || f.lastActive,
+              };
+            }
+            return f;
+          });
+        }
       }
+    } catch (err) {
+      console.warn('Live profile location fetch note:', err);
     }
-  } catch (err) {
-    console.warn('Live profile location fetch note:', err);
   }
 
   // Apply custom color overrides
@@ -439,19 +515,25 @@ export async function loadFriends(userId: string): Promise<FriendUser[]> {
  * Remove a friend
  */
 export async function removeFriend(userId: string, friendUsername: string): Promise<void> {
-  try {
-    // Delete from Supabase friendships table
-    await supabase
-      .from('friendships')
-      .delete()
-      .match({ user_id: userId, friend_username: friendUsername.toLowerCase() });
-  } catch (err) {
-    console.warn('Supabase friend removal note:', err);
+  const clean = friendUsername.toLowerCase();
+  const authUid = await getAuthenticatedCloudUserId(userId);
+  if (authUid) {
+    try {
+      const { error } = await supabase.rpc('remove_friendship', { p_friend_username: clean });
+      if (error) {
+        await supabase
+          .from('friendships')
+          .delete()
+          .match({ user_id: authUid, friend_username: clean });
+      }
+    } catch (err) {
+      console.warn('Supabase friend removal note:', err);
+    }
   }
 
   try {
     const friends = await loadFriends(userId);
-    const updated = friends.filter((f) => f.username !== friendUsername.toLowerCase());
+    const updated = friends.filter((f) => f.username !== clean);
     await AsyncStorage.setItem(FRIENDS_KEY(userId), JSON.stringify(updated));
   } catch (e) {
     console.warn('Failed to remove friend locally:', e);
@@ -466,28 +548,30 @@ export async function loadFriendRequests(userId: string): Promise<FriendRequest[
   const myHandle = await getOrCreateMyUsername(userId);
   let cloudRequests: FriendRequest[] = [];
 
-  // Try loading real incoming / outgoing requests from Supabase
-  try {
-    const { data, error } = await supabase
-      .from('friend_requests')
-      .select('*')
-      .or(`to_username.eq.${myHandle},from_user_id.eq.${userId}`)
-      .order('created_at', { ascending: false });
+  const authUid = await getAuthenticatedCloudUserId(userId);
+  if (authUid) {
+    try {
+      const { data, error } = await supabase
+        .from('friend_requests')
+        .select('*')
+        .or(`to_username.eq.${myHandle},from_user_id.eq.${authUid}`)
+        .order('created_at', { ascending: false });
 
-    if (data && !error) {
-      cloudRequests = data.map((row) => ({
-        id: row.id,
-        fromUserId: row.from_user_id,
-        fromUsername: row.from_username,
-        fromDisplayName: row.from_display_name,
-        fromAvatarColor: row.from_avatar_color,
-        toUsername: row.to_username,
-        status: row.status as 'pending' | 'accepted' | 'declined',
-        sentAt: 'Recent',
-      }));
+      if (data && !error) {
+        cloudRequests = data.map((row) => ({
+          id: row.id,
+          fromUserId: row.from_user_id,
+          fromUsername: row.from_username,
+          fromDisplayName: row.from_display_name,
+          fromAvatarColor: row.from_avatar_color,
+          toUsername: row.to_username,
+          status: row.status as 'pending' | 'accepted' | 'declined',
+          sentAt: 'Recent',
+        }));
+      }
+    } catch (err) {
+      console.warn('Supabase friend requests fetch note:', err);
     }
-  } catch (err) {
-    console.warn('Supabase friend requests fetch note:', err);
   }
 
   // Also check local cache
@@ -537,7 +621,7 @@ export async function sendFriendRequest(
   const myUsername = await getOrCreateMyUsername(userId);
 
   if (clean === myUsername) {
-    throw new Error("You cannot send a friend request to yourself.");
+    throw new Error('You cannot send a friend request to yourself.');
   }
 
   const friends = await loadFriends(userId);
@@ -566,18 +650,21 @@ export async function sendFriendRequest(
     sentAt: 'Just now',
   };
 
-  // Push to Supabase Cloud
-  try {
-    await supabase.from('friend_requests').insert({
-      from_user_id: userId,
-      from_username: myUsername,
-      from_display_name: myDisplayName || myUsername,
-      from_avatar_color: '#a3e635',
-      to_username: clean,
-      status: 'pending',
-    });
-  } catch (err) {
-    console.warn('Could not post request to cloud:', err);
+  const authUid = await getAuthenticatedCloudUserId(userId);
+  if (authUid) {
+    try {
+      await supabase.from('friend_requests').insert({
+        from_user_id: authUid,
+        from_username: myUsername,
+        from_display_name: myDisplayName || myUsername,
+        from_avatar_color: '#a3e635',
+        to_user_id: target.id.startsWith('user_') ? null : target.id,
+        to_username: clean,
+        status: 'pending',
+      });
+    } catch (err) {
+      console.warn('Could not post request to cloud:', err);
+    }
   }
 
   const updated = [newReq, ...currentRequests];
@@ -601,22 +688,14 @@ export async function acceptFriendRequest(userId: string, requestId: string): Pr
     await AsyncStorage.setItem(FRIENDS_KEY(userId), JSON.stringify(updatedFriends));
   }
 
-  // Add to Supabase friendships table & update request status
-  try {
-    await supabase.from('friendships').upsert(
-      [
-        { user_id: userId, friend_username: friend.username },
-        { user_id: req.fromUserId, friend_username: req.toUsername },
-      ],
-      { onConflict: 'user_id,friend_username' }
-    );
-
-    await supabase
-      .from('friend_requests')
-      .update({ status: 'accepted' })
-      .eq('id', requestId);
-  } catch (err) {
-    console.warn('Supabase accept friend sync note:', err);
+  // Atomically create mutual friendship in Supabase via SECURITY DEFINER RPC
+  const authUid = await getAuthenticatedCloudUserId(userId);
+  if (authUid && !requestId.startsWith('req_')) {
+    try {
+      await supabase.rpc('accept_friend_request', { p_request_id: requestId });
+    } catch (err) {
+      console.warn('Supabase accept friend sync note:', err);
+    }
   }
 
   // Update local request status
@@ -627,11 +706,13 @@ export async function acceptFriendRequest(userId: string, requestId: string): Pr
 }
 
 export async function declineFriendRequest(userId: string, requestId: string): Promise<void> {
-  // Delete from Supabase
-  try {
-    await supabase.from('friend_requests').delete().eq('id', requestId);
-  } catch (err) {
-    console.warn('Supabase decline request note:', err);
+  const authUid = await getAuthenticatedCloudUserId(userId);
+  if (authUid && !requestId.startsWith('req_')) {
+    try {
+      await supabase.from('friend_requests').delete().eq('id', requestId);
+    } catch (err) {
+      console.warn('Supabase decline request note:', err);
+    }
   }
 
   const requests = await loadFriendRequests(userId);

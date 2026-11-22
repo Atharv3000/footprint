@@ -45,13 +45,18 @@ export const DEFAULT_PROFILE: UserProfile = {
 };
 
 const STORAGE_KEY = '@footprint_user_profile';
-const accountProfileKey = (email: string) => `@footprint_account_profile_${email.trim().toLowerCase()}`;
-export async function loadAccountProfile(email: string): Promise<UserProfile | null> {
-  const raw = await AsyncStorage.getItem(accountProfileKey(email));
+const accountProfileKey = (accountId: string) => `@footprint_account_profile_${accountId.trim().toLowerCase()}`;
+export async function loadAccountProfile(accountId: string, legacyEmail?: string): Promise<UserProfile | null> {
+  const raw = await AsyncStorage.getItem(accountProfileKey(accountId));
   if (raw) return { ...DEFAULT_PROFILE, ...JSON.parse(raw) };
+  if (legacyEmail) {
+    const legacyByEmail = await AsyncStorage.getItem(accountProfileKey(legacyEmail));
+    if (legacyByEmail) return { ...DEFAULT_PROFILE, ...JSON.parse(legacyByEmail) };
+  }
   // Preserve the last signed-in legacy profile only for its actual owner.
   const legacy = await loadUserProfile();
-  return legacy.email?.trim().toLowerCase() === email.trim().toLowerCase() ? legacy : null;
+  const matchTarget = (legacyEmail || accountId).trim().toLowerCase();
+  return legacy.email?.trim().toLowerCase() === matchTarget ? legacy : null;
 }
 
 export async function loadUserProfile(): Promise<UserProfile> {
@@ -69,9 +74,12 @@ export async function loadUserProfile(): Promise<UserProfile> {
   return DEFAULT_PROFILE;
 }
 
-export async function saveUserProfile(profile: UserProfile): Promise<void> {
+export async function saveUserProfile(profile: UserProfile, accountId?: string): Promise<void> {
   try {
-    if (profile.email && profile.authProvider !== 'guest') await AsyncStorage.setItem(accountProfileKey(profile.email), JSON.stringify(profile));
+    const scopeId = accountId || profile.email;
+    if (scopeId && profile.authProvider !== 'guest') {
+      await AsyncStorage.setItem(accountProfileKey(scopeId), JSON.stringify(profile));
+    }
     await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(profile));
   } catch (e) {
     console.error('Failed to save profile', e);

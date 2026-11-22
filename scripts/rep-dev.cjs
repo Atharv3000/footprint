@@ -6,14 +6,23 @@ const { spawn } = require('node:child_process');
 const root = path.resolve(__dirname, '..');
 const python = process.env.REP_PYTHON || path.join(root, '.venv', process.platform === 'win32' ? 'Scripts/python.exe' : 'bin/python');
 if (!fs.existsSync(python)) { console.error('Set up .venv first. See docs/pushup-battles.md.'); process.exit(1); }
-// Explicit local sessions use Metro's authenticated backend proxy, even when .env targets a deployed server.
-const env = { ...process.env, EXPO_PUBLIC_REP_SERVER_URL: '', REP_SERVER_TOKEN: crypto.randomBytes(32).toString('hex') };
-env.EXPO_PUBLIC_REP_TOKEN = env.REP_SERVER_TOKEN;
+// Explicit local sessions use Metro's authenticated localhost proxy without exposing tokens in the client bundle.
+const devToken = crypto.randomBytes(32).toString('hex');
+const serverEnv = {
+  ...process.env,
+  REP_SERVER_TOKEN: devToken,
+  REP_ALLOW_DEV_TOKEN: '1',
+};
+const metroEnv = {
+  ...process.env,
+  EXPO_PUBLIC_REP_SERVER_URL: '',
+  EXPO_PUBLIC_REP_TOKEN: '',
+};
 const children = [];
 let stopping = false;
 function stop(code = 0) { if (stopping) return; stopping = true; for (const c of children) c.kill(); process.exitCode = code; }
 for (const sig of ['SIGINT', 'SIGTERM']) process.on(sig, () => stop());
-function launch(command, args) {
+function launch(command, args, env) {
   const child = spawn(command, args, { cwd: root, env, stdio: 'inherit', windowsHide: true });
   children.push(child);
   child.on('error', e => { console.error(e.message); stop(1); });
@@ -30,12 +39,12 @@ function health() {
 (async () => {
   if (await health()) throw new Error('Rep server already runs on port 9002. Stop the old session first.');
   fs.mkdirSync(path.join(root, '.expo'), { recursive: true });
-  fs.writeFileSync(path.join(root, '.expo', 'rep-session-token'), env.REP_SERVER_TOKEN, { mode: 0o600 });
-  launch(python, ['-m', 'uvicorn', 'server.app:app', '--host', '127.0.0.1', '--port', '9002', '--no-access-log', '--ws-max-size', '2900000']);
+  fs.writeFileSync(path.join(root, '.expo', 'rep-session-token'), devToken, { mode: 0o600 });
+  launch(python, ['-m', 'uvicorn', 'server.app:app', '--host', '127.0.0.1', '--port', '9002', '--no-access-log', '--ws-max-size', '2900000'], serverEnv);
   let ready = false;
   for (let i = 0; i < 100 && !stopping; i++) { if (await health()) { ready = true; break; } await new Promise(r => setTimeout(r, 250)); }
   if (!ready || stopping) throw new Error('Rep server failed to start. Check Python dependencies and the pose model.');
   console.log('Pose-based rep analysis and live camera battles ready. Side-on push-ups are recommended.');
   const args = process.argv.slice(2);
-  launch(process.execPath, [require.resolve('expo/bin/cli'), 'start', ...(args.includes('--tunnel') ? ['--tunnel', 'ngrok'] : args)]);
+  launch(process.execPath, [require.resolve('expo/bin/cli'), 'start', ...(args.includes('--tunnel') ? ['--tunnel', 'ngrok'] : args)], metroEnv);
 })().catch(e => { console.error(e.message); stop(1); });

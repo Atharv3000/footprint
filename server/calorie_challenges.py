@@ -3,12 +3,18 @@ import hashlib
 import hmac
 import json
 import math
+import re
 import secrets
 import sqlite3
 from contextlib import contextmanager
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
+
+
+def _clean_text(value, default, max_len):
+    cleaned = re.sub(r'[\x00-\x1f\x7f]', '', str(value if value is not None else '')).strip()
+    return (cleaned or default)[:max_len]
 
 
 class CalorieChallenges:
@@ -18,7 +24,9 @@ class CalorieChallenges:
     @contextmanager
     def db(self):
         self.path.parent.mkdir(parents=True, exist_ok=True)
-        db = sqlite3.connect(self.path)
+        db = sqlite3.connect(self.path, timeout=10.0)
+        db.execute('pragma journal_mode=WAL')
+        db.execute('pragma busy_timeout=5000')
         db.execute('create table if not exists calorie_challenges (code text primary key, data text not null)')
         try:
             with db: yield db
@@ -42,12 +50,16 @@ class CalorieChallenges:
     def digest(key):
         return hashlib.sha256(key.encode()).hexdigest()
 
-    def member(self, room, key):
+    def member(self, room, key, user_id=None):
         for i, player in enumerate(room['players']):
-            if hmac.compare_digest(player['secret'], self.digest(str(key))): return i
+            if hmac.compare_digest(player['secret'], self.digest(str(key))):
+                bound_uid = player.get('user_id')
+                if user_id and bound_uid and bound_uid != user_id:
+                    raise PermissionError('This account does not own that challenge membership.')
+                return i
         raise PermissionError('This device does not have access to that challenge.')
 
-    def create(self, data):
+    def create(self, data, user_id=None):
         target, days = data.get('target'), data.get('days')
         if type(target) is not int or not 1000 <= target <= 10000: raise ValueError('Enter a target from 1,000 to 10,000 kcal.')
         if type(days) is not int or days not in (1, 7, 14, 30): raise ValueError('Choose 1, 7, 14 or 30 days.')
@@ -55,28 +67,40 @@ class CalorieChallenges:
         tz = str(data.get('timezone', 'UTC'))
         try: ZoneInfo(tz)
         except (ZoneInfoNotFoundError, ValueError): raise ValueError('Invalid time zone.')
+        with self.db() as db:
+            count = db.execute('select count(*) from calorie_challenges').fetchone()[0]
+            if count >= 10000:
+                raise ValueError('Challenge storage limit reached. Try again later.')
         key = secrets.token_hex(32)
+        player = dict(name=_clean_text(data.get('name'), 'You', 40), secret=self.digest(key), totals={}, completed=[])
+        if user_id:
+            player['user_id'] = user_id
         room = dict(code=secrets.token_hex(6).upper(), mode=data['mode'], target=target, days=days,
                     timezone=tz, created=datetime.now(timezone.utc).isoformat(), start=None, end=None,
-                    cancelled=False, players=[dict(name=str(data.get('name', 'You'))[:40],
-                    secret=self.digest(key), totals={}, completed=[])])
+                    cancelled=False, players=[player])
         self.save(room)
         return dict(key=key, challenge=self.snapshot(room, 0))
 
-    def join(self, data):
+    def join(self, data, user_id=None):
         room = self.load(data.get('code', ''))
         if room['cancelled'] or len(room['players']) != 1: raise ValueError('This invite is no longer available.')
         if datetime.now(timezone.utc) - datetime.fromisoformat(room['created']) > timedelta(days=7):
             raise ValueError('This invite has expired. Ask your friend for a new one.')
+        if user_id and room['players'][0].get('user_id') == user_id:
+            raise ValueError('You cannot join your own challenge from the same account.')
         key = secrets.token_hex(32)
-        room['players'].append(dict(name=str(data.get('name', 'Friend'))[:40], secret=self.digest(key), totals={}, completed=[]))
+        player = dict(name=_clean_text(data.get('name'), 'Friend', 40), secret=self.digest(key), totals={}, completed=[])
+        if user_id:
+            player['user_id'] = user_id
+        room['players'].append(player)
         room['start'] = self.today(room)
         room['end'] = (datetime.fromisoformat(room['start']) + timedelta(days=room['days'] - 1)).date().isoformat()
         self.save(room)
         return dict(key=key, challenge=self.snapshot(room, 1))
 
-    def update(self, data):
-        room = self.load(data.get('code', '')); member = self.member(room, data.get('key', ''))
+    def update(self, data, user_id=None):
+        room = self.load(data.get('code', ''))
+        member = self.member(room, data.get('key', ''), user_id=user_id)
         if data.get('cancel') is True and (not room['end'] or self.today(room) <= room['end']):
             room['cancelled'] = True
         elif room['start'] and not room['cancelled'] and self.today(room) <= room['end']:

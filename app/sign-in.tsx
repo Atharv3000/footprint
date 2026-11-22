@@ -16,11 +16,11 @@ import {
   Keyboard,
   Easing,
 } from 'react-native';
+import { supabase } from '@/constants/supabaseClient';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { useAuth } from '@/constants/AuthContext';
 import { useTheme, BRAND_ROUNDED_FONT, BRAND_ROUNDED_FONT_EXTRA, SERIF_FONT } from '@/constants/ThemeContext';
-import { DEMO_ACCOUNT } from '@/constants/demoPreload';
 import * as Haptics from 'expo-haptics';
 
 const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
@@ -39,7 +39,6 @@ export default function SignInScreen() {
   const {
     signInWithApple,
     signInWithGoogle,
-    signInWithGoogleDemo,
     signInWithEmail,
     signUpWithEmail,
     isAppleAvailable,
@@ -122,7 +121,8 @@ export default function SignInScreen() {
     setError('');
     try {
       await signInWithApple();
-      router.replace('/(tabs)');
+      const { data } = await supabase.auth.getSession();
+      if (data.session) router.replace('/(tabs)');
     } catch (e: any) {
       setError(e?.message || 'Apple Sign In failed.');
     } finally {
@@ -135,28 +135,10 @@ export default function SignInScreen() {
     setError('');
     try {
       await signInWithGoogle();
-      router.replace('/(tabs)');
+      const { data } = await supabase.auth.getSession();
+      if (data.session) router.replace('/(tabs)');
     } catch (e: any) {
-      console.warn('Google Sign In error:', e);
-      // If blocked by Google's OAuth 2.0 security policy / custom scheme / client configuration
-      Alert.alert(
-        'Google OAuth Security Notice',
-        'Google OAuth 2.0 restricts Web Client IDs from using custom mobile schemes or requires an authorized redirect URI in Google Cloud Console.\n\nWould you like to authorize as a Google user now for testing?',
-        [
-          {
-            text: 'Sign In as Google User',
-            onPress: async () => {
-              try {
-                await signInWithGoogleDemo('user@gmail.com', 'Google User');
-                router.replace('/(tabs)');
-              } catch (demoErr: any) {
-                setError(demoErr?.message || 'Failed to authenticate');
-              }
-            },
-          },
-          { text: 'Cancel', style: 'cancel' },
-        ]
-      );
+      setError(e?.message || 'Google Sign In failed. Please check your OAuth configuration.');
     } finally {
       setLoading(false);
     }
@@ -411,7 +393,7 @@ export default function SignInScreen() {
                     <Ionicons name="lock-closed-outline" size={16} color="#a1a1aa" style={styles.inputIcon} />
                     <TextInput
                       style={styles.input}
-                      placeholder={currentDisplayMode === 'signup' ? 'Min. 6 characters' : 'Your password'}
+                      placeholder={currentDisplayMode === 'signup' ? 'Min. 8 characters' : 'Your password'}
                       placeholderTextColor="#71717a"
                       value={password}
                       onChangeText={setPassword}
@@ -477,24 +459,6 @@ export default function SignInScreen() {
                     </Text>
                   </Text>
                 </TouchableOpacity>
-
-                {/* Preloaded Demo Credentials Quick Pill */}
-                {currentDisplayMode === 'signin' && (
-                  <TouchableOpacity
-                    style={styles.demoFillPill}
-                    onPress={() => {
-                      Haptics.selectionAsync();
-                      setEmail(DEMO_ACCOUNT.email);
-                      setPassword(DEMO_ACCOUNT.password);
-                    }}
-                    activeOpacity={0.7}
-                  >
-                    <Ionicons name="sparkles" size={13} color="#a3e635" />
-                    <Text style={styles.demoFillText}>
-                      Prefill preloaded account ({DEMO_ACCOUNT.email})
-                    </Text>
-                  </TouchableOpacity>
-                )}
               </View>
             </Animated.View>
           </ScrollView>

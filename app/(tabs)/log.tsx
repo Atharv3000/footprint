@@ -545,7 +545,6 @@ export default function LogScreen() {
   const [selectedExIdsForRoutine, setSelectedExIdsForRoutine] = useState<string[]>([]);
   const [batchSuccessMsg, setBatchSuccessMsg] = useState<string | null>(null);
   const [showCameraTracker, setShowCameraTracker] = useState<boolean>(false);
-  const [activeFitnessTool, setActiveFitnessTool] = useState<'soreness' | 'bodyFat' | 'aiForm'>('aiForm');
 
   // Undo support state: stores IDs of the most recently logged entry/entries
   const [lastLoggedIds, setLastLoggedIds] = useState<string[]>([]);
@@ -1045,21 +1044,29 @@ export default function LogScreen() {
           <Text style={[styles.screenTitle, { color: colors.text }]}>Fitness Log</Text>
         </View>
 
-        {/* ── 3 PROMINENT QUICK ACTION TILES ── */}
-        <TutorialAnchor tutorialId="fitness-tools" accessibilityLabel="Fitness tools" style={[styles.quickActionButtonsRow, { backgroundColor: colors.surfaceElevated }]}>
+        {/* ── 3 SEPARATE QUICK ACTION BUTTONS ── */}
+        <TutorialAnchor tutorialId="fitness-tools" accessibilityLabel="Fitness tools" style={styles.quickActionButtonsRow}>
           {([
-            { id: 'aiForm', color: '#10b981', label: 'AI Form', icon: 'videocam-outline', open: () => setShowCameraTracker(true) },
-            { id: 'bodyFat', color: '#a855f7', label: 'Body Fat', icon: 'scan-circle-outline', open: () => setShowBodyFatModal(true) },
-            { id: 'soreness', color: '#f97316', label: 'Soreness', icon: 'fitness-outline', open: () => setShowMuscleRecoveryModal(true) },
-          ] as const).map(tool => {
-            const selected = activeFitnessTool === tool.id;
-            return <TouchableOpacity key={tool.id} accessibilityRole="button" accessibilityState={{ selected }}
-              style={[styles.quickActionTile, { backgroundColor: selected ? tool.color + '18' : 'transparent' }]}
-              onPress={() => { Haptics.selectionAsync().catch(() => {}); setActiveFitnessTool(tool.id); tool.open(); }} activeOpacity={0.8}>
-              <Ionicons name={tool.icon} size={18} color={tool.color} />
-              <Text style={[styles.quickActionTitle, { color: tool.color }]} numberOfLines={1}>{tool.label}</Text>
-            </TouchableOpacity>;
-          })}
+            { id: 'aiForm', color: '#10b981', label: 'AI Form', icon: 'videocam', open: () => setShowCameraTracker(true) },
+            { id: 'bodyFat', color: '#a855f7', label: 'Body Fat', icon: 'scan-circle', open: () => setShowBodyFatModal(true) },
+            { id: 'soreness', color: '#f97316', label: 'Soreness', icon: 'fitness', open: () => setShowMuscleRecoveryModal(true) },
+          ] as const).map(tool => (
+            <TouchableOpacity
+              key={tool.id}
+              accessibilityRole="button"
+              style={[styles.quickActionTile, { backgroundColor: colors.surfaceElevated }]}
+              onPress={() => {
+                Haptics.selectionAsync().catch(() => {});
+                tool.open();
+              }}
+              activeOpacity={0.8}
+            >
+              <Ionicons name={tool.icon} size={19} color={tool.color} />
+              <Text style={[styles.quickActionTitle, { color: colors.text }]} numberOfLines={1}>
+                {tool.label}
+              </Text>
+            </TouchableOpacity>
+          ))}
         </TutorialAnchor>
 
         {/* ── SECTION 0: CUSTOM WORKOUT DAY PRESETS / ROUTINES (SLIDER: 2 LARGER CARDS AT ONCE) ── */}
@@ -1344,27 +1351,24 @@ const styles = StyleSheet.create({
   },
   quickActionButtonsRow: {
     flexDirection: 'row',
-    marginHorizontal: -16,
-    paddingVertical: 0,
-    paddingHorizontal: 0,
-    borderRadius: 18,
-    gap: 4,
+    gap: ROUTINE_CARD_GAP,
     marginBottom: 10,
-    overflow: 'hidden',
   },
   quickActionTile: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 11,
-    borderRadius: 18,
+    paddingHorizontal: 8,
+    borderRadius: 16,
     gap: 7,
-    minHeight: 46.2,
+    height: 52,
   },
   quickActionTitle: {
     fontFamily: BRAND_ROUNDED_FONT_EXTRA,
-    fontSize: 13,
+    fontSize: 12.5,
+    fontWeight: '800',
+    letterSpacing: -0.2,
     flexShrink: 1,
   },
   quickActionIndividualBtn: {

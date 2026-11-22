@@ -66,8 +66,9 @@ class BoxingTests(unittest.TestCase):
             def analyze(self, image, upright=False):
                 if image != 'fixture': raise ValueError('Bad frame')
                 return pose(), 1, 'preview'
-        old_token, old_vision = service.TOKEN, service.vision
-        service.TOKEN = 'boxing-fixture-token'; service.vision = FakeVision()
+        old_token, old_vision, old_allow = service.TOKEN, service.vision, service.ALLOW_DEV_TOKEN
+        service.TOKEN, service.vision, service.ALLOW_DEV_TOKEN = 'boxing-fixture-token', FakeVision(), True
+        service.limiter.reset()
         try:
             api = TestClient(service.app); headers = {'Authorization': 'Bearer '+service.TOKEN}
             session = api.post('/rep-api/session', headers=headers).json()
@@ -81,7 +82,7 @@ class BoxingTests(unittest.TestCase):
             self.assertIsNone(service.sessions[session['session']].boxing)
             api.post('/rep-api/close', headers=headers)
         finally:
-            service.TOKEN, service.vision = old_token, old_vision
+            service.TOKEN, service.vision, service.ALLOW_DEV_TOKEN = old_token, old_vision, old_allow
 
     def test_early_and_wrong_direction_do_not_score(self):
         game = BoxingGame()

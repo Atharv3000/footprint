@@ -7,20 +7,28 @@ from server.tests.test_counter import pose
 
 
 class FakeVision:
-    def analyze(self, image):
+    def analyze(self, image, upright=False, include_preview=False):
         if image != 'fixture': raise ValueError('Invalid camera image.')
-        return pose(), 1, 'preview'
+        return pose(), 1, ('preview' if include_preview else None)
     def close(self): pass
 
 
 class ApiTests(unittest.TestCase):
     def setUp(self):
-        service.TOKEN = 't' * 48; service.vision = FakeVision()
+        self._old_allow = service.ALLOW_DEV_TOKEN
+        self._old_token = service.TOKEN
+        service.ALLOW_DEV_TOKEN = True
+        service.TOKEN = 't' * 48
+        service.vision = FakeVision()
+        service.limiter.reset()
         service.clients.clear(); service.sessions.clear(); service.battles = Battles()
         self.client = TestClient(service.app); self.client.__enter__()
         self.auth = {'Authorization': 'Bearer ' + service.TOKEN}
 
-    def tearDown(self): self.client.__exit__(None, None, None)
+    def tearDown(self):
+        self.client.__exit__(None, None, None)
+        service.ALLOW_DEV_TOKEN = self._old_allow
+        service.TOKEN = self._old_token
 
     def player(self):
         r = self.client.post('/rep-api/session', headers=self.auth)
@@ -50,19 +58,35 @@ class ApiTests(unittest.TestCase):
         self.assertEqual(self.command(headers, type='rep', count=1000).status_code, 400)
         self.assertEqual(self.command(headers, type='ready', ready=True).status_code, 400)
 
-    def test_frame_routes_pose_and_preview_but_rejects_invalid_images(self):
+    def test_frame_routes_pose_by_default_and_preview_only_with_opt_in(self):
         a, ah = self.player(); _, bh = self.player()
-        self.command(ah, type='create'); self.command(bh, type='join', code=service.battles.get(a).code)
+        self.command(ah, type='create')
+        self.command(bh, type='join', code=service.battles.get(a).code)
+        # Privacy-by-default: skeleton keypoints only, no raw video frame
         r = self.client.post('/rep-api/frame', headers=ah, json={'image': 'fixture'})
         self.assertEqual(r.status_code, 200); self.assertEqual(r.json()['messages'][0]['type'], 'pose')
         messages = self.client.get('/rep-api/poll', headers=bh).json()['messages']
+        self.assertTrue(any(m['type'] == 'opponent_pose' for m in messages))
+        self.assertFalse(any(m['type'] == 'opponent_frame' for m in messages))
+        # Explicit opt-in enables video preview relay
+        self.assertEqual(self.command(ah, type='privacy', share_video=True).status_code, 200)
+        service.clients[a].frame_at = 0
+        self.assertEqual(self.client.post('/rep-api/frame', headers=ah, json={'image': 'fixture'}).status_code, 200)
+        messages = self.client.get('/rep-api/poll', headers=bh).json()['messages']
         self.assertTrue(any(m['type'] == 'opponent_frame' for m in messages))
+        # Turning privacy back on purges queued frames
+        service.clients[a].frame_at = 0
+        self.client.post('/rep-api/frame', headers=ah, json={'image': 'fixture'})
+        self.command(ah, type='privacy', share_video=False)
+        messages = self.client.get('/rep-api/poll', headers=bh).json()['messages']
+        self.assertFalse(any(m['type'] == 'opponent_frame' for m in messages))
         service.clients[a].frame_at = 0
         self.assertEqual(self.client.post('/rep-api/frame', headers=ah, json={'image': 'bad'}).status_code, 400)
 
     def test_large_body_and_missing_session_are_rejected(self):
         _, h = self.player()
         self.assertEqual(self.client.post('/rep-api/frame', headers=h, content='x' * 2900001).status_code, 413)
+        self.assertEqual(self.client.post('/rep-api/command', headers=h, content='x' * 65537).status_code, 413)
         self.assertEqual(self.client.post('/rep-api/frame', headers=self.auth, json={'image': 'fixture'}).status_code, 401)
 
     def test_close_notifies_other_player_and_removes_session(self):

@@ -74,8 +74,9 @@ class CountryQuestTests(unittest.TestCase):
     def test_http_two_device_shared_progress(self):
         from fastapi.testclient import TestClient
         from server import app as service
-        old_store, old_token = service.country_quests, service.TOKEN
-        service.country_quests, service.TOKEN = self.service, 'country-test-token'
+        old_store, old_token, old_allow = service.country_quests, service.TOKEN, service.ALLOW_DEV_TOKEN
+        service.country_quests, service.TOKEN, service.ALLOW_DEV_TOKEN = self.service, 'country-test-token', True
+        service.limiter.reset()
         try:
             client = TestClient(service.app); headers = {'Authorization': 'Bearer '+service.TOKEN}
             self.assertEqual(client.post('/rep-api/countries', json={'action': 'preview', 'code': self.code}).status_code, 401)
@@ -85,7 +86,7 @@ class CountryQuestTests(unittest.TestCase):
             host = client.post('/rep-api/countries', headers=headers, json={'action': 'get', 'code': self.code, 'walkerKey': self.host})
             self.assertEqual(host.json()['totalSteps'], 9876)
             self.assertEqual(client.post('/rep-api/countries', headers=headers, json={'action': 'get', 'code': self.code, 'walkerKey': 'wrong'*16}).status_code, 403)
-        finally: service.country_quests, service.TOKEN = old_store, old_token
+        finally: service.country_quests, service.TOKEN, service.ALLOW_DEV_TOKEN = old_store, old_token, old_allow
 
 
 if __name__ == '__main__': unittest.main()

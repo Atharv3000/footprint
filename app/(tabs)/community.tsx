@@ -240,6 +240,13 @@ export default function CommunityScreen() {
           loadData();
         }
       )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'user_locations' },
+        () => {
+          loadData();
+        }
+      )
       .subscribe();
 
     return () => {

@@ -38,6 +38,7 @@ RUN mkdir -p /data /app/server/data
 # Default persistent database paths can be pointed to /data on Railway/Render
 ENV CALORIE_DB_PATH=/data/calories.sqlite3
 ENV COUNTRY_QUEST_DB_PATH=/data/country-quests.sqlite3
+ENV COMMUNITY_GOALS_DB_PATH=/data/community-goals.sqlite3
 
 EXPOSE 9002
 

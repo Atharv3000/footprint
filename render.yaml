@@ -11,9 +11,15 @@ services:
       mountPath: /data
       sizeGB: 1
     envVars:
-      - key: REP_SERVER_TOKEN
-        generateValue: true
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_ANON_KEY
+        sync: false
+      - key: SUPABASE_JWT_SECRET
+        sync: false
       - key: CALORIE_DB_PATH
         value: /data/calories.sqlite3
       - key: COUNTRY_QUEST_DB_PATH
         value: /data/country-quests.sqlite3
+      - key: COMMUNITY_GOALS_DB_PATH
+        value: /data/community-goals.sqlite3

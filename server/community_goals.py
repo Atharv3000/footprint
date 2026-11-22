@@ -2,7 +2,7 @@
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 import secrets
-from .country_quests import CountryQuests
+from .country_quests import CountryQuests, _clean_text
 
 
 class CommunityGoals(CountryQuests):
@@ -10,16 +10,19 @@ class CommunityGoals(CountryQuests):
         self.path = Path(path)
         self.clock = clock or (lambda: datetime.now(timezone.utc))
 
-    def create(self, data):
+    def create(self, data, user_id=None):
         target = data.get('target')
         if type(target) is not int or not 100 <= target <= 1_000_000:
             raise ValueError('Choose a shared step goal from 100 to 1,000,000.')
-        owner = self.identity(data)
+        owner = self.identity(data, user_id=user_id)
+        with self.db() as db:
+            if db.execute('select count(*) from country_quests').fetchone()[0] >= 10000:
+                raise ValueError('Goal storage limit reached. Try again later.')
         start = self.clock()
         player = self.player(data)
         player['joinedAt'] = start.isoformat()
         room = dict(code=secrets.token_hex(6).upper(), countryId='SQUAD', owner=owner,
-                    title=str(data.get('title', '')).strip()[:80] or 'Squad step goal',
+                    title=_clean_text(data.get('title'), 'Squad step goal', 80),
                     goalSteps=target, startsAt=start.isoformat(), endsAt=(start + timedelta(days=7)).isoformat(),
                     closed=False, completed=False, members={owner: player})
         self.save(room)

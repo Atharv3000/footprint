@@ -1,7 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as SecureStore from 'expo-secure-store';
 import { DeviceEventEmitter } from 'react-native';
-import { repServerUrl } from './repTrackerProtocol';
+import { repServerUrl, getRepAuthToken } from './repTrackerProtocol';
 import { loadMealLogs } from './nutritionStorage';
 
 export const CALORIE_CHALLENGES_CHANGED = 'footprint:calorie-challenges-changed';
@@ -22,12 +22,13 @@ export async function cachedChallenges(id: string): Promise<CalorieChallenge[]> 
   return JSON.parse(await AsyncStorage.getItem(storageKey(id)) || '[]');
 }
 async function request(action: string, data: object) {
-  const token = process.env.EXPO_PUBLIC_REP_TOKEN;
-  if (!token) throw new Error('Start npm run start:reps:tunnel to connect calorie challenges.');
+  const token = process.env.EXPO_PUBLIC_REP_TOKEN || (await getRepAuthToken());
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+  if (token && token !== 'local-dev-proxy') headers.Authorization = `Bearer ${token}`;
   const controller = new AbortController(); const timeout = setTimeout(() => controller.abort(), 12000);
   try {
     const response = await fetch(`${repServerUrl()}/calories`, { method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      headers,
       body: JSON.stringify({ action, ...data }), signal: controller.signal });
     const result = await response.json();
     if (!response.ok) throw new Error(result.detail || 'Challenge could not be updated.');

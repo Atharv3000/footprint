@@ -2,7 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as SecureStore from 'expo-secure-store';
 import { randomUUID } from 'expo-crypto';
 import { DeviceEventEmitter } from 'react-native';
-import { repServerUrl } from './repTrackerProtocol';
+import { repServerUrl, getRepAuthToken } from './repTrackerProtocol';
 import { loadRecordedWalks, WalkRecord } from './walkStorage';
 import catalog from '@/assets/data/countryBorders.json';
 
@@ -27,12 +27,13 @@ async function walkerKey(id: string) {
   return key;
 }
 async function request(action: string, data: object): Promise<any> {
-  const token = process.env.EXPO_PUBLIC_REP_TOKEN;
-  if (!token) throw new Error('Start npm run start:reps:tunnel to connect country quests.');
+  const token = process.env.EXPO_PUBLIC_REP_TOKEN || (await getRepAuthToken());
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+  if (token && token !== 'local-dev-proxy') headers.Authorization = `Bearer ${token}`;
   const controller = new AbortController(); const timeout = setTimeout(() => controller.abort(), 12000);
   try {
     const response = await fetch(`${repServerUrl()}/countries`, { method: 'POST', signal: controller.signal,
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }, body: JSON.stringify({ action, ...data }) });
+      headers, body: JSON.stringify({ action, ...data }) });
     const result = await response.json();
     if (!response.ok) throw new Error(result.detail || 'Could not update this quest.');
     return result;

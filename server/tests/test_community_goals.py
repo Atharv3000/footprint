@@ -44,12 +44,13 @@ class CommunityGoalTests(unittest.TestCase):
     def test_endpoint_authentication_and_shared_goal_route(self):
         from fastapi.testclient import TestClient
         from server import app as service
-        previous, token = service.community_goals, service.TOKEN
-        service.community_goals, service.TOKEN = self.service, 't' * 48
+        previous, token, old_allow = service.community_goals, service.TOKEN, service.ALLOW_DEV_TOKEN
+        service.community_goals, service.TOKEN, service.ALLOW_DEV_TOKEN = self.service, 't' * 48, True
+        service.limiter.reset()
         try:
             client = TestClient(service.app)
             self.assertEqual(client.post('/rep-api/goals', json={'action': 'preview', 'code': self.code}).status_code, 401)
             response = client.post('/rep-api/goals', headers={'Authorization': 'Bearer ' + service.TOKEN}, json={'action': 'get', 'code': self.code, 'walkerKey': self.host})
             self.assertEqual(response.status_code, 200)
             self.assertEqual(response.json()['goalSteps'], 5000)
-        finally: service.community_goals, service.TOKEN = previous, token
+        finally: service.community_goals, service.TOKEN, service.ALLOW_DEV_TOKEN = previous, token, old_allow

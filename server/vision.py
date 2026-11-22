@@ -34,7 +34,7 @@ class Vision:
             points[name] = {'id': name, 'x': x, 'y': y, 'z': p.z, 'visibility': min(p.visibility, p.presence)}
         return points
 
-    def analyze(self, encoded, upright=False):
+    def analyze(self, encoded, upright=False, include_preview=False):
         if not isinstance(encoded, str) or len(encoded) > 2_800_000:
             raise ValueError('Frame is too large. Use the low-resolution camera setting.')
         try:
@@ -54,7 +54,9 @@ class Vision:
             if not raw_points and not upright:
                 candidates = [self._points(rgb, angle) for angle in (90, 270)]
                 points = max(candidates, key=arm_quality)
-        # Relay the normalized, reduced JPEG, never an EXIF-bearing original.
+        if not include_preview:
+            return points, image.width / image.height, None
+        # Relay only a normalized, reduced EXIF-stripped JPEG when explicit video consent is enabled.
         preview = image.copy(); preview.thumbnail((400, 400))
         stream = io.BytesIO(); preview.save(stream, format='JPEG', quality=48)
         return points, image.width / image.height, base64.b64encode(stream.getvalue()).decode()

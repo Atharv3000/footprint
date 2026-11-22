@@ -2,7 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as SecureStore from 'expo-secure-store';
 import { randomUUID } from 'expo-crypto';
 import { DeviceEventEmitter } from 'react-native';
-import { repServerUrl } from './repTrackerProtocol';
+import { repServerUrl, getRepAuthToken } from './repTrackerProtocol';
 import { loadRecordedWalks, WalkRecord } from './walkStorage';
 import { DEFAULT_GOAL_TARGETS, GoalTargets, GoalProgress, WalkGoalGain, personalGoalProgress, walkingStepsInWindow, walkGoalGains } from './communityGoalProgress';
 export const COMMUNITY_GOALS_CHANGED = 'footprint:community-goals-changed';
@@ -32,12 +32,13 @@ async function identity(id: string) {
   return key;
 }
 async function request(data: object): Promise<any> {
-  const token = process.env.EXPO_PUBLIC_REP_TOKEN;
-  if (!token) throw new Error('Connect the challenge server to use shared squad goals.');
+  const token = process.env.EXPO_PUBLIC_REP_TOKEN || (await getRepAuthToken());
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+  if (token && token !== 'local-dev-proxy') headers.Authorization = `Bearer ${token}`;
   const controller = new AbortController(); const timer = setTimeout(() => controller.abort(), 12000);
   try {
     const response = await fetch(`${repServerUrl()}/goals`, { method: 'POST', signal: controller.signal,
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }, body: JSON.stringify(data) });
+      headers, body: JSON.stringify(data) });
     const result = await response.json();
     if (response.status === 404) throw new Error('Shared squad goals are not available on the connected server yet. Your personal goals still work.');
     if (!response.ok) throw new Error(result.detail || 'Squad goal could not sync.');

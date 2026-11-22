@@ -24,8 +24,31 @@ export function repServerUrl(): string {
   }
   const host = Constants.expoConfig?.hostUri;
   if (!host) throw new Error('Start the app with npm run start:reps to connect the rep tracker or set EXPO_PUBLIC_REP_SERVER_URL in your cloud deployment.');
-  const local = /^(localhost|127\.|10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.)/.test(host);
+  const local = /^(localhost|127\.|10\.|192\.168\.|172\.(1[6-9]|2\d|3[1])\.)/.test(host);
   return `${local ? 'http' : 'https'}://${host}/rep-api`;
+}
+
+export async function getRepAuthToken(): Promise<string> {
+  if (process.env.EXPO_PUBLIC_REP_TOKEN) {
+    return process.env.EXPO_PUBLIC_REP_TOKEN;
+  }
+  try {
+    // Lazy-loaded so unit tests mocking only expo-constants keep running without Supabase runtime deps.
+    const { supabase, isSupabaseConfigured } = require('./supabaseClient');
+    if (isSupabaseConfigured) {
+      const { data } = await supabase.auth.getSession();
+      if (data?.session?.access_token) {
+        return data.session.access_token;
+      }
+    }
+  } catch {
+    // Fall through to local proxy check
+  }
+  if (!process.env.EXPO_PUBLIC_REP_SERVER_URL && Constants.expoConfig?.hostUri) {
+    // Local Metro dev proxy injects the ephemeral local session token on 127.0.0.1.
+    return 'local-dev-proxy';
+  }
+  throw new Error('Please sign in to your Footprint account to use this feature.');
 }
 
 /** Small camera relay transport; low-frame-rate previews, not an audio call. */
@@ -45,12 +68,23 @@ export class RepConnection {
 
   private emit(message: object) { if (this.readyState === 1) this.onmessage?.({ data: JSON.stringify(message) }); }
 
+  private authHeaders(): Record<string, string> {
+    const headers: Record<string, string> = {};
+    if (this.token && this.token !== 'local-dev-proxy') {
+      headers.Authorization = `Bearer ${this.token}`;
+    }
+    if (this.session) {
+      headers['X-Rep-Session'] = this.session;
+    }
+    return headers;
+  }
+
   private async request(path: string, method: string, body?: object) {
     const controller = new AbortController(); this.requests.add(controller);
     const timer = setTimeout(() => controller.abort(), 12000);
     try {
       const response = await fetch(`${this.base}/${path}`, { method, signal: controller.signal,
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${this.token}`, 'X-Rep-Session': this.session },
+        headers: { 'Content-Type': 'application/json', ...this.authHeaders() },
         body: body ? JSON.stringify(body) : undefined,
       });
       const result = await response.json();
@@ -97,7 +131,7 @@ export class RepConnection {
     this.readyState = 3; clearTimeout(this.polling);
     for (const controller of this.requests) controller.abort();
     if (this.session) fetch(`${this.base}/close`, { method: 'POST',
-      headers: { Authorization: `Bearer ${this.token}`, 'X-Rep-Session': this.session },
+      headers: this.authHeaders(),
     }).catch(() => {});
     this.onclose?.();
   }

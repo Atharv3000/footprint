@@ -1,5 +1,3 @@
-import { TutorialAnchor } from "@/components/FirstRunTutorial";
-import { WalkGoalSummary } from '@/components/WalkGoalSummary';
 import { useScreenInsets } from '@/constants/useScreenInsets';
 import { AppModal as Modal } from '@/components/AppModal';
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
@@ -118,7 +116,7 @@ const DraggableStopRow = React.memo(function DraggableStopRow({
       onPanResponderGrant: () => {
         onDragStart(sIdx);
         dragTranslateY.setValue(0);
-        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy).catch(() => {});
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy).catch(() => { });
       },
       onPanResponderMove: (_, g) => {
         dragTranslateY.setValue(g.dy);
@@ -353,12 +351,12 @@ function DistanceSlider({
     if (newVal !== valueRef.current) {
       valueRef.current = newVal;
       onChange(newVal);
-      Haptics.selectionAsync().catch(() => {});
+      Haptics.selectionAsync().catch(() => { });
     }
 
     if (isRelease) {
       onCommit(valueRef.current);
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => { });
     }
   };
 
@@ -400,7 +398,7 @@ function DistanceSlider({
             if (newVal !== valueRef.current) {
               valueRef.current = newVal;
               onChange(newVal);
-              Haptics.selectionAsync().catch(() => {});
+              Haptics.selectionAsync().catch(() => { });
             }
           });
         } else {
@@ -426,7 +424,7 @@ function DistanceSlider({
         // If released after straying far off the bar, simply commit the current stable value
         if (verticalDrift > 65) {
           onCommit(valueRef.current);
-          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
+          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => { });
           return;
         }
         const deltaX = e.nativeEvent.pageX - startDragPageXRef.current;
@@ -438,7 +436,7 @@ function DistanceSlider({
         // Do NOT jump to the ends on gesture cancel / termination!
         // Lock and commit the last valid value in-place without applying erratic deltas.
         onCommit(valueRef.current);
-        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => { });
       },
     })
   ).current;
@@ -621,12 +619,13 @@ const sliderStyles = StyleSheet.create({
 
 export default function TrackScreen() {
   const screenInsets = useScreenInsets();
-  const safeStyles = React.useMemo(() => ({ ...styles,
-    topNavCardContainer: { ...styles.topNavCardContainer, paddingTop: screenInsets.top + 12 , left: screenInsets.left + 0, right: screenInsets.right + 0, paddingLeft: screenInsets.left + 16, paddingRight: screenInsets.right + 16 },
-    unifiedTopBar: { ...styles.unifiedTopBar, top: screenInsets.top + 18 , left: screenInsets.left + 14, right: screenInsets.right + 14, paddingLeft: screenInsets.left + 4, paddingRight: screenInsets.right + 4 },
-    searchResultsDropdown: { ...styles.searchResultsDropdown, top: screenInsets.top + 72 , left: screenInsets.left + 8, right: screenInsets.right + 8 },
-    topHudContainer: { ...styles.topHudContainer, top: screenInsets.top + 70 , left: screenInsets.left + 14, right: screenInsets.right + 14 },
-    directionsPanel: { ...styles.directionsPanel, top: screenInsets.top + 170 , left: screenInsets.left + 14, right: screenInsets.right + 14 },
+  const safeStyles = React.useMemo(() => ({
+    ...styles,
+    topNavCardContainer: { ...styles.topNavCardContainer, paddingTop: screenInsets.top + 12, left: screenInsets.left + 0, right: screenInsets.right + 0, paddingLeft: screenInsets.left + 16, paddingRight: screenInsets.right + 16 },
+    unifiedTopBar: { ...styles.unifiedTopBar, top: screenInsets.top + 18, left: screenInsets.left + 14, right: screenInsets.right + 14, paddingLeft: screenInsets.left + 4, paddingRight: screenInsets.right + 4 },
+    searchResultsDropdown: { ...styles.searchResultsDropdown, top: screenInsets.top + 72, left: screenInsets.left + 8, right: screenInsets.right + 8 },
+    topHudContainer: { ...styles.topHudContainer, top: screenInsets.top + 70, left: screenInsets.left + 14, right: screenInsets.right + 14 },
+    directionsPanel: { ...styles.directionsPanel, top: screenInsets.top + 170, left: screenInsets.left + 14, right: screenInsets.right + 14 },
   }), [screenInsets.top, screenInsets.left, screenInsets.right]);
 
   const { user } = useAuth();
@@ -746,7 +745,7 @@ export default function TrackScreen() {
         pitch: 1.0,
         rate: 0.95,
       });
-    } catch (_) {}
+    } catch (_) { }
   };
 
   // Slide top navigation card in/out: active only when actively navigating or recording
@@ -809,10 +808,6 @@ export default function TrackScreen() {
   const [tempGender, setTempGender] = useState<GenderOption>('na');
 
   const [completedSummary, setCompletedSummary] = useState<WalkStats | null>(null);
-  const [savedSummaryWalk, setSavedSummaryWalk] = useState<WalkRecord | null>(null);
-  const [savingSummaryWalk, setSavingSummaryWalk] = useState(false);
-  const [summarySaveError, setSummarySaveError] = useState('');
-  const summaryRun = useRef(0);
 
   // Global App Color Scheme & Map Appearance
   const {
@@ -831,7 +826,7 @@ export default function TrackScreen() {
     const dest = routeDestinationRef.current || routeDestination;
     if (!lat || !lng || !dest) return;
 
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning).catch(() => {});
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning).catch(() => { });
     setIsRerouting(true);
     isReroutingRef.current = true;
     speakInstruction('Recalculating route directions.');
@@ -940,8 +935,9 @@ export default function TrackScreen() {
 
   // Load past recorded workouts to display on the map
   const fetchPastWalks = useCallback(async () => {
+    if (!user) return;
     try {
-      const records = await loadWalks(user?.id || 'guest_user');
+      const records = await loadWalks(user.id);
       setPastWalks(records || []);
     } catch (e) {
       console.warn('Failed to load past walks for map overlay:', e);
@@ -1056,7 +1052,7 @@ export default function TrackScreen() {
                   const nextIdx = stepIdx + 1;
                   currentStepIndexRef.current = nextIdx;
                   setCurrentStepIndex(nextIdx);
-                  Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+                  Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => { });
                   if (steps[nextIdx]?.instruction) {
                     speakInstruction(steps[nextIdx].instruction);
                   }
@@ -1174,7 +1170,7 @@ export default function TrackScreen() {
 
   // 3D Camera Tilt Toggle (works in Standard, Hybrid, Satellite, and Terrain)
   const toggle3D = async () => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => { });
     const next3D = !is3D;
     setIs3D(next3D);
     is3DRef.current = next3D; // sync immediately so camera-follow picks it up
@@ -1217,7 +1213,7 @@ export default function TrackScreen() {
   const [showMapLayersModal, setShowMapLayersModal] = useState<boolean>(false);
 
   const selectMapType = (newType: MapType) => {
-    Haptics.selectionAsync().catch(() => {});
+    Haptics.selectionAsync().catch(() => { });
     setMapType(newType);
     setShowMapLayersModal(false);
 
@@ -1246,7 +1242,7 @@ export default function TrackScreen() {
 
 
   const handleSelectFriend = (fr: FriendUser) => {
-    Haptics.selectionAsync().catch(() => {});
+    Haptics.selectionAsync().catch(() => { });
     setSelectedFriend(selectedFriend?.id === fr.id ? null : fr);
     const coord = fr.currentLocation;
     if (coord && mapRef.current) {
@@ -1263,7 +1259,7 @@ export default function TrackScreen() {
   };
 
   const handleToggleWalk = async () => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => { });
     if (!isRecording) {
       // If user hasn't calibrated measurements yet, ask once. Once completed, never ask again!
       // Measurements are adjusted anytime in the Profile / Settings tab.
@@ -1490,7 +1486,7 @@ export default function TrackScreen() {
     setSearchQuery(place.shortName);
     setPreviewPlace(place);
     setIsNavigating(false);
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => { });
 
     const newStops = [place];
     setRouteStops(newStops);
@@ -1503,7 +1499,7 @@ export default function TrackScreen() {
     setSearchQuery('');
     setIsAddingStopMode(false);
     setPlaceActionTarget(null);
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => { });
 
     // Ensure previewPlace is established if this was first stop
     if (!previewPlace) {
@@ -1516,7 +1512,7 @@ export default function TrackScreen() {
   };
 
   const handleRemoveStop = async (index: number) => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => { });
     const updated = routeStops.filter((_, idx) => idx !== index);
     setRouteStops(updated);
     if (updated.length === 0) {
@@ -1534,7 +1530,7 @@ export default function TrackScreen() {
 
   const handleMoveStop = async (fromIndex: number, toIndex: number) => {
     if (toIndex < 0 || toIndex >= routeStops.length || fromIndex === toIndex) return;
-    Haptics.selectionAsync().catch(() => {});
+    Haptics.selectionAsync().catch(() => { });
     const updated = [...routeStops];
     const [moved] = updated.splice(fromIndex, 1);
     updated.splice(toIndex, 0, moved);
@@ -1543,7 +1539,7 @@ export default function TrackScreen() {
   };
 
   const handleUpdateStopCoordinate = async (index: number, newCoord: { latitude: number; longitude: number }) => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => { });
     const updated = routeStops.map((stop, idx) => {
       if (idx === index) {
         return {
@@ -1559,7 +1555,7 @@ export default function TrackScreen() {
   };
 
   const handleStartNavigating = () => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => { });
     setIsNavigating(true);
     setPreviewPlace(null);
     setShowStopsManager(false);
@@ -1577,7 +1573,7 @@ export default function TrackScreen() {
   };
 
   const handlePreviewRoute = (route: RealRouteResult) => {
-    Haptics.selectionAsync().catch(() => {});
+    Haptics.selectionAsync().catch(() => { });
     setSelectedRoute(route);
     if (route.coordinates.length > 0) {
       const last = route.coordinates[route.coordinates.length - 1];
@@ -1592,7 +1588,7 @@ export default function TrackScreen() {
   };
 
   const handleSelectRoute = (route: RealRouteResult) => {
-    Haptics.selectionAsync().catch(() => {});
+    Haptics.selectionAsync().catch(() => { });
     setSelectedRoute(route);
     setShowRouteModal(false);
     setIsNavigating(true);
@@ -1615,7 +1611,7 @@ export default function TrackScreen() {
   };
 
   const handleClearSuggestedRoute = () => {
-    Haptics.selectionAsync().catch(() => {});
+    Haptics.selectionAsync().catch(() => { });
     setSelectedRoute(null);
     setPreviewPlace(null);
     setRouteStops([]);
@@ -1647,7 +1643,7 @@ export default function TrackScreen() {
           setSelectedRoute(newRoute);
           setCurrentStepIndex(0);
           currentStepIndexRef.current = 0;
-          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning).catch(() => {});
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning).catch(() => { });
         }
       })
       .finally(() => {
@@ -1680,10 +1676,8 @@ export default function TrackScreen() {
   }, [selectedRoute, location]);
 
   const stopActiveRecording = () => {
-    const finishId = ++summaryRun.current;
-    setSavedSummaryWalk(null); setSummarySaveError(''); setSavingSummaryWalk(false);
     setIsRecording(false);
-    try { Speech.stop(); } catch (_) {}
+    try { Speech.stop(); } catch (_) { }
     const mins = elapsedSeconds / 60;
     const burnedCalories = calculateScientificCaloriesBurned(
       profile.weightKg,
@@ -1695,7 +1689,7 @@ export default function TrackScreen() {
       activityType
     );
 
-  const isUS = profile.unitSystem === 'us_customary';
+    const isUS = profile.unitSystem === 'us_customary';
     const mainUnitsDist = isUS ? metersToMiles(totalDistanceMeters) : metersToKm(totalDistanceMeters);
     const paceMinPerUnit = mainUnitsDist > 0.03 ? Math.floor(mins / mainUnitsDist) : 0;
     const paceSecPerUnit = mainUnitsDist > 0.03 ? Math.round(((mins / mainUnitsDist) % 1) * 60) : 0;
@@ -1710,9 +1704,8 @@ export default function TrackScreen() {
       steps: estimatedSteps,
     });
 
-    if (totalDistanceMeters > 5 || elapsedSeconds > 10) {
-      setSavingSummaryWalk(true);
-      saveWalk(user?.id || 'guest_user', {
+    if (user && (totalDistanceMeters > 5 || elapsedSeconds > 10)) {
+      saveWalk(user.id, {
         durationSeconds: elapsedSeconds,
         distanceMeters: totalDistanceMeters,
         calories: burnedCalories,
@@ -1721,18 +1714,13 @@ export default function TrackScreen() {
         activityType,
         routeCoordinates: [...routeCoordinates],
       })
-        .then(record => {
-          if (summaryRun.current === finishId) { setSavedSummaryWalk(record); setSavingSummaryWalk(false); }
-          void fetchPastWalks();
-        })
-        .catch(() => {
-          if (summaryRun.current === finishId) { setSavingSummaryWalk(false); setSummarySaveError('Could not save this walk. Goal progress has not been added.'); }
-        });
+        .then(() => fetchPastWalks())
+        .catch((e) => console.warn('Failed to auto-save workout record:', e));
     }
   };
 
   const centerOnUser = () => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => { });
     if (!mapRef.current) return;
 
     setFollowsUser(true);
@@ -1844,7 +1832,7 @@ export default function TrackScreen() {
   const effectiveMarkerPitch = is3D ? (cameraPitch > 10 ? Math.min(cameraPitch, 70) : 65) : (cameraPitch > 10 ? Math.min(cameraPitch, 70) : 0);
 
   // Google Maps / Platform Custom Styling to turn off all POI/building labels when toggled off
-  
+
 
   // When satellite is chosen, retain satellite imagery in both 2D and 3D mode.
   const effectiveMapType: MapType = useMemo(() => {
@@ -1881,9 +1869,9 @@ export default function TrackScreen() {
         ref={(instance: any) => {
           if (instance) {
             // Provide safe fallback stubs on web / non-native to guarantee methods never throw
-            if (typeof instance.animateCamera !== 'function') instance.animateCamera = () => {};
-            if (typeof instance.animateToRegion !== 'function') instance.animateToRegion = () => {};
-            if (typeof instance.fitToCoordinates !== 'function') instance.fitToCoordinates = () => {};
+            if (typeof instance.animateCamera !== 'function') instance.animateCamera = () => { };
+            if (typeof instance.animateToRegion !== 'function') instance.animateToRegion = () => { };
+            if (typeof instance.fitToCoordinates !== 'function') instance.fitToCoordinates = () => { };
             if (typeof instance.getCamera !== 'function') {
               instance.getCamera = async () => ({
                 center: { latitude: 0, longitude: 0 },
@@ -1926,7 +1914,7 @@ export default function TrackScreen() {
                 setCameraPitch(Math.round(cam.pitch));
                 cameraPitchRef.current = Math.round(cam.pitch);
               }
-            } catch (_) {}
+            } catch (_) { }
           }
         }}
       >
@@ -2010,14 +1998,14 @@ export default function TrackScreen() {
               .map((fr) => fr.currentLocation!);
             const baseCoord = memberLocs.length > 0
               ? {
-                  latitude: memberLocs.reduce((s, c) => s + c.latitude, 0) / memberLocs.length,
-                  longitude: memberLocs.reduce((s, c) => s + c.longitude, 0) / memberLocs.length,
-                }
+                latitude: memberLocs.reduce((s, c) => s + c.latitude, 0) / memberLocs.length,
+                longitude: memberLocs.reduce((s, c) => s + c.longitude, 0) / memberLocs.length,
+              }
               : location?.coords
                 ? {
-                    latitude: location.coords.latitude + 0.0012 * (sqIdx + 1),
-                    longitude: location.coords.longitude - 0.0012 * (sqIdx + 1),
-                  }
+                  latitude: location.coords.latitude + 0.0012 * (sqIdx + 1),
+                  longitude: location.coords.longitude - 0.0012 * (sqIdx + 1),
+                }
                 : null;
             if (!baseCoord) return null;
             const isSelected = selectedSquadId === sq.id;
@@ -2028,7 +2016,7 @@ export default function TrackScreen() {
                 anchor={{ x: 0.5, y: 0.5 }}
                 zIndex={isSelected ? 32 : 22}
                 onPress={() => {
-                  Haptics.selectionAsync().catch(() => {});
+                  Haptics.selectionAsync().catch(() => { });
                   setSelectedSquadId(isSelected ? null : sq.id);
                 }}
               >
@@ -2097,7 +2085,43 @@ export default function TrackScreen() {
                 title={route.name}
                 pinColor={color}
               />
-              </React.Fragment>
+              {/* Highlight / Spot Points along this suggested route */}
+              {route.pois && route.pois.map((poi, pIdx) => {
+                const pCoord = poi.coordinate || (route.coordinates.length > 0
+                  ? route.coordinates[Math.min(route.coordinates.length - 1, Math.floor(((pIdx + 1) / (route.pois!.length + 1)) * (route.coordinates.length - 1)))]
+                  : null);
+                if (!pCoord) return null;
+                const catIcon =
+                  poi.category === 'park' ? 'leaf'
+                    : poi.category === 'water' ? 'water'
+                      : poi.category === 'viewpoint' ? 'eye'
+                        : poi.category === 'trail' ? 'walk'
+                          : 'compass';
+
+                return (
+                  <Marker
+                    key={`poi_marker_${poi.id || pIdx}`}
+                    coordinate={pCoord}
+                    title={poi.name}
+                    description={`${poi.category.toUpperCase()} • ${poi.distanceAlongKm || 0} km along path`}
+                    zIndex={12}
+                  >
+                    <View style={{ alignItems: 'center' }}>
+                      {showsBuildings && (
+                        <View style={[styles.poiCalloutBadge, { backgroundColor: '#18181b', borderColor: color }]}>
+                          <Text style={styles.poiCalloutText} numberOfLines={1}>
+                            {poi.name}
+                          </Text>
+                        </View>
+                      )}
+                      <View style={[styles.mapPoiPin, { backgroundColor: color, borderColor: '#ffffff' }]}>
+                        <Ionicons name={catIcon as any} size={11} color="#ffffff" />
+                      </View>
+                    </View>
+                  </Marker>
+                );
+              })}
+            </React.Fragment>
           );
         })}
 
@@ -2197,7 +2221,43 @@ export default function TrackScreen() {
                 )}
               </>
             )}
-            </>
+            {/* Highlight Spots Along the Selected Path */}
+            {selectedRoute.pois && selectedRoute.pois.map((poi, pIdx) => {
+              const pCoord = poi.coordinate || (selectedRoute.coordinates.length > 0
+                ? selectedRoute.coordinates[Math.min(selectedRoute.coordinates.length - 1, Math.floor(((pIdx + 1) / (selectedRoute.pois!.length + 1)) * (selectedRoute.coordinates.length - 1)))]
+                : null);
+              if (!pCoord) return null;
+              const catIcon =
+                poi.category === 'park' ? 'leaf'
+                  : poi.category === 'water' ? 'water'
+                    : poi.category === 'viewpoint' ? 'eye'
+                      : poi.category === 'trail' ? 'walk'
+                        : 'compass';
+
+              return (
+                <Marker
+                  key={`selected_poi_${poi.id || pIdx}`}
+                  coordinate={pCoord}
+                  title={poi.name}
+                  description={`${poi.category.toUpperCase()} • ${poi.distanceAlongKm || 0} km in`}
+                  zIndex={20}
+                >
+                  <View style={{ alignItems: 'center' }}>
+                    {showsBuildings && (
+                      <View style={[styles.poiCalloutBadge, { backgroundColor: '#18181b', borderColor: '#38bdf8' }]}>
+                        <Text style={styles.poiCalloutText} numberOfLines={1}>
+                          {poi.name}
+                        </Text>
+                      </View>
+                    )}
+                    <View style={[styles.mapPoiPin, { backgroundColor: '#38bdf8', borderColor: '#ffffff' }]}>
+                      <Ionicons name={catIcon as any} size={12} color="#ffffff" />
+                    </View>
+                  </View>
+                </Marker>
+              );
+            })}
+          </>
         )}
 
         {/* Continuous Walking Trail Polyline with Smooth, Long, Multi-Stage Fading Trail */}
@@ -2387,11 +2447,11 @@ export default function TrackScreen() {
                 <TouchableOpacity
                   style={[styles.voiceMuteBtn, { backgroundColor: isVoiceMuted ? themeColors.surfaceElevated : 'rgba(56, 189, 248, 0.15)' }]}
                   onPress={() => {
-                    Haptics.selectionAsync().catch(() => {});
+                    Haptics.selectionAsync().catch(() => { });
                     const next = !isVoiceMuted;
                     setIsVoiceMuted(next);
                     if (next) {
-                      try { Speech.stop(); } catch (_) {}
+                      try { Speech.stop(); } catch (_) { }
                     } else if (step?.instruction) {
                       speakInstruction(step.instruction);
                     }
@@ -2423,7 +2483,7 @@ export default function TrackScreen() {
                 <TouchableOpacity
                   style={[styles.voiceMuteBtn, { backgroundColor: showDirections ? 'rgba(56, 189, 248, 0.18)' : themeColors.surfaceElevated }]}
                   onPress={() => {
-                    Haptics.selectionAsync().catch(() => {});
+                    Haptics.selectionAsync().catch(() => { });
                     setShowDirections(!showDirections);
                   }}
                   activeOpacity={0.8}
@@ -2483,7 +2543,7 @@ export default function TrackScreen() {
             <TouchableOpacity
               style={styles.unifiedActivityBtn}
               onPress={() => {
-                Haptics.selectionAsync().catch(() => {});
+                Haptics.selectionAsync().catch(() => { });
                 setIsAddingStopMode(false);
                 setSearchQuery('');
                 setSearchResults([]);
@@ -2497,7 +2557,7 @@ export default function TrackScreen() {
             <TouchableOpacity
               style={styles.unifiedActivityBtn}
               onPress={() => {
-                Haptics.selectionAsync().catch(() => {});
+                Haptics.selectionAsync().catch(() => { });
                 setIsActivityDropdownOpen(!isActivityDropdownOpen);
               }}
               activeOpacity={0.8}
@@ -2524,7 +2584,7 @@ export default function TrackScreen() {
               selectedRoute && { backgroundColor: themeColors.primaryBg },
             ]}
             onPress={() => {
-              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => { });
               handleGenerateRoutes();
               setShowRouteModal(true);
             }}
@@ -2569,7 +2629,7 @@ export default function TrackScreen() {
                 (showSearchOptions || preferParks || avoidTrafficLights) && { backgroundColor: themeColors.primaryBg },
               ]}
               onPress={() => {
-                Haptics.selectionAsync().catch(() => {});
+                Haptics.selectionAsync().catch(() => { });
                 setShowSearchOptions(!showSearchOptions);
                 setIsActivityDropdownOpen(false);
               }}
@@ -2601,7 +2661,7 @@ export default function TrackScreen() {
               <TouchableOpacity
                 style={styles.searchOptionRow}
                 onPress={() => {
-                  Haptics.selectionAsync().catch(() => {});
+                  Haptics.selectionAsync().catch(() => { });
                   const next = !preferParks;
                   setPreferParks(next);
                   if (routeDestination) {
@@ -2629,7 +2689,7 @@ export default function TrackScreen() {
               <TouchableOpacity
                 style={styles.searchOptionRow}
                 onPress={() => {
-                  Haptics.selectionAsync().catch(() => {});
+                  Haptics.selectionAsync().catch(() => { });
                   const next = !avoidTrafficLights;
                   setAvoidTrafficLights(next);
                   if (routeDestination) {
@@ -2657,7 +2717,7 @@ export default function TrackScreen() {
               <TouchableOpacity
                 style={styles.searchOptionRow}
                 onPress={() => {
-                  Haptics.selectionAsync().catch(() => {});
+                  Haptics.selectionAsync().catch(() => { });
                   const next = !avoidBusyRoads;
                   setAvoidBusyRoads(next);
                   if (routeDestination) {
@@ -2686,7 +2746,7 @@ export default function TrackScreen() {
                 <TouchableOpacity
                   style={styles.searchOptionRow}
                   onPress={() => {
-                    Haptics.selectionAsync().catch(() => {});
+                    Haptics.selectionAsync().catch(() => { });
                     const next = !preferCyclingLanes;
                     setPreferCyclingLanes(next);
                   }}
@@ -2720,7 +2780,7 @@ export default function TrackScreen() {
                       isSelected && { backgroundColor: themeColors.primaryBg },
                     ]}
                     onPress={() => {
-                      Haptics.selectionAsync().catch(() => {});
+                      Haptics.selectionAsync().catch(() => { });
                       setActivityType(mode);
                       setIsActivityDropdownOpen(false);
 
@@ -2815,21 +2875,21 @@ export default function TrackScreen() {
                 renderItem={({ item }) => {
                   const distFormatted = item.distanceMeters !== undefined
                     ? (profile.unitSystem === 'us_customary'
-                        ? (item.distanceMeters >= 160.934
-                            ? `${(item.distanceMeters / 1609.34).toFixed(1)} mi`
-                            : `${Math.round(item.distanceMeters * 3.28084 / 10) * 10} ft`)
-                        : (item.distanceMeters >= 1000
-                            ? `${(item.distanceMeters / 1000).toFixed(1)} km`
-                            : `${Math.round(item.distanceMeters / 10) * 10} m`))
+                      ? (item.distanceMeters >= 160.934
+                        ? `${(item.distanceMeters / 1609.34).toFixed(1)} mi`
+                        : `${Math.round(item.distanceMeters * 3.28084 / 10) * 10} ft`)
+                      : (item.distanceMeters >= 1000
+                        ? `${(item.distanceMeters / 1000).toFixed(1)} km`
+                        : `${Math.round(item.distanceMeters / 10) * 10} m`))
                     : null;
 
                   const catIcon =
                     item.category === 'park' ? 'leaf'
-                    : item.category === 'water' ? 'water'
-                    : item.category === 'viewpoint' ? 'eye'
-                    : item.category === 'trail' ? 'walk'
-                    : item.category === 'nature' ? 'flower'
-                    : 'location';
+                      : item.category === 'water' ? 'water'
+                        : item.category === 'viewpoint' ? 'eye'
+                          : item.category === 'trail' ? 'walk'
+                            : item.category === 'nature' ? 'flower'
+                              : 'location';
 
                   return (
                     <TouchableOpacity
@@ -2887,7 +2947,7 @@ export default function TrackScreen() {
                         style={[styles.searchResultMoreBtn, { backgroundColor: themeColors.surfaceElevated, borderColor: themeColors.border }]}
                         onPress={(e) => {
                           e.stopPropagation();
-                          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+                          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => { });
                           setPlaceActionTarget(item);
                         }}
                         hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
@@ -2912,7 +2972,7 @@ export default function TrackScreen() {
         ]}
       >
         {/* Map Controls */}
-        <TutorialAnchor tutorialId="map-controls" style={styles.topActionsRow}>
+        <View style={styles.topActionsRow}>
           {/* 3D Perspective Button */}
           <Animated.View
             style={[
@@ -3027,7 +3087,7 @@ export default function TrackScreen() {
               />
             </TouchableOpacity>
           </Animated.View>
-        </TutorialAnchor>
+        </View>
       </View>
 
       {/* Full Turn-by-Turn Directions Panel (Modal list when requested) */}
@@ -3258,7 +3318,7 @@ export default function TrackScreen() {
             </TouchableOpacity>
           </View>
 
-          {/* Scrollable Body: Metrics, Stops, and Route Preferences */}
+          {/* Scrollable Body: Metrics, Stops, Highlights, and Route Preferences */}
           <ScrollView
             style={styles.routePreviewScrollBody}
             contentContainerStyle={styles.routePreviewScrollContent}
@@ -3308,7 +3368,7 @@ export default function TrackScreen() {
                 <TouchableOpacity
                   style={[styles.manageStopsPill, { backgroundColor: themeColors.surfaceElevated, borderColor: themeColors.border }]}
                   onPress={() => {
-                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => { });
                     setIsAddingStopMode(true);
                     setSearchQuery('');
                     setSearchResults([]);
@@ -3411,7 +3471,7 @@ export default function TrackScreen() {
                           },
                         ]}
                         onPress={async () => {
-                          Haptics.selectionAsync().catch(() => {});
+                          Haptics.selectionAsync().catch(() => { });
                           const nextElev = isSelected ? null : elev;
                           setTargetElevation(nextElev);
                           if (routeStops.length > 0) {
@@ -3479,7 +3539,7 @@ export default function TrackScreen() {
                           backgroundColor: isActive ? themeColors.primary : themeColors.surfaceElevated,
                         }}
                         onPress={async () => {
-                          Haptics.selectionAsync().catch(() => {});
+                          Haptics.selectionAsync().catch(() => { });
                           let nextBusy = avoidBusyRoads;
                           let nextParks = preferParks;
                           let nextLights = avoidTrafficLights;
@@ -3540,7 +3600,152 @@ export default function TrackScreen() {
               </View>
             </View>
 
-            </ScrollView>
+            {/* Highlights Along Route */}
+            {selectedRoute.pois && selectedRoute.pois.length > 0 && (
+              <View style={styles.routePreviewStopsSection}>
+                <View style={styles.routePoiSectionHeader}>
+                  <Ionicons name="sparkles" size={13} color="#38bdf8" />
+                  <Text style={[styles.routePoiSectionTitle, { color: themeColors.text }]}>
+                    Highlights Along Path
+                  </Text>
+                </View>
+                <ScrollView
+                  horizontal={true}
+                  nestedScrollEnabled={true}
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={{ gap: 10, paddingVertical: 2, paddingRight: 8 }}
+                >
+                  {selectedRoute.pois.map((poi, pIdx) => {
+                    const catIcon =
+                      poi.category === 'park' ? 'leaf'
+                        : poi.category === 'water' ? 'water'
+                          : poi.category === 'viewpoint' ? 'eye'
+                            : poi.category === 'trail' ? 'walk'
+                              : 'compass';
+
+                    const stopIdx = routeStops.findIndex((s) => {
+                      if (s.placeId === poi.id || s.placeId === `poi_${poi.id}` || s.placeId.startsWith(`poi_${poi.id}_`)) return true;
+                      if (s.shortName && poi.name && s.shortName.trim().toLowerCase() === poi.name.trim().toLowerCase()) return true;
+                      if (s.displayName && poi.name && s.displayName.trim().toLowerCase() === poi.name.trim().toLowerCase()) return true;
+                      if (
+                        poi.coordinate &&
+                        Math.abs(s.latitude - poi.coordinate.latitude) < 0.0008 &&
+                        Math.abs(s.longitude - poi.coordinate.longitude) < 0.0008
+                      ) {
+                        return true;
+                      }
+                      return false;
+                    });
+                    const isAlreadyStop = stopIdx >= 0;
+
+                    return (
+                      <TouchableOpacity
+                        key={poi.id || pIdx}
+                        style={[
+                          styles.previewPoiCard,
+                          {
+                            backgroundColor: themeColors.surface,
+                            borderColor: isAlreadyStop ? themeColors.primary : themeColors.border,
+                            borderWidth: isAlreadyStop ? 1.5 : 1,
+                          },
+                        ]}
+                        activeOpacity={0.82}
+                        onPress={async () => {
+                          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => { });
+                          const targetPlace: GeocodedPlace = {
+                            placeId: `poi_${poi.id}`,
+                            displayName: poi.name,
+                            shortName: poi.name,
+                            latitude: poi.coordinate?.latitude || location?.coords.latitude || 37.33182,
+                            longitude: poi.coordinate?.longitude || location?.coords.longitude || -122.03118,
+                            category: (poi.category as any) || 'place',
+                            imageUrl: poi.imageUrl,
+                            description: `${poi.category.toUpperCase()} • Popular highlight along route`,
+                          };
+
+                          if (isAlreadyStop && stopIdx >= 0) {
+                            await handleRemoveStop(stopIdx);
+                          } else {
+                            await handleAddStopToRoute(targetPlace);
+                          }
+                        }}
+                      >
+                        <View style={styles.previewPoiImgWrap}>
+                          <Image
+                            source={{ uri: poi.imageUrl }}
+                            style={styles.previewPoiImg}
+                            resizeMode="cover"
+                            defaultSource={{ uri: 'https://images.unsplash.com/photo-1519331379826-f10be5486c6f?auto=format&fit=crop&w=600&q=80' }}
+                          />
+                          <View style={styles.poiCategoryBadge}>
+                            <Ionicons name={catIcon as any} size={10} color="#ffffff" />
+                            <Text style={styles.poiCategoryText}>{poi.category.toUpperCase()}</Text>
+                          </View>
+                          <View
+                            style={{
+                              position: 'absolute',
+                              top: 6,
+                              right: 6,
+                              backgroundColor: isAlreadyStop ? themeColors.primary : 'rgba(0, 0, 0, 0.72)',
+                              borderRadius: 12,
+                              paddingHorizontal: 6,
+                              paddingVertical: 3,
+                              flexDirection: 'row',
+                              alignItems: 'center',
+                              gap: 3,
+                              borderWidth: 0.5,
+                              borderColor: isAlreadyStop ? themeColors.primary : 'rgba(255, 255, 255, 0.3)',
+                            }}
+                          >
+                            <Ionicons
+                              name={isAlreadyStop ? 'checkmark' : 'add'}
+                              size={11}
+                              color={isAlreadyStop ? (themeColors.isDark ? '#09090b' : '#ffffff') : '#ffffff'}
+                            />
+                            <Text
+                              style={{
+                                fontSize: 9,
+                                fontWeight: '800',
+                                color: isAlreadyStop ? (themeColors.isDark ? '#09090b' : '#ffffff') : '#ffffff',
+                              }}
+                            >
+                              {isAlreadyStop ? 'ADDED' : 'ADD'}
+                            </Text>
+                          </View>
+                        </View>
+                        <View style={styles.previewPoiDetails}>
+                          <Text style={[styles.previewPoiName, { color: themeColors.text }]} numberOfLines={1}>
+                            {poi.name}
+                          </Text>
+                          {typeof poi.distanceAlongKm === 'number' && (
+                            <View style={styles.poiDistRow}>
+                              <Ionicons name="navigate-outline" size={10} color="#38bdf8" />
+                              <Text style={[styles.poiDist, { color: themeColors.textMuted }]}>
+                                {isUS ? `${(poi.distanceAlongKm * 0.621371).toFixed(1)} mi in` : `${poi.distanceAlongKm} km in`}
+                              </Text>
+                            </View>
+                          )}
+                          {Boolean(poi.description || poi.infoSnippet) && (
+                            <Text
+                              style={{
+                                fontSize: 9.5,
+                                lineHeight: 13,
+                                color: themeColors.textSecondary,
+                                marginTop: 3,
+                              }}
+                              numberOfLines={2}
+                            >
+                              {poi.description || poi.infoSnippet}
+                            </Text>
+                          )}
+                        </View>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </ScrollView>
+              </View>
+            )}
+          </ScrollView>
 
           {/* Docked Action Row: Start Navigation & Cancel (always visible at bottom above tab bar) */}
           <View style={[styles.routePreviewActionRow, { borderTopColor: themeColors.border, backgroundColor: themeColors.surface }]}>
@@ -3826,1108 +4031,1184 @@ export default function TrackScreen() {
                         onChange={(v) => setTempHeightFeet(v.toString())}
                       />
                     </View>
-<View style={{ flex: 1 }}>
-<FlipNumberPicker
-value={parseInt(tempHeightInches, 10) || 9}
-min={0}
-max={11}
-step={1}
-unit="in"
-onChange={(v) => setTempHeightInches(v.toString())}
-/>
-</View>
-</View>
-) : (
-<FlipNumberPicker
-value={parseInt(tempHeight, 10) || 175}
-min={100}
-max={230}
-step={1}
-unit="cm"
-onChange={(v) => setTempHeight(v.toString())}
-/>
-)}
-</View>
-</View>
+                    <View style={{ flex: 1 }}>
+                      <FlipNumberPicker
+                        value={parseInt(tempHeightInches, 10) || 9}
+                        min={0}
+                        max={11}
+                        step={1}
+                        unit="in"
+                        onChange={(v) => setTempHeightInches(v.toString())}
+                      />
+                    </View>
+                  </View>
+                ) : (
+                  <FlipNumberPicker
+                    value={parseInt(tempHeight, 10) || 175}
+                    min={100}
+                    max={230}
+                    step={1}
+                    unit="cm"
+                    onChange={(v) => setTempHeight(v.toString())}
+                  />
+                )}
+              </View>
+            </View>
 
-{/* Age & Gender */}
-<View style={styles.setupInputRow}>
-<View style={styles.setupInputCol}>
-<Text style={[styles.setupInputLabel, { color: themeColors.textMuted }]}>AGE</Text>
-<FlipNumberPicker
-value={parseInt(tempAge, 10) || 28}
-min={10}
-max={100}
-step={1}
-unit="yrs"
-onChange={(v) => setTempAge(v.toString())}
-/>
-</View>
+            {/* Age & Gender */}
+            <View style={styles.setupInputRow}>
+              <View style={styles.setupInputCol}>
+                <Text style={[styles.setupInputLabel, { color: themeColors.textMuted }]}>AGE</Text>
+                <FlipNumberPicker
+                  value={parseInt(tempAge, 10) || 28}
+                  min={10}
+                  max={100}
+                  step={1}
+                  unit="yrs"
+                  onChange={(v) => setTempAge(v.toString())}
+                />
+              </View>
 
-<View style={styles.setupInputCol}>
-<Text style={[styles.setupInputLabel, { color: themeColors.textMuted }]}>GENDER</Text>
-<View style={[styles.modalGenderRow, { backgroundColor: themeColors.surfaceElevated, borderColor: themeColors.border }]}>
-<TouchableOpacity
-style={[
-styles.modalGenderBtn,
-{ backgroundColor: 'transparent' },
-tempGender === 'male' && [styles.modalGenderBtnActive, { backgroundColor: themeColors.surface, borderColor: themeColors.border }],
-]}
-onPress={() => setTempGender('male')}
-activeOpacity={0.8}
->
-<Text style={[styles.modalGenderSymbol, { color: themeColors.textMuted }, tempGender === 'male' && { color: themeColors.primary, fontWeight: '900' }]}>
-♂ Male
-</Text>
-</TouchableOpacity>
+              <View style={styles.setupInputCol}>
+                <Text style={[styles.setupInputLabel, { color: themeColors.textMuted }]}>GENDER</Text>
+                <View style={[styles.modalGenderRow, { backgroundColor: themeColors.surfaceElevated, borderColor: themeColors.border }]}>
+                  <TouchableOpacity
+                    style={[
+                      styles.modalGenderBtn,
+                      { backgroundColor: 'transparent' },
+                      tempGender === 'male' && [styles.modalGenderBtnActive, { backgroundColor: themeColors.surface, borderColor: themeColors.border }],
+                    ]}
+                    onPress={() => setTempGender('male')}
+                    activeOpacity={0.8}
+                  >
+                    <Text style={[styles.modalGenderSymbol, { color: themeColors.textMuted }, tempGender === 'male' && { color: themeColors.primary, fontWeight: '900' }]}>
+                      ♂ Male
+                    </Text>
+                  </TouchableOpacity>
 
-<TouchableOpacity
-style={[
-styles.modalGenderBtn,
-{ backgroundColor: 'transparent' },
-tempGender === 'female' && [styles.modalGenderBtnActive, { backgroundColor: themeColors.surface, borderColor: themeColors.border }],
-]}
-onPress={() => setTempGender('female')}
-activeOpacity={0.8}
->
-<Text style={[styles.modalGenderSymbol, { color: themeColors.textMuted }, tempGender === 'female' && { color: themeColors.primary, fontWeight: '900' }]}>
-♀ Female
-</Text>
-</TouchableOpacity>
+                  <TouchableOpacity
+                    style={[
+                      styles.modalGenderBtn,
+                      { backgroundColor: 'transparent' },
+                      tempGender === 'female' && [styles.modalGenderBtnActive, { backgroundColor: themeColors.surface, borderColor: themeColors.border }],
+                    ]}
+                    onPress={() => setTempGender('female')}
+                    activeOpacity={0.8}
+                  >
+                    <Text style={[styles.modalGenderSymbol, { color: themeColors.textMuted }, tempGender === 'female' && { color: themeColors.primary, fontWeight: '900' }]}>
+                      ♀ Female
+                    </Text>
+                  </TouchableOpacity>
 
-<TouchableOpacity
-style={[
-styles.modalGenderBtn,
-{ backgroundColor: 'transparent' },
-tempGender === 'na' && [styles.modalGenderBtnActive, { backgroundColor: themeColors.surface, borderColor: themeColors.border }],
-]}
-onPress={() => setTempGender('na')}
-activeOpacity={0.8}
->
-<Text style={[styles.modalGenderSymbol, { color: themeColors.textMuted }, tempGender === 'na' && { color: themeColors.primary, fontWeight: '900' }]}>
-—
-</Text>
-</TouchableOpacity>
-</View>
-</View>
-</View>
+                  <TouchableOpacity
+                    style={[
+                      styles.modalGenderBtn,
+                      { backgroundColor: 'transparent' },
+                      tempGender === 'na' && [styles.modalGenderBtnActive, { backgroundColor: themeColors.surface, borderColor: themeColors.border }],
+                    ]}
+                    onPress={() => setTempGender('na')}
+                    activeOpacity={0.8}
+                  >
+                    <Text style={[styles.modalGenderSymbol, { color: themeColors.textMuted }, tempGender === 'na' && { color: themeColors.primary, fontWeight: '900' }]}>
+                      —
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            </View>
 
-{/* Passive Location Notice */}
-{!backgroundPermission && (
-<View style={[styles.passiveNoticeBox, { backgroundColor: themeColors.primaryBg, borderColor: themeColors.primary }]}>
-<Ionicons name="information-circle" size={20} color={themeColors.primary} />
-<View style={{ flex: 1 }}>
-<Text style={[styles.passiveNoticeTitle, { color: themeColors.text }]}>Passive Tracking</Text>
-<Text style={[styles.passiveNoticeDesc, { color: themeColors.textSecondary }]}>
-Set Location to "Always" in iOS Settings to record with phone locked.
-</Text>
-</View>
-<TouchableOpacity
-style={[styles.openSettingsPill, { backgroundColor: themeColors.primary }]}
-onPress={() => Linking.openSettings()}
->
-<Text style={[styles.openSettingsPillText, { color: '#ffffff' }]}>Settings</Text>
-</TouchableOpacity>
-</View>
-)}
+            {/* Passive Location Notice */}
+            {!backgroundPermission && (
+              <View style={[styles.passiveNoticeBox, { backgroundColor: themeColors.primaryBg, borderColor: themeColors.primary }]}>
+                <Ionicons name="information-circle" size={20} color={themeColors.primary} />
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.passiveNoticeTitle, { color: themeColors.text }]}>Passive Tracking</Text>
+                  <Text style={[styles.passiveNoticeDesc, { color: themeColors.textSecondary }]}>
+                    Set Location to "Always" in iOS Settings to record with phone locked.
+                  </Text>
+                </View>
+                <TouchableOpacity
+                  style={[styles.openSettingsPill, { backgroundColor: themeColors.primary }]}
+                  onPress={() => Linking.openSettings()}
+                >
+                  <Text style={[styles.openSettingsPillText, { color: '#ffffff' }]}>Settings</Text>
+                </TouchableOpacity>
+              </View>
+            )}
 
-{/* Modal Buttons */}
-<View style={styles.modalButtonsGroup}>
-<TouchableOpacity
-style={[styles.startConfirmedBtn, { backgroundColor: themeColors.primary }]}
-onPress={handleSaveCustomSetupAndStart}
-activeOpacity={0.85}
->
-<Ionicons name="checkmark-circle" size={18} color="#ffffff" />
-<Text style={[styles.startConfirmedBtnText, { color: '#ffffff' }]}>START WITH THESE SETTINGS</Text>
-</TouchableOpacity>
-
-<TouchableOpacity
-style={[styles.useDefaultsBtn, { backgroundColor: themeColors.surfaceElevated, borderColor: themeColors.border }]}
-onPress={handleUseDefaultsAndStart}
-activeOpacity={0.85}
->
-<Ionicons name="flash" size={16} color={themeColors.text} />
-<Text style={[styles.useDefaultsBtnText, { color: themeColors.text }]}>JUST USE DEFAULTS & START</Text>
-</TouchableOpacity>
-
-<TouchableOpacity
-style={styles.cancelBtn}
-onPress={() => setShowSetupModal(false)}
-activeOpacity={0.8}
->
-<Text style={[styles.cancelBtnText, { color: themeColors.textMuted }]}>Cancel</Text>
-</TouchableOpacity>
-</View>
-</View>
-</View>
-</Modal>
-
-{/* SUMMARY MODAL */}
-<Modal
-visible={!!completedSummary}
-transparent={true}
-animationType="fade"
-onRequestClose={() => setCompletedSummary(null)}
->
-<View style={styles.summaryModalBackdrop}>
-<ScrollView style={{ width: '100%', maxWidth: 380, maxHeight: '88%' }} contentContainerStyle={[styles.summaryCard, { backgroundColor: themeColors.surface, borderColor: themeColors.border }]} showsVerticalScrollIndicator={false}>
-<View style={[styles.summaryCheckmark, { backgroundColor: themeColors.surfaceElevated, borderColor: themeColors.border }]}>
-<Ionicons name="trophy" size={28} color={themeColors.primary} />
-</View>
-<Text style={[styles.summaryTitle, { color: themeColors.text }]}>Walk Complete!</Text>
-<Text style={[styles.summarySubtitle, { color: themeColors.textSecondary }]}>Great work on your route.</Text>
-
-{completedSummary && (
-<View style={styles.summaryStatsGrid}>
-<View style={[styles.summaryStatBox, { backgroundColor: themeColors.surfaceElevated, borderColor: themeColors.border }]}>
-<Text style={[styles.summaryStatVal, { color: themeColors.text }]}>
-{isUS
-? metersToMiles(completedSummary.distanceMeters).toFixed(2)
-: metersToKm(completedSummary.distanceMeters).toFixed(2)}
-</Text>
-<Text style={[styles.summaryStatUnit, { color: themeColors.textMuted }]}>{isUS ? 'Miles' : 'Kilometers'}</Text>
-</View>
-<View style={[styles.summaryStatBox, { backgroundColor: themeColors.surfaceElevated, borderColor: themeColors.border }]}>
-<Text style={[styles.summaryStatVal, { color: themeColors.text }]}>
-{formatTimer(completedSummary.durationSeconds)}
-</Text>
-<Text style={[styles.summaryStatUnit, { color: themeColors.textMuted }]}>Duration</Text>
-</View>
-<View style={[styles.summaryStatBox, { backgroundColor: themeColors.surfaceElevated, borderColor: themeColors.border }]}>
-<Text style={[styles.summaryStatVal, { color: themeColors.text }]}>{completedSummary.calories}</Text>
-<Text style={[styles.summaryStatUnit, { color: themeColors.textMuted }]}>Calories Burned</Text>
-</View>
-<View style={[styles.summaryStatBox, { backgroundColor: themeColors.surfaceElevated, borderColor: themeColors.border }]}>
-<Text style={[styles.summaryStatVal, { color: themeColors.text }]}>{completedSummary.steps}</Text>
-<Text style={[styles.summaryStatUnit, { color: themeColors.textMuted }]}>Est. Steps</Text>
-</View>
-</View>
-)}
-{savingSummaryWalk && <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center', marginVertical: 12 }}><ActivityIndicator size="small" color={themeColors.primary} /><Text style={{ color: themeColors.textMuted, fontSize: 12 }}>Saving activity and updating goals…</Text></View>}
-{!!summarySaveError && <Text style={{ color: '#f87171', fontSize: 12, marginVertical: 10 }}>{summarySaveError}</Text>}
-{savedSummaryWalk && <WalkGoalSummary walk={savedSummaryWalk} userId={savedSummaryWalk.userId} />}
-
-<TouchableOpacity
-style={[styles.summaryCloseBtn, { backgroundColor: themeColors.primary }]}
-onPress={() => setCompletedSummary(null)}
->
-<Text style={[styles.summaryCloseBtnText, { color: '#ffffff' }]}>Done</Text>
-</TouchableOpacity>
-</ScrollView>
-</View>
-</Modal>
-
-<Modal
-visible={showMapLayersModal}
-transparent={true}
-animationType="slide"
-onRequestClose={() => setShowMapLayersModal(false)}
->
-<View style={styles.bottomSheetBackdrop}>
-<TouchableOpacity
-style={StyleSheet.absoluteFill}
-activeOpacity={1}
-onPress={() => setShowMapLayersModal(false)}
-/>
-<View
-style={[
-styles.bottomSheetCard,
-{
-backgroundColor: themeColors.surface,
-borderColor: themeColors.border,
-maxHeight: '80%',
-},
-]}
->
-{/* Grab handle */}
-<View style={[styles.sheetHandle, { backgroundColor: themeColors.borderLight }]} />
-
-<View style={styles.sheetHeaderRow}>
-<View style={{ flex: 1 }}>
-<Text style={[styles.sheetTitle, { color: themeColors.text }]}>Map Themes & Buildings</Text>
-<Text style={[styles.sheetSubtitle, { color: themeColors.textSecondary }]}>
-Choose your theme & customize building labels
-</Text>
-</View>
-</View>
-
-<ScrollView
-showsVerticalScrollIndicator={true}
-nestedScrollEnabled={true}
-contentContainerStyle={{ paddingBottom: 16 }}
->
-{/* 3D Buildings & Place Labels Toggle */}
-<View style={styles.sheetSection}>
-<Text style={[styles.sheetSectionTitle, { color: themeColors.textMuted }]}>BUILDING & PLACE LABELS</Text>
-<View style={[styles.buildingsToggleCard, { backgroundColor: themeColors.surfaceElevated, borderColor: themeColors.border }]}>
-<View style={{ flex: 1, paddingRight: 8 }}>
-<View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-<Ionicons name="business" size={16} color={showsBuildings ? themeColors.primary : themeColors.textMuted} />
-<Text style={[styles.buildingsToggleTitle, { color: themeColors.text }]}>
-Building & Place Labels
-</Text>
-</View>
-<Text style={[styles.buildingsToggleSubtitle, { color: themeColors.textMuted }]}>
-{showsBuildings ? '3D buildings, place titles, and landmark labels are visible' : 'Clean label-free map with markers and routes only'}
-</Text>
-</View>
-
-{/* Switch Button */}
-<TouchableOpacity
-style={[
-styles.buildingsSwitchBtn,
-showsBuildings
-? { backgroundColor: themeColors.primary }
-: { backgroundColor: themeColors.surface, borderColor: themeColors.border, borderWidth: 1 },
-]}
-onPress={() => {
-Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
-setShowsBuildings(!showsBuildings);
-}}
-activeOpacity={0.8}
->
-<Text
-style={[
-styles.buildingsSwitchText,
-showsBuildings ? { color: '#09090b' } : { color: themeColors.textMuted },
-]}
->
-{showsBuildings ? 'ON' : 'OFF'}
-</Text>
-</TouchableOpacity>
-</View>
-</View>
-
-{/* Past Recorded Workouts Overlay Toggle */}
-<View style={styles.sheetSection}>
-<Text style={[styles.sheetSectionTitle, { color: themeColors.textMuted }]}>WORKOUT TRAILS OVERLAY</Text>
-<View style={[styles.buildingsToggleCard, { backgroundColor: themeColors.surfaceElevated, borderColor: themeColors.border }]}>
-<View style={{ flex: 1, paddingRight: 8 }}>
-<View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-<Ionicons name="footsteps" size={16} color={showPastWalks ? '#a1a1aa' : themeColors.textMuted} />
-<Text style={[styles.buildingsToggleTitle, { color: themeColors.text }]}>
-Past Workouts on Map
-</Text>
-</View>
-<Text style={[styles.buildingsToggleSubtitle, { color: themeColors.textMuted }]}>
-{showPastWalks
-? `${pastWalks.length} past workout line${pastWalks.length === 1 ? '' : 's'} visible in subtle grey on the map`
-: 'Past workout paths hidden from map'}
-</Text>
-</View>
-
-{/* Switch Button */}
-<TouchableOpacity
-style={[
-styles.buildingsSwitchBtn,
-showPastWalks
-? { backgroundColor: '#71717a' }
-: { backgroundColor: themeColors.surface, borderColor: themeColors.border, borderWidth: 1 },
-]}
-onPress={() => {
-Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
-setShowPastWalks(!showPastWalks);
-}}
-activeOpacity={0.8}
->
-<Text
-style={[
-styles.buildingsSwitchText,
-showPastWalks ? { color: '#ffffff' } : { color: themeColors.textMuted },
-]}
->
-{showPastWalks ? 'ON' : 'OFF'}
-</Text>
-</TouchableOpacity>
-</View>
-</View>
-
-{/* Live Friends Walking Trails & Cursors Overlay Toggle */}
-<View style={styles.sheetSection}>
-<Text style={[styles.sheetSectionTitle, { color: themeColors.textMuted }]}>FRIENDS LIVE OVERLAY</Text>
-<View style={[styles.buildingsToggleCard, { backgroundColor: themeColors.surfaceElevated, borderColor: themeColors.border }]}>
-<View style={{ flex: 1, paddingRight: 8 }}>
-<View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-<Ionicons name="people" size={16} color={showFriendsOnMap ? '#ec4899' : themeColors.textMuted} />
-<Text style={[styles.buildingsToggleTitle, { color: themeColors.text }]}>
-Friends on Map
-</Text>
-</View>
-<Text style={[styles.buildingsToggleSubtitle, { color: themeColors.textMuted }]}>
-{showFriendsOnMap
-? `${friendsOnMap.length} friend${friendsOnMap.length === 1 ? '' : 's'} with personalized cursor colors & trails`
-: 'Friend map cursors hidden'}
-</Text>
-</View>
-
-{/* Switch Button */}
-<TouchableOpacity
-style={[
-styles.buildingsSwitchBtn,
-showFriendsOnMap
-? { backgroundColor: '#ec4899' }
-: { backgroundColor: themeColors.surface, borderColor: themeColors.border, borderWidth: 1 },
-]}
-onPress={() => {
-Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
-setShowFriendsOnMap(!showFriendsOnMap);
-}}
-activeOpacity={0.8}
->
-<Text
-style={[
-styles.buildingsSwitchText,
-showFriendsOnMap ? { color: '#ffffff' } : { color: themeColors.textMuted },
-]}
->
-{showFriendsOnMap ? 'ON' : 'OFF'}
-</Text>
-</TouchableOpacity>
-</View>
-</View>
-
-{/* Squads on Map Overlay Toggle & Filter (Below Friends) */}
-<View style={styles.sheetSection}>
-<Text style={[styles.sheetSectionTitle, { color: themeColors.textMuted }]}>SQUADS ON MAP</Text>
-<View style={[styles.buildingsToggleCard, { backgroundColor: themeColors.surfaceElevated, borderColor: themeColors.border }]}>
-<View style={{ flex: 1, paddingRight: 8 }}>
-<View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-<Ionicons name="shield-half" size={16} color={showSquadsOnMap ? '#6366f1' : themeColors.textMuted} />
-<Text style={[styles.buildingsToggleTitle, { color: themeColors.text }]}>
-Squads on Map
-</Text>
-</View>
-<Text style={[styles.buildingsToggleSubtitle, { color: themeColors.textMuted }]}>
-{showSquadsOnMap
-? `${squadsOnMap.length} squad${squadsOnMap.length === 1 ? '' : 's'} pinned on map`
-: 'Squad map pins hidden'}
-</Text>
-</View>
-
-<TouchableOpacity
-style={[
-styles.buildingsSwitchBtn,
-showSquadsOnMap
-? { backgroundColor: '#6366f1' }
-: { backgroundColor: themeColors.surface, borderColor: themeColors.border, borderWidth: 1 },
-]}
-onPress={() => {
-Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
-setShowSquadsOnMap(!showSquadsOnMap);
-}}
-activeOpacity={0.8}
->
-<Text
-style={[
-styles.buildingsSwitchText,
-showSquadsOnMap ? { color: '#ffffff' } : { color: themeColors.textMuted },
-]}
->
-{showSquadsOnMap ? 'ON' : 'OFF'}
-</Text>
-</TouchableOpacity>
-</View>
-
-{showSquadsOnMap && squadsOnMap.length > 0 && (
-<ScrollView
-horizontal
-showsHorizontalScrollIndicator={false}
-contentContainerStyle={{ gap: 8, paddingTop: 8 }}
->
-<TouchableOpacity
-onPress={() => {
-Haptics.selectionAsync().catch(() => {});
-setSelectedSquadId(null);
-}}
-style={{
-paddingHorizontal: 12,
-paddingVertical: 7,
-borderRadius: 12,
-backgroundColor: selectedSquadId === null ? '#6366f1' : themeColors.surfaceElevated,
-borderWidth: 1,
-borderColor: selectedSquadId === null ? '#6366f1' : themeColors.border,
-}}
->
-<Text style={{ fontSize: 12, fontWeight: '700', color: selectedSquadId === null ? '#ffffff' : themeColors.text }}>
-All Squads
-</Text>
-</TouchableOpacity>
-{squadsOnMap.map((sq) => {
-const active = selectedSquadId === sq.id;
-return (
-<TouchableOpacity
-key={`sheet_squad_${sq.id}`}
-onPress={() => {
-Haptics.selectionAsync().catch(() => {});
-setSelectedSquadId(active ? null : sq.id);
-}}
-style={{
-flexDirection: 'row',
-alignItems: 'center',
-gap: 5,
-paddingHorizontal: 12,
-paddingVertical: 7,
-borderRadius: 12,
-backgroundColor: active ? '#6366f1' : themeColors.surfaceElevated,
-borderWidth: 1,
-borderColor: active ? '#6366f1' : themeColors.border,
-}}
->
-<Text style={{ fontSize: 12 }}>{sq.badgeEmoji || '⚡'}</Text>
-<Text style={{ fontSize: 12, fontWeight: '700', color: active ? '#ffffff' : themeColors.text }}>
-{sq.name}
-</Text>
-</TouchableOpacity>
-);
-})}
-</ScrollView>
-)}
-</View>
-
-{/* Map Appearance: Dark vs Light */}
-<View style={styles.sheetSection}>
-<Text style={[styles.sheetSectionTitle, { color: themeColors.textMuted }]}>MAP APPEARANCE</Text>
-<View style={styles.appearanceRow}>
-<TouchableOpacity
-style={[
-styles.appearanceOption,
-{ backgroundColor: themeColors.surfaceElevated, borderColor: themeColors.border },
-mapTheme === 'dark' && [styles.appearanceOptionActive, { borderColor: themeColors.primary, backgroundColor: `${themeColors.primary}18` }],
-]}
-onPress={() => {
-Haptics.selectionAsync().catch(() => {});
-setMapTheme('dark');
-}}
-activeOpacity={0.8}
->
-<View style={[styles.themePreviewDark, { borderColor: themeColors.border }]}>
-<View style={styles.themeRoadLineDark} />
-<View style={styles.themeRoadLineSubDark} />
-</View>
-<View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', width: '100%', marginTop: 4 }}>
-<Text style={[styles.appearanceLabel, { color: themeColors.text }, mapTheme === 'dark' && { color: themeColors.primary }]}>
-Dark Mode
-</Text>
-{mapTheme === 'dark' && <Ionicons name="checkmark-circle" size={15} color={themeColors.primary} />}
-</View>
-</TouchableOpacity>
-
-<TouchableOpacity
-style={[
-styles.appearanceOption,
-{ backgroundColor: themeColors.surfaceElevated, borderColor: themeColors.border },
-mapTheme === 'light' && [styles.appearanceOptionActive, { borderColor: themeColors.primary, backgroundColor: `${themeColors.primary}18` }],
-]}
-onPress={() => {
-Haptics.selectionAsync().catch(() => {});
-setMapTheme('light');
-}}
-activeOpacity={0.8}
->
-<View style={[styles.themePreviewLight, { borderColor: themeColors.border }]}>
-<View style={styles.themeRoadLineLight} />
-<View style={styles.themeRoadLineSubLight} />
-</View>
-<View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', width: '100%', marginTop: 4 }}>
-<Text style={[styles.appearanceLabel, { color: themeColors.text }, mapTheme === 'light' && { color: themeColors.primary }]}>
-Light Mode
-</Text>
-{mapTheme === 'light' && <Ionicons name="checkmark-circle" size={15} color={themeColors.primary} />}
-</View>
-</TouchableOpacity>
-</View>
-</View>
-
-{/* Map Type / Layer Styles Grid */}
-<View style={styles.sheetSection}>
-<Text style={[styles.sheetSectionTitle, { color: themeColors.textMuted }]}>MAP STYLES</Text>
-<View style={styles.mapTypesGrid}>
-{/* Standard Map */}
-<TouchableOpacity
-style={[
-styles.mapTypeCard,
-{ backgroundColor: themeColors.surfaceElevated, borderColor: themeColors.border },
-mapType === 'standard' && [styles.mapTypeCardActive, { borderColor: themeColors.primary, backgroundColor: `${themeColors.primary}15` }],
-]}
-onPress={() => selectMapType('standard')}
-activeOpacity={0.7}
->
-<View style={[styles.texturePreviewStandard, { borderColor: themeColors.border }]}>
-  <Svg width="100%" height="100%" viewBox="0 0 140 52">
-    <Defs>
-      <SvgGradient id="stdGrass" x1="0" y1="0" x2="0" y2="1">
-        <SvgStop offset="0" stopColor="#eaf3e6" />
-        <SvgStop offset="1" stopColor="#dce8d9" />
-      </SvgGradient>
-      <SvgGradient id="stdWater" x1="0" y1="0" x2="1" y2="1">
-        <SvgStop offset="0" stopColor="#93c5fd" />
-        <SvgStop offset="1" stopColor="#60a5fa" />
-      </SvgGradient>
-      <SvgGradient id="stdRoute" x1="0" y1="0" x2="1" y2="1">
-        <SvgStop offset="0" stopColor="#10b981" />
-        <SvgStop offset="1" stopColor="#059669" />
-      </SvgGradient>
-    </Defs>
-    {/* Land/Grass background */}
-    <Rect width="140" height="52" fill="url(#stdGrass)" />
-    {/* River / Water body */}
-    <SvgPath d="M-10,38 Q35,46 70,30 T150,22 L150,55 L-10,55 Z" fill="url(#stdWater)" />
-    {/* Urban blocks */}
-    <Rect x="8" y="6" width="22" height="15" rx="3" fill="#ffffff" opacity="0.8" stroke="#cbd5e1" strokeWidth="0.5" />
-    <Rect x="34" y="8" width="26" height="12" rx="3" fill="#ffffff" opacity="0.8" stroke="#cbd5e1" strokeWidth="0.5" />
-    <Rect x="64" y="5" width="20" height="14" rx="3" fill="#f1f5f9" opacity="0.85" stroke="#cbd5e1" strokeWidth="0.5" />
-    <Rect x="100" y="7" width="32" height="11" rx="3" fill="#ffffff" opacity="0.8" stroke="#cbd5e1" strokeWidth="0.5" />
-    {/* Clean street grid lines */}
-    <SvgPath d="M0,23 L140,23" stroke="#ffffff" strokeWidth="2.5" />
-    <SvgPath d="M30,0 L30,52" stroke="#ffffff" strokeWidth="2" />
-    <SvgPath d="M95,0 L95,52" stroke="#ffffff" strokeWidth="2" />
-    {/* Highlighted active route polyline with glow shadow */}
-    <SvgPath d="M-5,16 Q45,26 80,10 T145,15" stroke="rgba(16, 185, 129, 0.25)" strokeWidth="6" strokeLinecap="round" />
-    <SvgPath d="M-5,16 Q45,26 80,10 T145,15" stroke="url(#stdRoute)" strokeWidth="2.8" strokeLinecap="round" />
-    {/* Start & End marker dots */}
-    <SvgCircle cx="12" cy="18" r="3" fill="#10b981" stroke="#ffffff" strokeWidth="1" />
-    <SvgCircle cx="128" cy="14" r="3" fill="#ef4444" stroke="#ffffff" strokeWidth="1" />
-  </Svg>
-</View>
-<View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
-<Text style={[styles.mapTypeCardTitle, { color: themeColors.text }, mapType === 'standard' && { color: themeColors.primary }]}>
-Standard
-</Text>
-{mapType === 'standard' && <Ionicons name="checkmark-circle" size={15} color={themeColors.primary} />}
-</View>
-</TouchableOpacity>
-
-{/* Muted Standard */}
-<TouchableOpacity
-style={[
-styles.mapTypeCard,
-{ backgroundColor: themeColors.surfaceElevated, borderColor: themeColors.border },
-mapType === 'mutedStandard' && [styles.mapTypeCardActive, { borderColor: themeColors.primary, backgroundColor: `${themeColors.primary}15` }],
-]}
-onPress={() => selectMapType('mutedStandard')}
-activeOpacity={0.7}
->
-<View style={[styles.texturePreviewMuted, { borderColor: themeColors.border }]}>
-  <Svg width="100%" height="100%" viewBox="0 0 140 52">
-    <Defs>
-      <SvgGradient id="mutedLand" x1="0" y1="0" x2="0" y2="1">
-        <SvgStop offset="0" stopColor="#1e2126" />
-        <SvgStop offset="1" stopColor="#14161a" />
-      </SvgGradient>
-      <SvgGradient id="mutedCyanRoute" x1="0" y1="0" x2="1" y2="1">
-        <SvgStop offset="0" stopColor="#38bdf8" />
-        <SvgStop offset="1" stopColor="#0284c7" />
-      </SvgGradient>
-    </Defs>
-    {/* Deep low-contrast land */}
-    <Rect width="140" height="52" fill="url(#mutedLand)" />
-    {/* Subtle water */}
-    <SvgPath d="M-10,36 Q35,44 70,30 T150,22 L150,55 L-10,55 Z" fill="#0f172a" />
-    {/* Subtle blocks */}
-    <Rect x="8" y="6" width="22" height="15" rx="3" fill="#242831" stroke="#2d3340" strokeWidth="0.5" />
-    <Rect x="34" y="8" width="26" height="12" rx="3" fill="#20242c" stroke="#2d3340" strokeWidth="0.5" />
-    <Rect x="64" y="5" width="20" height="14" rx="3" fill="#242831" stroke="#2d3340" strokeWidth="0.5" />
-    <Rect x="100" y="7" width="32" height="11" rx="3" fill="#20242c" stroke="#2d3340" strokeWidth="0.5" />
-    {/* Soft roads */}
-    <SvgPath d="M0,23 L140,23" stroke="#2d3340" strokeWidth="2" />
-    <SvgPath d="M30,0 L30,52" stroke="#282e3a" strokeWidth="2" />
-    <SvgPath d="M95,0 L95,52" stroke="#282e3a" strokeWidth="2" />
-    {/* Sleek neon cyan route with glow */}
-    <SvgPath d="M-5,16 Q45,26 80,10 T145,15" stroke="rgba(56, 189, 248, 0.28)" strokeWidth="6" strokeLinecap="round" />
-    <SvgPath d="M-5,16 Q45,26 80,10 T145,15" stroke="url(#mutedCyanRoute)" strokeWidth="2.8" strokeLinecap="round" />
-    <SvgCircle cx="12" cy="18" r="3" fill="#38bdf8" stroke="#ffffff" strokeWidth="1" />
-    <SvgCircle cx="128" cy="14" r="3" fill="#ec4899" stroke="#ffffff" strokeWidth="1" />
-  </Svg>
-</View>
-<View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
-<Text style={[styles.mapTypeCardTitle, { color: themeColors.text }, mapType === 'mutedStandard' && { color: themeColors.primary }]}>
-Muted
-</Text>
-{mapType === 'mutedStandard' && <Ionicons name="checkmark-circle" size={15} color={themeColors.primary} />}
-</View>
-</TouchableOpacity>
-
-{/* Satellite Map */}
-<TouchableOpacity
-  style={[
-    styles.mapTypeCard,
-    { backgroundColor: themeColors.surfaceElevated, borderColor: themeColors.border },
-    (mapType === 'satellite' || mapType === 'hybrid') && [styles.mapTypeCardActive, { borderColor: themeColors.primary, backgroundColor: `${themeColors.primary}15` }],
-  ]}
-  onPress={() => selectMapType('satellite')}
-  activeOpacity={0.7}
->
-  <View style={[styles.texturePreviewSatellite, { borderColor: themeColors.border }]}>
-    <Svg width="100%" height="100%" viewBox="0 0 140 52">
-      <Defs>
-        <SvgGradient id="satForest" x1="0" y1="0" x2="1" y2="1">
-          <SvgStop offset="0" stopColor="#1a331a" />
-          <SvgStop offset="0.5" stopColor="#112212" />
-          <SvgStop offset="1" stopColor="#0c180d" />
-        </SvgGradient>
-        <SvgGradient id="satCoast" x1="0" y1="0" x2="0" y2="1">
-          <SvgStop offset="0" stopColor="#072a42" />
-          <SvgStop offset="1" stopColor="#02141f" />
-        </SvgGradient>
-        <SvgGradient id="satAmberRoute" x1="0" y1="0" x2="1" y2="1">
-          <SvgStop offset="0" stopColor="#f59e0b" />
-          <SvgStop offset="1" stopColor="#d97706" />
-        </SvgGradient>
-      </Defs>
-      {/* Aerial Terrain Texture */}
-      <Rect width="140" height="52" fill="url(#satForest)" />
-      {/* Shoreline / Deep Coastal Water */}
-      <SvgPath d="M-10,32 Q30,42 65,28 T150,18 L150,55 L-10,55 Z" fill="url(#satCoast)" />
-      {/* Sandy reef / shallow water rim */}
-      <SvgPath d="M-10,32 Q30,42 65,28 T150,18" stroke="#0ea5e9" strokeWidth="2.5" opacity="0.45" fill="none" />
-      {/* Dense canopy textures */}
-      <SvgCircle cx="16" cy="14" r="10" fill="#2d5a27" opacity="0.75" />
-      <SvgCircle cx="44" cy="10" r="12" fill="#264e22" opacity="0.8" />
-      <SvgCircle cx="80" cy="8" r="9" fill="#2d5a27" opacity="0.7" />
-      {/* Runway / Secondary roads */}
-      <SvgPath d="M25,0 L35,52" stroke="rgba(255,255,255,0.22)" strokeWidth="1.5" />
-      {/* Glowing GPS Trail Polyline */}
-      <SvgPath d="M-5,16 Q45,26 80,10 T145,15" stroke="rgba(245, 158, 11, 0.35)" strokeWidth="6" strokeLinecap="round" />
-      <SvgPath d="M-5,16 Q45,26 80,10 T145,15" stroke="url(#satAmberRoute)" strokeWidth="2.8" strokeLinecap="round" />
-      <SvgCircle cx="12" cy="18" r="3" fill="#f59e0b" stroke="#ffffff" strokeWidth="1" />
-      <SvgCircle cx="128" cy="14" r="3" fill="#ef4444" stroke="#ffffff" strokeWidth="1" />
-    </Svg>
-  </View>
-  <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
-    <Text style={[styles.mapTypeCardTitle, { color: themeColors.text }, (mapType === 'satellite' || mapType === 'hybrid') && { color: themeColors.primary }]}>
-      Satellite
-    </Text>
-    {(mapType === 'satellite' || mapType === 'hybrid') && <Ionicons name="checkmark-circle" size={15} color={themeColors.primary} />}
-  </View>
-</TouchableOpacity>
-</View>
-</View>
-
-{/* Done button */}
-<TouchableOpacity
-style={[styles.sheetDoneButton, { backgroundColor: themeColors.primary }]}
-onPress={() => setShowMapLayersModal(false)}
->
-<Text style={[styles.sheetDoneButtonText, { color: themeColors.isDark ? '#09090b' : '#ffffff' }]}>
-Done
-</Text>
-</TouchableOpacity>
-</ScrollView>
-</View>
-</View>
-</Modal>
-
-{/* ROUTE BUILDER & EXPLORER MODAL (Bottom half-sheet allowing live map visibility of all 3 routes above) */}
-<Modal
-visible={showRouteModal}
-transparent={true}
-animationType="slide"
-onRequestClose={() => setShowRouteModal(false)}
->
-<View style={styles.routeModalBackdrop} pointerEvents="box-none">
-{/* Tap outside the bottom card to dismiss */}
-<TouchableOpacity
-style={styles.routeModalTopDismissArea}
-activeOpacity={1}
-onPress={() => setShowRouteModal(false)}
-/>
-
-<View
-style={[
-styles.routeModalBottomCard,
-{ backgroundColor: themeColors.surface },
-]}
->
-<View style={[styles.sheetHandle, { backgroundColor: themeColors.borderLight }]} />
-
-<View style={styles.sheetHeaderRow}>
-<View style={{ flex: 1 }}>
-<Text style={[styles.sheetTitle, { color: themeColors.text }]}>Explore Suggested Routes</Text>
-</View>
-</View>
-
-<ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 24 }}>
-{/* Route Type Segmented Control: Circuit Loop vs One-Way Outbound */}
-<View style={styles.sheetSection}>
-<View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-<Text style={[styles.sheetSectionTitle, { color: themeColors.textMuted, marginBottom: 0 }]}>
-ROUTE TYPE
-</Text>
-<Text style={{ fontSize: 11, fontWeight: '700', color: themeColors.primary }}>
-{routeType === 'loop' ? 'Start & End at Same Point' : 'Point-to-Point Destination'}
-</Text>
-</View>
-<View style={[styles.pillToggleTrack, { backgroundColor: themeColors.surfaceElevated, borderColor: themeColors.border }]}>
-<TouchableOpacity
-style={[
-styles.pillToggleOption,
-{
-backgroundColor: routeType === 'loop' ? themeColors.primary : 'transparent',
-},
-]}
-onPress={() => {
-Haptics.selectionAsync().catch(() => {});
-setRouteType('loop');
-handleGenerateRoutes(targetDistanceKm, targetElevation, routeOptions, 'loop');
-}}
-activeOpacity={0.85}
->
-<Ionicons
-name="repeat-outline"
-size={14}
-color={routeType === 'loop' ? (themeColors.isDark ? '#000000' : '#ffffff') : themeColors.textMuted}
-style={{ marginRight: 5 }}
-/>
-<Text
-style={{
-fontSize: 13,
-fontWeight: routeType === 'loop' ? '800' : '600',
-fontFamily: BRAND_ROUNDED_FONT_EXTRA,
-color: routeType === 'loop' ? (themeColors.isDark ? '#000000' : '#ffffff') : themeColors.textMuted,
-}}
->
-Loop Circuit
-</Text>
-</TouchableOpacity>
-
-<TouchableOpacity
-style={[
-styles.pillToggleOption,
-{
-backgroundColor: routeType === 'oneway' ? themeColors.primary : 'transparent',
-},
-]}
-onPress={() => {
-Haptics.selectionAsync().catch(() => {});
-setRouteType('oneway');
-handleGenerateRoutes(targetDistanceKm, targetElevation, routeOptions, 'oneway');
-}}
-activeOpacity={0.85}
->
-<Ionicons
-name="arrow-forward-outline"
-size={14}
-color={routeType === 'oneway' ? (themeColors.isDark ? '#000000' : '#ffffff') : themeColors.textMuted}
-style={{ marginRight: 5 }}
-/>
-<Text
-style={{
-fontSize: 13,
-fontWeight: routeType === 'oneway' ? '800' : '600',
-fontFamily: BRAND_ROUNDED_FONT_EXTRA,
-color: routeType === 'oneway' ? (themeColors.isDark ? '#000000' : '#ffffff') : themeColors.textMuted,
-}}
->
-One-Way
-</Text>
-</TouchableOpacity>
-</View>
-</View>
-
-{/* Target Distance Slider: 1,000 ft to Marathon with Logarithmic Scaling */}
-<View style={styles.sheetSection}>
-<View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-<Text style={[styles.sheetSectionTitle, { color: themeColors.textMuted, marginBottom: 0 }]}>TARGET DISTANCE</Text>
-<Text style={{ fontSize: 13, fontWeight: '800', fontFamily: BRAND_ROUNDED_FONT_EXTRA, color: themeColors.primary }}>
-{isUS
-? targetDistanceKm * 0.621371 < 0.25
-? `${Math.round(targetDistanceKm * 3280.84 / 50) * 50} ft`
-: Math.abs(targetDistanceKm * 0.621371 - 26.2) < 0.3
-? '26.2 mi (Marathon)'
-: `${(targetDistanceKm * 0.621371).toFixed(1)} mi`
-: targetDistanceKm < 1.0
-? `${Math.round((targetDistanceKm * 1000) / 50) * 50} m`
-: Math.abs(targetDistanceKm - 42.2) < 0.4
-? '42.2 km (Marathon)'
-: `${targetDistanceKm.toFixed(1)} km`}
-</Text>
-</View>
-<DistanceSlider
-value={targetDistanceKm}
-min={0.3048}
-max={42.195}
-isUS={isUS}
-primaryColor={themeColors.primary}
-surfaceColor={themeColors.surfaceElevated}
-borderColor={themeColors.border}
-onChange={(val) => setTargetDistanceKm(val)}
-onCommit={(val) => handleGenerateRoutes(val, targetElevation, routeOptions, routeType)}
-/>
-</View>
-
-{/* Elevation Profile Selector: Flat / Rolling / Hilly */}
-<View style={styles.sheetSection}>
-<View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-<Text style={[styles.sheetSectionTitle, { color: themeColors.textMuted, marginBottom: 0 }]}>
-ELEVATION PROFILE
-</Text>
-<Text style={{ fontSize: 11, fontWeight: '700', color: themeColors.primary }}>
-{targetElevation === 'flat' ? 'Level Grade / Valleys' : targetElevation === 'rolling' ? 'Moderate Incline' : targetElevation === 'hilly' ? 'Hillside & Ridge Trails' : 'No Preference'}
-</Text>
-</View>
-<View style={{ flexDirection: 'row', gap: 8 }}>
-{[
-{ key: 'flat', label: 'Flat', icon: 'remove-outline' },
-{ key: 'rolling', label: 'Rolling', icon: 'trending-up-outline' },
-{ key: 'hilly', label: 'Hilly', icon: 'trail-sign-outline' },
-].map((item) => {
-const isActive = targetElevation === item.key;
-const activeFg = themeColors.isDark ? '#000000' : '#ffffff';
-return (
-<TouchableOpacity
-key={item.key}
-style={{
-flex: 1,
-flexDirection: 'row',
-alignItems: 'center',
-justifyContent: 'center',
-gap: 6,
-paddingVertical: 9,
-borderRadius: 12,
-borderWidth: 1,
-borderColor: isActive ? themeColors.primary : themeColors.border,
-backgroundColor: isActive ? themeColors.primary : themeColors.surfaceElevated,
-}}
-onPress={() => {
-Haptics.selectionAsync().catch(() => {});
-const newElev = isActive ? null : (item.key as 'flat' | 'rolling' | 'hilly');
-setTargetElevation(newElev);
-handleGenerateRoutes(targetDistanceKm, newElev, routeOptions, routeType);
-}}
-activeOpacity={0.8}
->
-<Ionicons
-name={item.icon as any}
-size={15}
-color={isActive ? activeFg : themeColors.textSecondary}
-/>
-<Text
-style={{
-fontSize: 12,
-fontWeight: isActive ? '800' : '600',
-fontFamily: BRAND_ROUNDED_FONT_EXTRA,
-color: isActive ? activeFg : themeColors.text,
-}}
->
-{item.label}
-</Text>
-</TouchableOpacity>
-);
-})}
-</View>
-</View>
-
-{/* Route Preferences & Road Controls (Matching the Searching Modal design) */}
-<View style={styles.sheetSection}>
-<View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-<Text style={[styles.sheetSectionTitle, { color: themeColors.textMuted, marginBottom: 0 }]}>
-ROUTING PREFERENCES
-</Text>
-<Text style={{ fontSize: 11, fontWeight: '700', color: themeColors.primary }}>
-{(!preferParks && !avoidTrafficLights && !avoidBusyRoads) ? 'Fastest Path Default' : 'Custom Preferences'}
-</Text>
-</View>
-
-      <View style={{ flexDirection: 'row', gap: 8 }}>
-        {[
-          { key: 'quiet', label: 'Quiet Roads', icon: 'shield-checkmark-outline', isActive: avoidBusyRoads },
-          { key: 'parks', label: 'Parks & Trails', icon: 'leaf-outline', isActive: preferParks },
-          { key: 'lights', label: 'Avoid Lights', icon: 'stopwatch-outline', isActive: avoidTrafficLights },
-          ...(activityType === 'cycle'
-            ? [{ key: 'lanes', label: 'Bike Lanes', icon: 'bicycle-outline', isActive: preferCyclingLanes }]
-            : []),
-        ].map((item) => {
-          const isActive = item.isActive;
-          const activeFg = themeColors.isDark ? '#000000' : '#ffffff';
-          return (
-            <TouchableOpacity
-              key={item.key}
-              style={{
-                flex: 1,
-                flexDirection: 'row',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: 6,
-                paddingVertical: 9,
-                borderRadius: 12,
-                borderWidth: 1,
-                borderColor: isActive ? themeColors.primary : themeColors.border,
-                backgroundColor: isActive ? themeColors.primary : themeColors.surfaceElevated,
-              }}
-              onPress={() => {
-                Haptics.selectionAsync().catch(() => {});
-                let nextBusy = avoidBusyRoads;
-                let nextParks = preferParks;
-                let nextLights = avoidTrafficLights;
-                let nextLanes = preferCyclingLanes;
-
-                if (item.key === 'quiet') {
-                  nextBusy = !avoidBusyRoads;
-                  setAvoidBusyRoads(nextBusy);
-                } else if (item.key === 'parks') {
-                  nextParks = !preferParks;
-                  setPreferParks(nextParks);
-                } else if (item.key === 'lights') {
-                  nextLights = !avoidTrafficLights;
-                  setAvoidTrafficLights(nextLights);
-                } else if (item.key === 'lanes') {
-                  nextLanes = !preferCyclingLanes;
-                  setPreferCyclingLanes(nextLanes);
-                }
-
-                // If none are picked, default to fastest path
-                const nonePicked = !nextBusy && !nextParks && !nextLights && (!nextLanes || activityType !== 'cycle');
-                setPreferFastest(nonePicked);
-
-                const updatedOpts: RouteOptions = {
-                  ...routeOptions,
-                  avoidBusyRoads: nextBusy,
-                  preferParks: nextParks,
-                  avoidTrafficLights: nextLights,
-                  preferCyclingLanes: nextLanes,
-                  preferFastest: nonePicked,
-                };
-                handleGenerateRoutes(targetDistanceKm, targetElevation, updatedOpts, routeType);
-              }}
-              activeOpacity={0.8}
-            >
-              <Ionicons
-                name={item.icon as any}
-                size={15}
-                color={isActive ? activeFg : themeColors.textSecondary}
-              />
-              <Text
-                numberOfLines={1}
-                style={{
-                  fontSize: 12,
-                  fontWeight: isActive ? '800' : '600',
-                  fontFamily: BRAND_ROUNDED_FONT_EXTRA,
-                  color: isActive ? activeFg : themeColors.text,
-                }}
+            {/* Modal Buttons */}
+            <View style={styles.modalButtonsGroup}>
+              <TouchableOpacity
+                style={[styles.startConfirmedBtn, { backgroundColor: themeColors.primary }]}
+                onPress={handleSaveCustomSetupAndStart}
+                activeOpacity={0.85}
               >
-                {item.label}
-              </Text>
+                <Ionicons name="checkmark-circle" size={18} color="#ffffff" />
+                <Text style={[styles.startConfirmedBtnText, { color: '#ffffff' }]}>START WITH THESE SETTINGS</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.useDefaultsBtn, { backgroundColor: themeColors.surfaceElevated, borderColor: themeColors.border }]}
+                onPress={handleUseDefaultsAndStart}
+                activeOpacity={0.85}
+              >
+                <Ionicons name="flash" size={16} color={themeColors.text} />
+                <Text style={[styles.useDefaultsBtnText, { color: themeColors.text }]}>JUST USE DEFAULTS & START</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.cancelBtn}
+                onPress={() => setShowSetupModal(false)}
+                activeOpacity={0.8}
+              >
+                <Text style={[styles.cancelBtnText, { color: themeColors.textMuted }]}>Cancel</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* SUMMARY MODAL */}
+      <Modal
+        visible={!!completedSummary}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setCompletedSummary(null)}
+      >
+        <View style={styles.summaryModalBackdrop}>
+          <View style={[styles.summaryCard, { backgroundColor: themeColors.surface, borderColor: themeColors.border }]}>
+            <View style={[styles.summaryCheckmark, { backgroundColor: themeColors.surfaceElevated, borderColor: themeColors.border }]}>
+              <Ionicons name="trophy" size={28} color={themeColors.primary} />
+            </View>
+            <Text style={[styles.summaryTitle, { color: themeColors.text }]}>Walk Complete!</Text>
+            <Text style={[styles.summarySubtitle, { color: themeColors.textSecondary }]}>Great work on your route.</Text>
+
+            {completedSummary && (
+              <View style={styles.summaryStatsGrid}>
+                <View style={[styles.summaryStatBox, { backgroundColor: themeColors.surfaceElevated, borderColor: themeColors.border }]}>
+                  <Text style={[styles.summaryStatVal, { color: themeColors.text }]}>
+                    {isUS
+                      ? metersToMiles(completedSummary.distanceMeters).toFixed(2)
+                      : metersToKm(completedSummary.distanceMeters).toFixed(2)}
+                  </Text>
+                  <Text style={[styles.summaryStatUnit, { color: themeColors.textMuted }]}>{isUS ? 'Miles' : 'Kilometers'}</Text>
+                </View>
+                <View style={[styles.summaryStatBox, { backgroundColor: themeColors.surfaceElevated, borderColor: themeColors.border }]}>
+                  <Text style={[styles.summaryStatVal, { color: themeColors.text }]}>
+                    {formatTimer(completedSummary.durationSeconds)}
+                  </Text>
+                  <Text style={[styles.summaryStatUnit, { color: themeColors.textMuted }]}>Duration</Text>
+                </View>
+                <View style={[styles.summaryStatBox, { backgroundColor: themeColors.surfaceElevated, borderColor: themeColors.border }]}>
+                  <Text style={[styles.summaryStatVal, { color: themeColors.text }]}>{completedSummary.calories}</Text>
+                  <Text style={[styles.summaryStatUnit, { color: themeColors.textMuted }]}>Calories Burned</Text>
+                </View>
+                <View style={[styles.summaryStatBox, { backgroundColor: themeColors.surfaceElevated, borderColor: themeColors.border }]}>
+                  <Text style={[styles.summaryStatVal, { color: themeColors.text }]}>{completedSummary.steps}</Text>
+                  <Text style={[styles.summaryStatUnit, { color: themeColors.textMuted }]}>Est. Steps</Text>
+                </View>
+              </View>
+            )}
+
+            <TouchableOpacity
+              style={[styles.summaryCloseBtn, { backgroundColor: themeColors.primary }]}
+              onPress={() => setCompletedSummary(null)}
+            >
+              <Text style={[styles.summaryCloseBtnText, { color: '#ffffff' }]}>Save to History</Text>
             </TouchableOpacity>
-          );
-        })}
-      </View>
+          </View>
+        </View>
+      </Modal>
+
+      <Modal
+        visible={showMapLayersModal}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={() => setShowMapLayersModal(false)}
+      >
+        <View style={styles.bottomSheetBackdrop}>
+          <TouchableOpacity
+            style={StyleSheet.absoluteFill}
+            activeOpacity={1}
+            onPress={() => setShowMapLayersModal(false)}
+          />
+          <View
+            style={[
+              styles.bottomSheetCard,
+              {
+                backgroundColor: themeColors.surface,
+                borderColor: themeColors.border,
+                maxHeight: '80%',
+              },
+            ]}
+          >
+            {/* Grab handle */}
+            <View style={[styles.sheetHandle, { backgroundColor: themeColors.borderLight }]} />
+
+            <View style={styles.sheetHeaderRow}>
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.sheetTitle, { color: themeColors.text }]}>Map Themes & Buildings</Text>
+                <Text style={[styles.sheetSubtitle, { color: themeColors.textSecondary }]}>
+                  Choose your theme & customize building labels
+                </Text>
+              </View>
+            </View>
+
+            <ScrollView
+              showsVerticalScrollIndicator={true}
+              nestedScrollEnabled={true}
+              contentContainerStyle={{ paddingBottom: 16 }}
+            >
+              {/* 3D Buildings & Place Labels Toggle */}
+              <View style={styles.sheetSection}>
+                <Text style={[styles.sheetSectionTitle, { color: themeColors.textMuted }]}>BUILDING & PLACE LABELS</Text>
+                <View style={[styles.buildingsToggleCard, { backgroundColor: themeColors.surfaceElevated, borderColor: themeColors.border }]}>
+                  <View style={{ flex: 1, paddingRight: 8 }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                      <Ionicons name="business" size={16} color={showsBuildings ? themeColors.primary : themeColors.textMuted} />
+                      <Text style={[styles.buildingsToggleTitle, { color: themeColors.text }]}>
+                        Building & Place Labels
+                      </Text>
+                    </View>
+                    <Text style={[styles.buildingsToggleSubtitle, { color: themeColors.textMuted }]}>
+                      {showsBuildings ? '3D buildings, place titles, and landmark labels are visible' : 'Clean label-free map with markers and routes only'}
+                    </Text>
+                  </View>
+
+                  {/* Switch Button */}
+                  <TouchableOpacity
+                    style={[
+                      styles.buildingsSwitchBtn,
+                      showsBuildings
+                        ? { backgroundColor: themeColors.primary }
+                        : { backgroundColor: themeColors.surface, borderColor: themeColors.border, borderWidth: 1 },
+                    ]}
+                    onPress={() => {
+                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => { });
+                      setShowsBuildings(!showsBuildings);
+                    }}
+                    activeOpacity={0.8}
+                  >
+                    <Text
+                      style={[
+                        styles.buildingsSwitchText,
+                        showsBuildings ? { color: '#09090b' } : { color: themeColors.textMuted },
+                      ]}
+                    >
+                      {showsBuildings ? 'ON' : 'OFF'}
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+
+              {/* Past Recorded Workouts Overlay Toggle */}
+              <View style={styles.sheetSection}>
+                <Text style={[styles.sheetSectionTitle, { color: themeColors.textMuted }]}>WORKOUT TRAILS OVERLAY</Text>
+                <View style={[styles.buildingsToggleCard, { backgroundColor: themeColors.surfaceElevated, borderColor: themeColors.border }]}>
+                  <View style={{ flex: 1, paddingRight: 8 }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                      <Ionicons name="footsteps" size={16} color={showPastWalks ? '#a1a1aa' : themeColors.textMuted} />
+                      <Text style={[styles.buildingsToggleTitle, { color: themeColors.text }]}>
+                        Past Workouts on Map
+                      </Text>
+                    </View>
+                    <Text style={[styles.buildingsToggleSubtitle, { color: themeColors.textMuted }]}>
+                      {showPastWalks
+                        ? `${pastWalks.length} past workout line${pastWalks.length === 1 ? '' : 's'} visible in subtle grey on the map`
+                        : 'Past workout paths hidden from map'}
+                    </Text>
+                  </View>
+
+                  {/* Switch Button */}
+                  <TouchableOpacity
+                    style={[
+                      styles.buildingsSwitchBtn,
+                      showPastWalks
+                        ? { backgroundColor: '#71717a' }
+                        : { backgroundColor: themeColors.surface, borderColor: themeColors.border, borderWidth: 1 },
+                    ]}
+                    onPress={() => {
+                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => { });
+                      setShowPastWalks(!showPastWalks);
+                    }}
+                    activeOpacity={0.8}
+                  >
+                    <Text
+                      style={[
+                        styles.buildingsSwitchText,
+                        showPastWalks ? { color: '#ffffff' } : { color: themeColors.textMuted },
+                      ]}
+                    >
+                      {showPastWalks ? 'ON' : 'OFF'}
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+
+              {/* Live Friends Walking Trails & Cursors Overlay Toggle */}
+              <View style={styles.sheetSection}>
+                <Text style={[styles.sheetSectionTitle, { color: themeColors.textMuted }]}>FRIENDS LIVE OVERLAY</Text>
+                <View style={[styles.buildingsToggleCard, { backgroundColor: themeColors.surfaceElevated, borderColor: themeColors.border }]}>
+                  <View style={{ flex: 1, paddingRight: 8 }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                      <Ionicons name="people" size={16} color={showFriendsOnMap ? '#ec4899' : themeColors.textMuted} />
+                      <Text style={[styles.buildingsToggleTitle, { color: themeColors.text }]}>
+                        Friends on Map
+                      </Text>
+                    </View>
+                    <Text style={[styles.buildingsToggleSubtitle, { color: themeColors.textMuted }]}>
+                      {showFriendsOnMap
+                        ? `${friendsOnMap.length} friend${friendsOnMap.length === 1 ? '' : 's'} with personalized cursor colors & trails`
+                        : 'Friend map cursors hidden'}
+                    </Text>
+                  </View>
+
+                  {/* Switch Button */}
+                  <TouchableOpacity
+                    style={[
+                      styles.buildingsSwitchBtn,
+                      showFriendsOnMap
+                        ? { backgroundColor: '#ec4899' }
+                        : { backgroundColor: themeColors.surface, borderColor: themeColors.border, borderWidth: 1 },
+                    ]}
+                    onPress={() => {
+                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => { });
+                      setShowFriendsOnMap(!showFriendsOnMap);
+                    }}
+                    activeOpacity={0.8}
+                  >
+                    <Text
+                      style={[
+                        styles.buildingsSwitchText,
+                        showFriendsOnMap ? { color: '#ffffff' } : { color: themeColors.textMuted },
+                      ]}
+                    >
+                      {showFriendsOnMap ? 'ON' : 'OFF'}
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+
+              {/* Squads on Map Overlay Toggle & Filter (Below Friends) */}
+              <View style={styles.sheetSection}>
+                <Text style={[styles.sheetSectionTitle, { color: themeColors.textMuted }]}>SQUADS ON MAP</Text>
+                <View style={[styles.buildingsToggleCard, { backgroundColor: themeColors.surfaceElevated, borderColor: themeColors.border }]}>
+                  <View style={{ flex: 1, paddingRight: 8 }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                      <Ionicons name="shield-half" size={16} color={showSquadsOnMap ? '#6366f1' : themeColors.textMuted} />
+                      <Text style={[styles.buildingsToggleTitle, { color: themeColors.text }]}>
+                        Squads on Map
+                      </Text>
+                    </View>
+                    <Text style={[styles.buildingsToggleSubtitle, { color: themeColors.textMuted }]}>
+                      {showSquadsOnMap
+                        ? `${squadsOnMap.length} squad${squadsOnMap.length === 1 ? '' : 's'} pinned on map`
+                        : 'Squad map pins hidden'}
+                    </Text>
+                  </View>
+
+                  <TouchableOpacity
+                    style={[
+                      styles.buildingsSwitchBtn,
+                      showSquadsOnMap
+                        ? { backgroundColor: '#6366f1' }
+                        : { backgroundColor: themeColors.surface, borderColor: themeColors.border, borderWidth: 1 },
+                    ]}
+                    onPress={() => {
+                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => { });
+                      setShowSquadsOnMap(!showSquadsOnMap);
+                    }}
+                    activeOpacity={0.8}
+                  >
+                    <Text
+                      style={[
+                        styles.buildingsSwitchText,
+                        showSquadsOnMap ? { color: '#ffffff' } : { color: themeColors.textMuted },
+                      ]}
+                    >
+                      {showSquadsOnMap ? 'ON' : 'OFF'}
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+
+                {showSquadsOnMap && squadsOnMap.length > 0 && (
+                  <ScrollView
+                    horizontal
+                    showsHorizontalScrollIndicator={false}
+                    contentContainerStyle={{ gap: 8, paddingTop: 8 }}
+                  >
+                    <TouchableOpacity
+                      onPress={() => {
+                        Haptics.selectionAsync().catch(() => { });
+                        setSelectedSquadId(null);
+                      }}
+                      style={{
+                        paddingHorizontal: 12,
+                        paddingVertical: 7,
+                        borderRadius: 12,
+                        backgroundColor: selectedSquadId === null ? '#6366f1' : themeColors.surfaceElevated,
+                        borderWidth: 1,
+                        borderColor: selectedSquadId === null ? '#6366f1' : themeColors.border,
+                      }}
+                    >
+                      <Text style={{ fontSize: 12, fontWeight: '700', color: selectedSquadId === null ? '#ffffff' : themeColors.text }}>
+                        All Squads
+                      </Text>
+                    </TouchableOpacity>
+                    {squadsOnMap.map((sq) => {
+                      const active = selectedSquadId === sq.id;
+                      return (
+                        <TouchableOpacity
+                          key={`sheet_squad_${sq.id}`}
+                          onPress={() => {
+                            Haptics.selectionAsync().catch(() => { });
+                            setSelectedSquadId(active ? null : sq.id);
+                          }}
+                          style={{
+                            flexDirection: 'row',
+                            alignItems: 'center',
+                            gap: 5,
+                            paddingHorizontal: 12,
+                            paddingVertical: 7,
+                            borderRadius: 12,
+                            backgroundColor: active ? '#6366f1' : themeColors.surfaceElevated,
+                            borderWidth: 1,
+                            borderColor: active ? '#6366f1' : themeColors.border,
+                          }}
+                        >
+                          <Text style={{ fontSize: 12 }}>{sq.badgeEmoji || '⚡'}</Text>
+                          <Text style={{ fontSize: 12, fontWeight: '700', color: active ? '#ffffff' : themeColors.text }}>
+                            {sq.name}
+                          </Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </ScrollView>
+                )}
+              </View>
+
+              {/* Map Appearance: Dark vs Light */}
+              <View style={styles.sheetSection}>
+                <Text style={[styles.sheetSectionTitle, { color: themeColors.textMuted }]}>MAP APPEARANCE</Text>
+                <View style={styles.appearanceRow}>
+                  <TouchableOpacity
+                    style={[
+                      styles.appearanceOption,
+                      { backgroundColor: themeColors.surfaceElevated, borderColor: themeColors.border },
+                      mapTheme === 'dark' && [styles.appearanceOptionActive, { borderColor: themeColors.primary, backgroundColor: `${themeColors.primary}18` }],
+                    ]}
+                    onPress={() => {
+                      Haptics.selectionAsync().catch(() => { });
+                      setMapTheme('dark');
+                    }}
+                    activeOpacity={0.8}
+                  >
+                    <View style={[styles.themePreviewDark, { borderColor: themeColors.border }]}>
+                      <View style={styles.themeRoadLineDark} />
+                      <View style={styles.themeRoadLineSubDark} />
+                    </View>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', width: '100%', marginTop: 4 }}>
+                      <Text style={[styles.appearanceLabel, { color: themeColors.text }, mapTheme === 'dark' && { color: themeColors.primary }]}>
+                        Dark Mode
+                      </Text>
+                      {mapTheme === 'dark' && <Ionicons name="checkmark-circle" size={15} color={themeColors.primary} />}
+                    </View>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={[
+                      styles.appearanceOption,
+                      { backgroundColor: themeColors.surfaceElevated, borderColor: themeColors.border },
+                      mapTheme === 'light' && [styles.appearanceOptionActive, { borderColor: themeColors.primary, backgroundColor: `${themeColors.primary}18` }],
+                    ]}
+                    onPress={() => {
+                      Haptics.selectionAsync().catch(() => { });
+                      setMapTheme('light');
+                    }}
+                    activeOpacity={0.8}
+                  >
+                    <View style={[styles.themePreviewLight, { borderColor: themeColors.border }]}>
+                      <View style={styles.themeRoadLineLight} />
+                      <View style={styles.themeRoadLineSubLight} />
+                    </View>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', width: '100%', marginTop: 4 }}>
+                      <Text style={[styles.appearanceLabel, { color: themeColors.text }, mapTheme === 'light' && { color: themeColors.primary }]}>
+                        Light Mode
+                      </Text>
+                      {mapTheme === 'light' && <Ionicons name="checkmark-circle" size={15} color={themeColors.primary} />}
+                    </View>
+                  </TouchableOpacity>
+                </View>
+              </View>
+
+              {/* Map Type / Layer Styles Grid */}
+              <View style={styles.sheetSection}>
+                <Text style={[styles.sheetSectionTitle, { color: themeColors.textMuted }]}>MAP STYLES</Text>
+                <View style={styles.mapTypesGrid}>
+                  {/* Standard Map */}
+                  <TouchableOpacity
+                    style={[
+                      styles.mapTypeCard,
+                      { backgroundColor: themeColors.surfaceElevated, borderColor: themeColors.border },
+                      mapType === 'standard' && [styles.mapTypeCardActive, { borderColor: themeColors.primary, backgroundColor: `${themeColors.primary}15` }],
+                    ]}
+                    onPress={() => selectMapType('standard')}
+                    activeOpacity={0.7}
+                  >
+                    <View style={[styles.texturePreviewStandard, { borderColor: themeColors.border }]}>
+                      <Svg width="100%" height="100%" viewBox="0 0 140 52">
+                        <Defs>
+                          <SvgGradient id="stdGrass" x1="0" y1="0" x2="0" y2="1">
+                            <SvgStop offset="0" stopColor="#eaf3e6" />
+                            <SvgStop offset="1" stopColor="#dce8d9" />
+                          </SvgGradient>
+                          <SvgGradient id="stdWater" x1="0" y1="0" x2="1" y2="1">
+                            <SvgStop offset="0" stopColor="#93c5fd" />
+                            <SvgStop offset="1" stopColor="#60a5fa" />
+                          </SvgGradient>
+                          <SvgGradient id="stdRoute" x1="0" y1="0" x2="1" y2="1">
+                            <SvgStop offset="0" stopColor="#10b981" />
+                            <SvgStop offset="1" stopColor="#059669" />
+                          </SvgGradient>
+                        </Defs>
+                        {/* Land/Grass background */}
+                        <Rect width="140" height="52" fill="url(#stdGrass)" />
+                        {/* River / Water body */}
+                        <SvgPath d="M-10,38 Q35,46 70,30 T150,22 L150,55 L-10,55 Z" fill="url(#stdWater)" />
+                        {/* Urban blocks */}
+                        <Rect x="8" y="6" width="22" height="15" rx="3" fill="#ffffff" opacity="0.8" stroke="#cbd5e1" strokeWidth="0.5" />
+                        <Rect x="34" y="8" width="26" height="12" rx="3" fill="#ffffff" opacity="0.8" stroke="#cbd5e1" strokeWidth="0.5" />
+                        <Rect x="64" y="5" width="20" height="14" rx="3" fill="#f1f5f9" opacity="0.85" stroke="#cbd5e1" strokeWidth="0.5" />
+                        <Rect x="100" y="7" width="32" height="11" rx="3" fill="#ffffff" opacity="0.8" stroke="#cbd5e1" strokeWidth="0.5" />
+                        {/* Clean street grid lines */}
+                        <SvgPath d="M0,23 L140,23" stroke="#ffffff" strokeWidth="2.5" />
+                        <SvgPath d="M30,0 L30,52" stroke="#ffffff" strokeWidth="2" />
+                        <SvgPath d="M95,0 L95,52" stroke="#ffffff" strokeWidth="2" />
+                        {/* Highlighted active route polyline with glow shadow */}
+                        <SvgPath d="M-5,16 Q45,26 80,10 T145,15" stroke="rgba(16, 185, 129, 0.25)" strokeWidth="6" strokeLinecap="round" />
+                        <SvgPath d="M-5,16 Q45,26 80,10 T145,15" stroke="url(#stdRoute)" strokeWidth="2.8" strokeLinecap="round" />
+                        {/* Start & End marker dots */}
+                        <SvgCircle cx="12" cy="18" r="3" fill="#10b981" stroke="#ffffff" strokeWidth="1" />
+                        <SvgCircle cx="128" cy="14" r="3" fill="#ef4444" stroke="#ffffff" strokeWidth="1" />
+                      </Svg>
+                    </View>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
+                      <Text style={[styles.mapTypeCardTitle, { color: themeColors.text }, mapType === 'standard' && { color: themeColors.primary }]}>
+                        Standard
+                      </Text>
+                      {mapType === 'standard' && <Ionicons name="checkmark-circle" size={15} color={themeColors.primary} />}
+                    </View>
+                  </TouchableOpacity>
+
+                  {/* Muted Standard */}
+                  <TouchableOpacity
+                    style={[
+                      styles.mapTypeCard,
+                      { backgroundColor: themeColors.surfaceElevated, borderColor: themeColors.border },
+                      mapType === 'mutedStandard' && [styles.mapTypeCardActive, { borderColor: themeColors.primary, backgroundColor: `${themeColors.primary}15` }],
+                    ]}
+                    onPress={() => selectMapType('mutedStandard')}
+                    activeOpacity={0.7}
+                  >
+                    <View style={[styles.texturePreviewMuted, { borderColor: themeColors.border }]}>
+                      <Svg width="100%" height="100%" viewBox="0 0 140 52">
+                        <Defs>
+                          <SvgGradient id="mutedLand" x1="0" y1="0" x2="0" y2="1">
+                            <SvgStop offset="0" stopColor="#1e2126" />
+                            <SvgStop offset="1" stopColor="#14161a" />
+                          </SvgGradient>
+                          <SvgGradient id="mutedCyanRoute" x1="0" y1="0" x2="1" y2="1">
+                            <SvgStop offset="0" stopColor="#38bdf8" />
+                            <SvgStop offset="1" stopColor="#0284c7" />
+                          </SvgGradient>
+                        </Defs>
+                        {/* Deep low-contrast land */}
+                        <Rect width="140" height="52" fill="url(#mutedLand)" />
+                        {/* Subtle water */}
+                        <SvgPath d="M-10,36 Q35,44 70,30 T150,22 L150,55 L-10,55 Z" fill="#0f172a" />
+                        {/* Subtle blocks */}
+                        <Rect x="8" y="6" width="22" height="15" rx="3" fill="#242831" stroke="#2d3340" strokeWidth="0.5" />
+                        <Rect x="34" y="8" width="26" height="12" rx="3" fill="#20242c" stroke="#2d3340" strokeWidth="0.5" />
+                        <Rect x="64" y="5" width="20" height="14" rx="3" fill="#242831" stroke="#2d3340" strokeWidth="0.5" />
+                        <Rect x="100" y="7" width="32" height="11" rx="3" fill="#20242c" stroke="#2d3340" strokeWidth="0.5" />
+                        {/* Soft roads */}
+                        <SvgPath d="M0,23 L140,23" stroke="#2d3340" strokeWidth="2" />
+                        <SvgPath d="M30,0 L30,52" stroke="#282e3a" strokeWidth="2" />
+                        <SvgPath d="M95,0 L95,52" stroke="#282e3a" strokeWidth="2" />
+                        {/* Sleek neon cyan route with glow */}
+                        <SvgPath d="M-5,16 Q45,26 80,10 T145,15" stroke="rgba(56, 189, 248, 0.28)" strokeWidth="6" strokeLinecap="round" />
+                        <SvgPath d="M-5,16 Q45,26 80,10 T145,15" stroke="url(#mutedCyanRoute)" strokeWidth="2.8" strokeLinecap="round" />
+                        <SvgCircle cx="12" cy="18" r="3" fill="#38bdf8" stroke="#ffffff" strokeWidth="1" />
+                        <SvgCircle cx="128" cy="14" r="3" fill="#ec4899" stroke="#ffffff" strokeWidth="1" />
+                      </Svg>
+                    </View>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
+                      <Text style={[styles.mapTypeCardTitle, { color: themeColors.text }, mapType === 'mutedStandard' && { color: themeColors.primary }]}>
+                        Muted
+                      </Text>
+                      {mapType === 'mutedStandard' && <Ionicons name="checkmark-circle" size={15} color={themeColors.primary} />}
+                    </View>
+                  </TouchableOpacity>
+
+                  {/* Satellite Map */}
+                  <TouchableOpacity
+                    style={[
+                      styles.mapTypeCard,
+                      { backgroundColor: themeColors.surfaceElevated, borderColor: themeColors.border },
+                      (mapType === 'satellite' || mapType === 'hybrid') && [styles.mapTypeCardActive, { borderColor: themeColors.primary, backgroundColor: `${themeColors.primary}15` }],
+                    ]}
+                    onPress={() => selectMapType('satellite')}
+                    activeOpacity={0.7}
+                  >
+                    <View style={[styles.texturePreviewSatellite, { borderColor: themeColors.border }]}>
+                      <Svg width="100%" height="100%" viewBox="0 0 140 52">
+                        <Defs>
+                          <SvgGradient id="satForest" x1="0" y1="0" x2="1" y2="1">
+                            <SvgStop offset="0" stopColor="#1a331a" />
+                            <SvgStop offset="0.5" stopColor="#112212" />
+                            <SvgStop offset="1" stopColor="#0c180d" />
+                          </SvgGradient>
+                          <SvgGradient id="satCoast" x1="0" y1="0" x2="0" y2="1">
+                            <SvgStop offset="0" stopColor="#072a42" />
+                            <SvgStop offset="1" stopColor="#02141f" />
+                          </SvgGradient>
+                          <SvgGradient id="satAmberRoute" x1="0" y1="0" x2="1" y2="1">
+                            <SvgStop offset="0" stopColor="#f59e0b" />
+                            <SvgStop offset="1" stopColor="#d97706" />
+                          </SvgGradient>
+                        </Defs>
+                        {/* Aerial Terrain Texture */}
+                        <Rect width="140" height="52" fill="url(#satForest)" />
+                        {/* Shoreline / Deep Coastal Water */}
+                        <SvgPath d="M-10,32 Q30,42 65,28 T150,18 L150,55 L-10,55 Z" fill="url(#satCoast)" />
+                        {/* Sandy reef / shallow water rim */}
+                        <SvgPath d="M-10,32 Q30,42 65,28 T150,18" stroke="#0ea5e9" strokeWidth="2.5" opacity="0.45" fill="none" />
+                        {/* Dense canopy textures */}
+                        <SvgCircle cx="16" cy="14" r="10" fill="#2d5a27" opacity="0.75" />
+                        <SvgCircle cx="44" cy="10" r="12" fill="#264e22" opacity="0.8" />
+                        <SvgCircle cx="80" cy="8" r="9" fill="#2d5a27" opacity="0.7" />
+                        {/* Runway / Secondary roads */}
+                        <SvgPath d="M25,0 L35,52" stroke="rgba(255,255,255,0.22)" strokeWidth="1.5" />
+                        {/* Glowing GPS Trail Polyline */}
+                        <SvgPath d="M-5,16 Q45,26 80,10 T145,15" stroke="rgba(245, 158, 11, 0.35)" strokeWidth="6" strokeLinecap="round" />
+                        <SvgPath d="M-5,16 Q45,26 80,10 T145,15" stroke="url(#satAmberRoute)" strokeWidth="2.8" strokeLinecap="round" />
+                        <SvgCircle cx="12" cy="18" r="3" fill="#f59e0b" stroke="#ffffff" strokeWidth="1" />
+                        <SvgCircle cx="128" cy="14" r="3" fill="#ef4444" stroke="#ffffff" strokeWidth="1" />
+                      </Svg>
+                    </View>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
+                      <Text style={[styles.mapTypeCardTitle, { color: themeColors.text }, (mapType === 'satellite' || mapType === 'hybrid') && { color: themeColors.primary }]}>
+                        Satellite
+                      </Text>
+                      {(mapType === 'satellite' || mapType === 'hybrid') && <Ionicons name="checkmark-circle" size={15} color={themeColors.primary} />}
+                    </View>
+                  </TouchableOpacity>
+                </View>
+              </View>
+
+              {/* Done button */}
+              <TouchableOpacity
+                style={[styles.sheetDoneButton, { backgroundColor: themeColors.primary }]}
+                onPress={() => setShowMapLayersModal(false)}
+              >
+                <Text style={[styles.sheetDoneButtonText, { color: themeColors.isDark ? '#09090b' : '#ffffff' }]}>
+                  Done
+                </Text>
+              </TouchableOpacity>
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
+
+      {/* ROUTE BUILDER & EXPLORER MODAL (Bottom half-sheet allowing live map visibility of all 3 routes above) */}
+      <Modal
+        visible={showRouteModal}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={() => setShowRouteModal(false)}
+      >
+        <View style={styles.routeModalBackdrop} pointerEvents="box-none">
+          {/* Tap outside the bottom card to dismiss */}
+          <TouchableOpacity
+            style={styles.routeModalTopDismissArea}
+            activeOpacity={1}
+            onPress={() => setShowRouteModal(false)}
+          />
+
+          <View
+            style={[
+              styles.routeModalBottomCard,
+              { backgroundColor: themeColors.surface },
+            ]}
+          >
+            <View style={[styles.sheetHandle, { backgroundColor: themeColors.borderLight }]} />
+
+            <View style={styles.sheetHeaderRow}>
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.sheetTitle, { color: themeColors.text }]}>Explore Suggested Routes</Text>
+              </View>
+            </View>
+
+            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 24 }}>
+              {/* Route Type Segmented Control: Circuit Loop vs One-Way Outbound */}
+              <View style={styles.sheetSection}>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                  <Text style={[styles.sheetSectionTitle, { color: themeColors.textMuted, marginBottom: 0 }]}>
+                    ROUTE TYPE
+                  </Text>
+                  <Text style={{ fontSize: 11, fontWeight: '700', color: themeColors.primary }}>
+                    {routeType === 'loop' ? 'Start & End at Same Point' : 'Point-to-Point Destination'}
+                  </Text>
+                </View>
+                <View style={[styles.pillToggleTrack, { backgroundColor: themeColors.surfaceElevated, borderColor: themeColors.border }]}>
+                  <TouchableOpacity
+                    style={[
+                      styles.pillToggleOption,
+                      {
+                        backgroundColor: routeType === 'loop' ? themeColors.primary : 'transparent',
+                      },
+                    ]}
+                    onPress={() => {
+                      Haptics.selectionAsync().catch(() => { });
+                      setRouteType('loop');
+                      handleGenerateRoutes(targetDistanceKm, targetElevation, routeOptions, 'loop');
+                    }}
+                    activeOpacity={0.85}
+                  >
+                    <Ionicons
+                      name="repeat-outline"
+                      size={14}
+                      color={routeType === 'loop' ? (themeColors.isDark ? '#000000' : '#ffffff') : themeColors.textMuted}
+                      style={{ marginRight: 5 }}
+                    />
+                    <Text
+                      style={{
+                        fontSize: 13,
+                        fontWeight: routeType === 'loop' ? '800' : '600',
+                        fontFamily: BRAND_ROUNDED_FONT_EXTRA,
+                        color: routeType === 'loop' ? (themeColors.isDark ? '#000000' : '#ffffff') : themeColors.textMuted,
+                      }}
+                    >
+                      Loop Circuit
+                    </Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={[
+                      styles.pillToggleOption,
+                      {
+                        backgroundColor: routeType === 'oneway' ? themeColors.primary : 'transparent',
+                      },
+                    ]}
+                    onPress={() => {
+                      Haptics.selectionAsync().catch(() => { });
+                      setRouteType('oneway');
+                      handleGenerateRoutes(targetDistanceKm, targetElevation, routeOptions, 'oneway');
+                    }}
+                    activeOpacity={0.85}
+                  >
+                    <Ionicons
+                      name="arrow-forward-outline"
+                      size={14}
+                      color={routeType === 'oneway' ? (themeColors.isDark ? '#000000' : '#ffffff') : themeColors.textMuted}
+                      style={{ marginRight: 5 }}
+                    />
+                    <Text
+                      style={{
+                        fontSize: 13,
+                        fontWeight: routeType === 'oneway' ? '800' : '600',
+                        fontFamily: BRAND_ROUNDED_FONT_EXTRA,
+                        color: routeType === 'oneway' ? (themeColors.isDark ? '#000000' : '#ffffff') : themeColors.textMuted,
+                      }}
+                    >
+                      One-Way
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+
+              {/* Target Distance Slider: 1,000 ft to Marathon with Logarithmic Scaling */}
+              <View style={styles.sheetSection}>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                  <Text style={[styles.sheetSectionTitle, { color: themeColors.textMuted, marginBottom: 0 }]}>TARGET DISTANCE</Text>
+                  <Text style={{ fontSize: 13, fontWeight: '800', fontFamily: BRAND_ROUNDED_FONT_EXTRA, color: themeColors.primary }}>
+                    {isUS
+                      ? targetDistanceKm * 0.621371 < 0.25
+                        ? `${Math.round(targetDistanceKm * 3280.84 / 50) * 50} ft`
+                        : Math.abs(targetDistanceKm * 0.621371 - 26.2) < 0.3
+                          ? '26.2 mi (Marathon)'
+                          : `${(targetDistanceKm * 0.621371).toFixed(1)} mi`
+                      : targetDistanceKm < 1.0
+                        ? `${Math.round((targetDistanceKm * 1000) / 50) * 50} m`
+                        : Math.abs(targetDistanceKm - 42.2) < 0.4
+                          ? '42.2 km (Marathon)'
+                          : `${targetDistanceKm.toFixed(1)} km`}
+                  </Text>
+                </View>
+                <DistanceSlider
+                  value={targetDistanceKm}
+                  min={0.3048}
+                  max={42.195}
+                  isUS={isUS}
+                  primaryColor={themeColors.primary}
+                  surfaceColor={themeColors.surfaceElevated}
+                  borderColor={themeColors.border}
+                  onChange={(val) => setTargetDistanceKm(val)}
+                  onCommit={(val) => handleGenerateRoutes(val, targetElevation, routeOptions, routeType)}
+                />
+              </View>
+
+              {/* Elevation Profile Selector: Flat / Rolling / Hilly */}
+              <View style={styles.sheetSection}>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                  <Text style={[styles.sheetSectionTitle, { color: themeColors.textMuted, marginBottom: 0 }]}>
+                    ELEVATION PROFILE
+                  </Text>
+                  <Text style={{ fontSize: 11, fontWeight: '700', color: themeColors.primary }}>
+                    {targetElevation === 'flat' ? 'Level Grade / Valleys' : targetElevation === 'rolling' ? 'Moderate Incline' : targetElevation === 'hilly' ? 'Hillside & Ridge Trails' : 'No Preference'}
+                  </Text>
+                </View>
+                <View style={{ flexDirection: 'row', gap: 8 }}>
+                  {[
+                    { key: 'flat', label: 'Flat', icon: 'remove-outline' },
+                    { key: 'rolling', label: 'Rolling', icon: 'trending-up-outline' },
+                    { key: 'hilly', label: 'Hilly', icon: 'trail-sign-outline' },
+                  ].map((item) => {
+                    const isActive = targetElevation === item.key;
+                    const activeFg = themeColors.isDark ? '#000000' : '#ffffff';
+                    return (
+                      <TouchableOpacity
+                        key={item.key}
+                        style={{
+                          flex: 1,
+                          flexDirection: 'row',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          gap: 6,
+                          paddingVertical: 9,
+                          borderRadius: 12,
+                          borderWidth: 1,
+                          borderColor: isActive ? themeColors.primary : themeColors.border,
+                          backgroundColor: isActive ? themeColors.primary : themeColors.surfaceElevated,
+                        }}
+                        onPress={() => {
+                          Haptics.selectionAsync().catch(() => { });
+                          const newElev = isActive ? null : (item.key as 'flat' | 'rolling' | 'hilly');
+                          setTargetElevation(newElev);
+                          handleGenerateRoutes(targetDistanceKm, newElev, routeOptions, routeType);
+                        }}
+                        activeOpacity={0.8}
+                      >
+                        <Ionicons
+                          name={item.icon as any}
+                          size={15}
+                          color={isActive ? activeFg : themeColors.textSecondary}
+                        />
+                        <Text
+                          style={{
+                            fontSize: 12,
+                            fontWeight: isActive ? '800' : '600',
+                            fontFamily: BRAND_ROUNDED_FONT_EXTRA,
+                            color: isActive ? activeFg : themeColors.text,
+                          }}
+                        >
+                          {item.label}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              </View>
+
+              {/* Route Preferences & Road Controls (Matching the Searching Modal design) */}
+              <View style={styles.sheetSection}>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+                  <Text style={[styles.sheetSectionTitle, { color: themeColors.textMuted, marginBottom: 0 }]}>
+                    ROUTING PREFERENCES
+                  </Text>
+                  <Text style={{ fontSize: 11, fontWeight: '700', color: themeColors.primary }}>
+                    {(!preferParks && !avoidTrafficLights && !avoidBusyRoads) ? 'Fastest Path Default' : 'Custom Preferences'}
+                  </Text>
+                </View>
+
+                <View style={{ flexDirection: 'row', gap: 8 }}>
+                  {[
+                    { key: 'quiet', label: 'Quiet Roads', icon: 'shield-checkmark-outline', isActive: avoidBusyRoads },
+                    { key: 'parks', label: 'Parks & Trails', icon: 'leaf-outline', isActive: preferParks },
+                    { key: 'lights', label: 'Avoid Lights', icon: 'stopwatch-outline', isActive: avoidTrafficLights },
+                    ...(activityType === 'cycle'
+                      ? [{ key: 'lanes', label: 'Bike Lanes', icon: 'bicycle-outline', isActive: preferCyclingLanes }]
+                      : []),
+                  ].map((item) => {
+                    const isActive = item.isActive;
+                    const activeFg = themeColors.isDark ? '#000000' : '#ffffff';
+                    return (
+                      <TouchableOpacity
+                        key={item.key}
+                        style={{
+                          flex: 1,
+                          flexDirection: 'row',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          gap: 6,
+                          paddingVertical: 9,
+                          borderRadius: 12,
+                          borderWidth: 1,
+                          borderColor: isActive ? themeColors.primary : themeColors.border,
+                          backgroundColor: isActive ? themeColors.primary : themeColors.surfaceElevated,
+                        }}
+                        onPress={() => {
+                          Haptics.selectionAsync().catch(() => { });
+                          let nextBusy = avoidBusyRoads;
+                          let nextParks = preferParks;
+                          let nextLights = avoidTrafficLights;
+                          let nextLanes = preferCyclingLanes;
+
+                          if (item.key === 'quiet') {
+                            nextBusy = !avoidBusyRoads;
+                            setAvoidBusyRoads(nextBusy);
+                          } else if (item.key === 'parks') {
+                            nextParks = !preferParks;
+                            setPreferParks(nextParks);
+                          } else if (item.key === 'lights') {
+                            nextLights = !avoidTrafficLights;
+                            setAvoidTrafficLights(nextLights);
+                          } else if (item.key === 'lanes') {
+                            nextLanes = !preferCyclingLanes;
+                            setPreferCyclingLanes(nextLanes);
+                          }
+
+                          // If none are picked, default to fastest path
+                          const nonePicked = !nextBusy && !nextParks && !nextLights && (!nextLanes || activityType !== 'cycle');
+                          setPreferFastest(nonePicked);
+
+                          const updatedOpts: RouteOptions = {
+                            ...routeOptions,
+                            avoidBusyRoads: nextBusy,
+                            preferParks: nextParks,
+                            avoidTrafficLights: nextLights,
+                            preferCyclingLanes: nextLanes,
+                            preferFastest: nonePicked,
+                          };
+                          handleGenerateRoutes(targetDistanceKm, targetElevation, updatedOpts, routeType);
+                        }}
+                        activeOpacity={0.8}
+                      >
+                        <Ionicons
+                          name={item.icon as any}
+                          size={15}
+                          color={isActive ? activeFg : themeColors.textSecondary}
+                        />
+                        <Text
+                          numberOfLines={1}
+                          style={{
+                            fontSize: 12,
+                            fontWeight: isActive ? '800' : '600',
+                            fontFamily: BRAND_ROUNDED_FONT_EXTRA,
+                            color: isActive ? activeFg : themeColors.text,
+                          }}
+                        >
+                          {item.label}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              </View>
+
+              {/* Suggested Routes List with Colored Map Route Indicators */}
+              <View style={styles.sheetSection}>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+                  <Text style={[styles.sheetSectionTitle, { color: themeColors.textMuted, marginBottom: 0 }]}>
+                    {routeType === 'loop' ? 'CIRCUITS ON MAP' : 'ONE-WAY ROUTES ON MAP'} ({routeSuggestions.length})
+                  </Text>
+                  {isGeneratingRoutes && (
+                    <ActivityIndicator size="small" color={themeColors.primary} />
+                  )}
+                </View>
+
+                {routeSuggestions.length === 0 && !isGeneratingRoutes && (
+                  <View style={[styles.emptyRoutesBox, { borderColor: themeColors.border, backgroundColor: themeColors.surfaceElevated }]}>
+                    <Ionicons name="map-outline" size={24} color={themeColors.textMuted} />
+                    <Text style={[styles.emptyRoutesText, { color: themeColors.textSecondary }]}>
+                      {routeType === 'loop' ? 'Drag the distance slider above to find real loop circuits' : 'Drag the distance slider above to find real outbound routes'}
+                    </Text>
+                  </View>
+                )}
+
+                {routeSuggestions.map((route, idx) => {
+                  const isSelected = selectedRoute?.id === route.id;
+                  const routeColors = ['#10b981', '#38bdf8', '#f59e0b'];
+                  const routeColor = routeColors[idx % routeColors.length];
+                  const displayDist = isUS
+                    ? `${(route.distanceKm * 0.621371).toFixed(1)} mi`
+                    : `${route.distanceKm} km`;
+
+                  return (
+                    <View
+                      key={route.id}
+                      style={[
+                        styles.routeCard,
+                        { backgroundColor: themeColors.surfaceElevated, borderColor: isSelected ? routeColor : themeColors.border },
+                        isSelected && { borderWidth: 2, backgroundColor: `${routeColor}12` },
+                      ]}
+                    >
+                      <TouchableOpacity
+                        onPress={() => handlePreviewRoute(route)}
+                        activeOpacity={0.8}
+                      >
+                        <View style={styles.routeCardTop}>
+                          {/* Colored Map Route Badge Indicator */}
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 }}>
+                            <View style={[styles.routeColorBadge, { backgroundColor: routeColor }]}>
+                              <Ionicons name="navigate" size={13} color="#ffffff" />
+                            </View>
+                            <View style={{ flex: 1 }}>
+                              <Text style={[styles.routeCardTitle, { color: themeColors.text }]}>{route.name}</Text>
+                              <Text style={[styles.routeCardDesc, { color: themeColors.textSecondary }]} numberOfLines={1}>
+                                {route.summary || route.destinationName}
+                              </Text>
+                            </View>
+                          </View>
+
+                          <View style={[styles.routeDiffBadge, { backgroundColor: `${routeColor}20`, borderColor: routeColor }]}>
+                            <Text style={[styles.routeDiffText, { color: routeColor }]}>Map Route {idx + 1}</Text>
+                          </View>
+                        </View>
+
+                        {/* Prominently Listed Distance and Time */}
+                        <View style={[styles.routeStatsRow, { backgroundColor: themeColors.surface, borderColor: themeColors.border }]}>
+                          <View style={styles.routeStatItem}>
+                            <Ionicons name="footsteps-outline" size={14} color={routeColor} />
+                            <View>
+                              <Text style={[styles.routeStatVal, { color: themeColors.text, fontWeight: '800' }]}>{displayDist}</Text>
+                              <Text style={[styles.routeStatSub, { color: themeColors.textMuted }]}>Distance</Text>
+                            </View>
+                          </View>
+                          <View style={styles.routeStatItem}>
+                            <Ionicons name="time-outline" size={14} color={routeColor} />
+                            <View>
+                              <Text style={[styles.routeStatVal, { color: themeColors.text, fontWeight: '800' }]}>~{route.durationMins} min</Text>
+                              <Text style={[styles.routeStatSub, { color: themeColors.textMuted }]}>Est. Time</Text>
+                            </View>
+                          </View>
+                          <View style={styles.routeStatItem}>
+                            <Ionicons name="trending-up-outline" size={14} color={themeColors.textMuted} />
+                            <View>
+                              <Text style={[styles.routeStatVal, { color: themeColors.text }]}>+{route.elevationGainMeters}m</Text>
+                              <Text style={[styles.routeStatSub, { color: themeColors.textMuted }]}>Elevation</Text>
+                            </View>
+                          </View>
+                        </View>
+                      </TouchableOpacity>
+
+                      {/* Highlights / POI Images Along the Route */}
+                      {route.pois && route.pois.length > 0 && (
+                        <View style={styles.routePoiSection}>
+                          <View style={styles.routePoiSectionHeader}>
+                            <Ionicons name="images" size={14} color={routeColor} />
+                            <Text style={[styles.routePoiSectionTitle, { color: themeColors.textSecondary }]}>
+                              Highlights Along This Route
+                            </Text>
+                            <Text style={[styles.routePoiCountBadge, { color: themeColors.textMuted }]}>
+                              {route.pois.length} spots (Swipe →)
+                            </Text>
+                          </View>
+                          <ScrollView
+                            horizontal={true}
+                            nestedScrollEnabled={true}
+                            directionalLockEnabled={true}
+                            scrollEventThrottle={16}
+                            showsHorizontalScrollIndicator={true}
+                            contentContainerStyle={{ gap: 12, paddingVertical: 4, paddingRight: 16 }}
+                          >
+                            {route.pois.map((poi, pIdx) => {
+                              const catIcon =
+                                poi.category === 'park' ? 'leaf'
+                                  : poi.category === 'water' ? 'water'
+                                    : poi.category === 'viewpoint' ? 'eye'
+                                      : poi.category === 'trail' ? 'walk'
+                                        : 'compass';
+
+                              return (
+                                <View
+                                  key={poi.id || pIdx}
+                                  style={[
+                                    styles.poiCard,
+                                    { backgroundColor: themeColors.surface, borderColor: themeColors.border },
+                                  ]}
+                                >
+                                  <View style={styles.poiImageContainer}>
+                                    <Image source={{ uri: poi.imageUrl }} style={styles.poiImage} resizeMode="cover" />
+                                    <View style={[styles.poiMilestoneBadge, { backgroundColor: routeColor }]}>
+                                      <Text style={styles.poiMilestoneText}>STOP {pIdx + 1}</Text>
+                                    </View>
+                                    <View style={styles.poiCategoryBadge}>
+                                      <Ionicons name={catIcon as any} size={11} color="#FFF" />
+                                      <Text style={styles.poiCategoryText}>{poi.category.toUpperCase()}</Text>
+                                    </View>
+                                  </View>
+                                  <View style={[styles.poiInfo, { padding: 10 }]}>
+                                    <Text style={[styles.poiName, { color: themeColors.text }]} numberOfLines={1}>
+                                      {poi.name}
+                                    </Text>
+                                    {typeof poi.distanceAlongKm === 'number' && (
+                                      <View style={styles.poiDistRow}>
+                                        <Ionicons name="navigate-outline" size={10} color={routeColor} />
+                                        <Text style={[styles.poiDist, { color: themeColors.textMuted }]}>
+                                          {isUS ? `${(poi.distanceAlongKm * 0.621371).toFixed(1)} mi along route` : `${poi.distanceAlongKm} km along route`}
+                                        </Text>
+                                      </View>
+                                    )}
+                                    {Boolean(poi.description || poi.infoSnippet) && (
+                                      <Text
+                                        style={{
+                                          fontSize: 10.5,
+                                          lineHeight: 14,
+                                          color: themeColors.textSecondary,
+                                          marginTop: 4,
+                                        }}
+                                        numberOfLines={2}
+                                      >
+                                        {poi.description || poi.infoSnippet}
+                                      </Text>
+                                    )}
+                                  </View>
+                                </View>
+                              );
+                            })}
+                          </ScrollView>
+                        </View>
+                      )}
+
+                      {/* Select & Start Button */}
+                      <TouchableOpacity
+                        style={[
+                          styles.selectRouteActionBtn,
+                          { backgroundColor: isSelected ? routeColor : themeColors.surface, borderColor: routeColor },
+                        ]}
+                        onPress={() => handleSelectRoute(route)}
+                        activeOpacity={0.8}
+                      >
+                        <Ionicons
+                          name={isSelected ? 'checkmark-circle' : 'play'}
+                          size={15}
+                          color={isSelected ? '#09090b' : routeColor}
+                        />
+                        <Text style={[styles.selectRouteActionText, { color: isSelected ? '#09090b' : routeColor }]}>
+                          {isSelected ? 'Start This Route' : 'Select This Route'}
+                        </Text>
+                      </TouchableOpacity>
+                    </View>
+                  );
+                })}
+              </View>
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
     </View>
-
-{/* Suggested Routes List with Colored Map Route Indicators */}
-<View style={styles.sheetSection}>
-<View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-<Text style={[styles.sheetSectionTitle, { color: themeColors.textMuted, marginBottom: 0 }]}>
-{routeType === 'loop' ? 'CIRCUITS ON MAP' : 'ONE-WAY ROUTES ON MAP'} ({routeSuggestions.length})
-</Text>
-{isGeneratingRoutes && (
-<ActivityIndicator size="small" color={themeColors.primary} />
-)}
-</View>
-
-{routeSuggestions.length === 0 && !isGeneratingRoutes && (
-<View style={[styles.emptyRoutesBox, { borderColor: themeColors.border, backgroundColor: themeColors.surfaceElevated }]}>
-<Ionicons name="map-outline" size={24} color={themeColors.textMuted} />
-<Text style={[styles.emptyRoutesText, { color: themeColors.textSecondary }]}>
-{routeType === 'loop' ? 'Drag the distance slider above to find real loop circuits' : 'Drag the distance slider above to find real outbound routes'}
-</Text>
-</View>
-)}
-
-{routeSuggestions.map((route, idx) => {
-const isSelected = selectedRoute?.id === route.id;
-const routeColors = ['#10b981', '#38bdf8', '#f59e0b'];
-const routeColor = routeColors[idx % routeColors.length];
-const displayDist = isUS
-? `${(route.distanceKm * 0.621371).toFixed(1)} mi`
-: `${route.distanceKm} km`;
-
-return (
-<View
-key={route.id}
-style={[
-styles.routeCard,
-{ backgroundColor: themeColors.surfaceElevated, borderColor: isSelected ? routeColor : themeColors.border },
-isSelected && { borderWidth: 2, backgroundColor: `${routeColor}12` },
-]}
->
-<TouchableOpacity
-onPress={() => handlePreviewRoute(route)}
-activeOpacity={0.8}
->
-<View style={styles.routeCardTop}>
-{/* Colored Map Route Badge Indicator */}
-<View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 }}>
-<View style={[styles.routeColorBadge, { backgroundColor: routeColor }]}>
-<Ionicons name="navigate" size={13} color="#ffffff" />
-</View>
-<View style={{ flex: 1 }}>
-<Text style={[styles.routeCardTitle, { color: themeColors.text }]}>{route.name}</Text>
-<Text style={[styles.routeCardDesc, { color: themeColors.textSecondary }]} numberOfLines={1}>
-{route.summary || route.destinationName}
-</Text>
-</View>
-</View>
-
-<View style={[styles.routeDiffBadge, { backgroundColor: `${routeColor}20`, borderColor: routeColor }]}>
-<Text style={[styles.routeDiffText, { color: routeColor }]}>Map Route {idx + 1}</Text>
-</View>
-</View>
-
-{/* Prominently Listed Distance and Time */}
-<View style={[styles.routeStatsRow, { backgroundColor: themeColors.surface, borderColor: themeColors.border }]}>
-<View style={styles.routeStatItem}>
-<Ionicons name="footsteps-outline" size={14} color={routeColor} />
-<View>
-<Text style={[styles.routeStatVal, { color: themeColors.text, fontWeight: '800' }]}>{displayDist}</Text>
-<Text style={[styles.routeStatSub, { color: themeColors.textMuted }]}>Distance</Text>
-</View>
-</View>
-<View style={styles.routeStatItem}>
-<Ionicons name="time-outline" size={14} color={routeColor} />
-<View>
-<Text style={[styles.routeStatVal, { color: themeColors.text, fontWeight: '800' }]}>~{route.durationMins} min</Text>
-<Text style={[styles.routeStatSub, { color: themeColors.textMuted }]}>Est. Time</Text>
-</View>
-</View>
-<View style={styles.routeStatItem}>
-<Ionicons name="trending-up-outline" size={14} color={themeColors.textMuted} />
-<View>
-<Text style={[styles.routeStatVal, { color: themeColors.text }]}>+{route.elevationGainMeters}m</Text>
-<Text style={[styles.routeStatSub, { color: themeColors.textMuted }]}>Elevation</Text>
-</View>
-</View>
-</View>
-</TouchableOpacity>
-
-{/* Select & Start Button */}
-<TouchableOpacity
-style={[
-styles.selectRouteActionBtn,
-{ backgroundColor: isSelected ? routeColor : themeColors.surface, borderColor: routeColor },
-]}
-onPress={() => handleSelectRoute(route)}
-activeOpacity={0.8}
->
-<Ionicons
-name={isSelected ? 'checkmark-circle' : 'play'}
-size={15}
-color={isSelected ? '#09090b' : routeColor}
-/>
-<Text style={[styles.selectRouteActionText, { color: isSelected ? '#09090b' : routeColor }]}>
-{isSelected ? 'Start This Route' : 'Select This Route'}
-</Text>
-</TouchableOpacity>
-</View>
-);
-})}
-</View>
-</ScrollView>
-</View>
-</View>
-</Modal>
-</View>
-);
+  );
 }
 
 const styles = StyleSheet.create({

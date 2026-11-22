@@ -87,8 +87,9 @@ class ChallengesTests(unittest.TestCase):
     def test_http_two_phone_flow_and_auth(self):
         from fastapi.testclient import TestClient
         from server import app as service
-        old_store, old_token = service.calorie_challenges, service.TOKEN
-        service.calorie_challenges = self.service; service.TOKEN = 'test-calorie-service-token'
+        old_store, old_token, old_allow = service.calorie_challenges, service.TOKEN, service.ALLOW_DEV_TOKEN
+        service.calorie_challenges, service.TOKEN, service.ALLOW_DEV_TOKEN = self.service, 'test-calorie-service-token', True
+        service.limiter.reset()
         try:
             client = TestClient(service.app)
             headers = {'Authorization': 'Bearer ' + service.TOKEN}
@@ -104,7 +105,7 @@ class ChallengesTests(unittest.TestCase):
             self.assertEqual(host['players'][1]['score'], 1)
             self.assertEqual(client.post('/rep-api/calories', headers=headers, json={'action': 'get', 'code': self.code, 'key': 'wrong'}).status_code, 403)
         finally:
-            service.calorie_challenges, service.TOKEN = old_store, old_token
+            service.calorie_challenges, service.TOKEN, service.ALLOW_DEV_TOKEN = old_store, old_token, old_allow
 
 
 if __name__ == '__main__': unittest.main()
