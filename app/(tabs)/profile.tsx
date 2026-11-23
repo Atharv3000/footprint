@@ -99,6 +99,7 @@ export default function ProfileScreen() {
 
   // Active Profile Sub-tab: 'activity' | 'progress' | 'insights' | 'badges' with animated indicator
   const [activeSubTab, setActiveSubTab] = useState<'activity' | 'progress' | 'insights' | 'badges'>('activity');
+  const tabAnim = useRef(new Animated.Value(0)).current;
   const [badges, setBadges] = useState<BadgeDefinition[]>([]);
   const [selectedBadge, setSelectedBadge] = useState<BadgeDefinition | null>(null);
 
@@ -106,7 +107,12 @@ export default function ProfileScreen() {
     if (tab === activeSubTab) return;
     Haptics.selectionAsync().catch(() => {});
     setActiveSubTab(tab);
-
+    const targetVal = tab === 'activity' ? 0 : tab === 'progress' ? 1 : tab === 'insights' ? 2 : 3;
+    Animated.timing(tabAnim, {
+      toValue: targetVal,
+      duration: 220,
+      useNativeDriver: false,
+    }).start();
   };
 
   const effectiveUserId = user?.id || 'guest_user';
@@ -775,21 +781,33 @@ export default function ProfileScreen() {
       </InteractiveBottomModal>
 
       {/* ── LOWER SCREEN CONTAINER (Sub-tab bar and entire content below it: pure white in light mode, pure black in dark mode) ── */}
-      <View style={[styles.lowerScreenSection, { backgroundColor: isDark ? '#000000' : '#ffffff' }]}>
-        <View accessibilityRole="tablist" style={[styles.subTabBarContainer, { backgroundColor: colors.surfaceElevated }]}>
-          {([
-            { id: 'activity', label: 'Activity', icon: 'fitness-outline' },
-            { id: 'progress', label: 'Progress', icon: 'images-outline' },
-            { id: 'insights', label: 'Insights', icon: 'stats-chart-outline' },
-            { id: 'badges', label: 'Badges', icon: 'ribbon-outline' },
-          ] as const).map(tab => {
-            const selected = activeSubTab === tab.id;
-            return <TutorialButton tutorialId={`profile-${tab.id}`} key={tab.id} accessibilityRole="tab" accessibilityState={{ selected }}
-              style={[styles.subTabBtn, { backgroundColor: selected ? colors.primaryBg : 'transparent' }]} onPress={() => switchTab(tab.id)} activeOpacity={0.75}>
-              <Ionicons name={tab.icon} size={16} color={selected ? colors.primary : colors.textMuted} />
-              <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.85} style={[styles.subTabText, { color: selected ? colors.primary : colors.textMuted }]}>{tab.label}</Text>
-            </TutorialButton>;
-          })}
+      <View style={[styles.lowerScreenSection, { backgroundColor: isDark ? '#000000' : '#ffffff', borderTopColor: isDark ? '#1a1a1f' : '#ededf0' }]}>
+        {/* Full-Width Underline Sub-Tab Selector: activity, progress, insights, badges */}
+        <View accessibilityRole="tablist" style={[styles.subTabBarContainer, { backgroundColor: isDark ? '#000000' : '#ffffff', borderBottomColor: isDark ? '#1f1f24' : '#e5e5ea' }]}>
+          {(['activity', 'progress', 'insights', 'badges'] as const).map(tab => (
+            <TutorialButton tutorialId={`profile-${tab}`} key={tab} accessibilityRole="tab" accessibilityState={{ selected: activeSubTab === tab }}
+              style={styles.subTabBtn} onPress={() => switchTab(tab)} activeOpacity={0.75}>
+              <Text style={[styles.subTabText, {
+                color: activeSubTab === tab ? (isDark ? '#ffffff' : '#000000') : (isDark ? '#71717a' : '#9ca3af'),
+                fontWeight: activeSubTab === tab ? '800' : '600',
+              }]}>{tab}</Text>
+            </TutorialButton>
+          ))}
+
+          {/* Animated line highlighted under what is selected */}
+          <Animated.View
+            style={[
+              styles.subTabHighlightLine,
+              {
+                backgroundColor: isDark ? '#ffffff' : '#000000',
+                left: tabAnim.interpolate({
+                  inputRange: [0, 1, 2, 3],
+                  outputRange: ['0%', '25%', '50%', '75%'],
+                }),
+                width: '25%',
+              },
+            ]}
+          />
         </View>
 
         {/* ── PERSISTENT SUB-TAB CONTENT: ACTIVITY vs INSIGHTS vs BADGES ── */}
@@ -1767,37 +1785,42 @@ const styles = StyleSheet.create({
 
   /* ── Lower Screen Container (Full width below profile header) ── */
   lowerScreenSection: {
+    flex: 1,
     marginHorizontal: -16,
-    paddingTop: 4,
-    paddingBottom: 60,
+    paddingTop: 0,
+    paddingBottom: 80,
     minHeight: 600,
+    borderTopWidth: 1,
   },
-  /* ── Sub-tab bar (Activity vs Badges) with animated highlight underline ── */
+  /* ── Sub-tab bar (Activity vs Progress vs Insights vs Badges) with full-width underline ── */
   subTabBarContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 0,
-    paddingHorizontal: 0,
-    gap: 4,
-    borderRadius: 18,
-    marginHorizontal: 0,
-    marginBottom: 16,
-    overflow: 'hidden',
+    height: 44,
+    position: 'relative',
+    borderBottomWidth: 1,
+    marginBottom: 6,
+  },
+  subTabHighlightLine: {
+    position: 'absolute',
+    bottom: -1,
+    width: '25%',
+    height: 2.5,
+    borderRadius: 1.5,
+    zIndex: 5,
   },
   subTabBtn: {
     flex: 1,
-    flexDirection: 'row',
-    minHeight: 50,
-    paddingVertical: 16,
-    borderRadius: 18,
-    gap: 4,
+    height: '100%',
     alignItems: 'center',
     justifyContent: 'center',
+    zIndex: 2,
   },
   subTabText: {
     fontFamily: BRAND_ROUNDED_FONT_EXTRA,
-    fontSize: 12,
-    flexShrink: 1,
+    fontSize: 14,
+    letterSpacing: -0.2,
+    textTransform: 'lowercase',
   },
   activityTabWrapper: {
     paddingHorizontal: 16,

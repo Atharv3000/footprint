@@ -373,7 +373,7 @@ export default function NutritionScreen() {
         showsVerticalScrollIndicator={false}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />}
       >
-        {/* Header: Title + Subtitle + Customizer Button */}
+        {/* Header: Title + Subtitle + Pet Pill + Customizer Button */}
         <View style={styles.scrollHeader}>
           <View style={{ flex: 1 }}>
             <Text style={[styles.pageTitle, { color: colors.text }]}>Calorie Tracker</Text>
@@ -384,22 +384,53 @@ export default function NutritionScreen() {
             </Text>
           </View>
 
-          <TouchableOpacity
-            style={[styles.iconButton, { backgroundColor: colors.surfaceElevated }]}
-            onPress={() => {
-              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
-              setShowCustomizerModal(true);
-            }}
-          >
-            <Ionicons name="options-outline" size={20} color={colors.primary} />
-          </TouchableOpacity>
-        </View>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+            <TutorialButton
+              tutorialId="nutrition-pet"
+              accessibilityRole="button"
+              accessibilityState={{ selected: activeTab === 'pet' }}
+              accessibilityLabel="Toggle Pet Companion"
+              onPress={() => {
+                setActiveTab((prev) => (prev === 'pet' ? 'tracker' : 'pet'));
+                mainScroll.current?.scrollTo({ y: 0, animated: false });
+                Haptics.selectionAsync().catch(() => {});
+              }}
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: 6,
+                height: 44,
+                paddingHorizontal: 15,
+                borderRadius: 22,
+                backgroundColor: activeTab === 'pet' ? colors.primary : colors.surfaceElevated,
+              }}
+            >
+              <Ionicons
+                name="paw"
+                size={17}
+                color={activeTab === 'pet' ? (isDark ? '#09090b' : '#ffffff') : colors.primary}
+              />
+              <Text
+                style={{
+                  fontFamily: BRAND_ROUNDED_FONT_EXTRA,
+                  fontSize: 13.5,
+                  color: activeTab === 'pet' ? (isDark ? '#09090b' : '#ffffff') : colors.primary,
+                }}
+              >
+                Pet
+              </Text>
+            </TutorialButton>
 
-        <View accessibilityRole="tablist" style={{ flexDirection: 'row', overflow: 'hidden', marginHorizontal: -16, paddingVertical: 0, paddingHorizontal: 0, borderRadius: 18, backgroundColor: colors.surfaceElevated, gap: 4 }}>
-          {(['tracker', 'pet'] as const).map(tab => <TutorialButton tutorialId={tab === 'pet' ? 'nutrition-pet' : 'nutrition-tracker'} key={tab} accessibilityRole="tab" accessibilityState={{ selected: activeTab === tab }} onPress={() => { setActiveTab(tab); mainScroll.current?.scrollTo({ y: 0, animated: false }); Haptics.selectionAsync().catch(() => {}); }} style={{ flex: 1, paddingVertical: 11, borderRadius: 18, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7, backgroundColor: activeTab === tab ? colors.primaryBg : 'transparent' }}>
-            <Ionicons name={tab === 'tracker' ? 'stats-chart-outline' : 'paw-outline'} size={18} color={activeTab === tab ? colors.primary : colors.textMuted} />
-            <Text style={{ fontFamily: BRAND_ROUNDED_FONT_EXTRA, fontSize: 13, color: activeTab === tab ? colors.primary : colors.textMuted }}>{tab === 'tracker' ? 'Tracker' : 'Pet'}</Text>
-          </TutorialButton>)}
+            <TouchableOpacity
+              style={[styles.iconButton, { backgroundColor: colors.surfaceElevated }]}
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+                setShowCustomizerModal(true);
+              }}
+            >
+              <Ionicons name="options-outline" size={20} color={colors.primary} />
+            </TouchableOpacity>
+          </View>
         </View>
         <View style={{ gap: 14, display: activeTab === 'tracker' ? 'flex' : 'none' }}>
         {/* INTEGRATED DATE SELECTOR BAR: Isolated directly on the background (no bubble container around row) */}

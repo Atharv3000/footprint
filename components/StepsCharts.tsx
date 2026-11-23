@@ -1108,149 +1108,152 @@ export function StepsCharts({
     }
   }, [externalDate]);
 
-  const metricAnim = useRef(new Animated.Value(metricMode === 'steps' ? 0 : metricMode === 'distance' ? 1 : 2)).current;
+  const [expandedSections, setExpandedSections] = useState<Record<'steps' | 'distance' | 'history', boolean>>({
+    steps: true,
+    distance: false,
+    history: false,
+  });
 
-  const handleSwitchMetric = (mode: MetricMode) => {
-    if (mode === metricMode) {
-      if (mode === 'distance') {
-        // Tapping distance tab while active toggles unit between mi and km
-        toggleDistanceUnit();
-      }
-      return;
-    }
+  const toggleSection = (section: 'steps' | 'distance' | 'history') => {
     Haptics.selectionAsync().catch(() => {});
-    setMetricMode(mode);
-    const targetVal = mode === 'steps' ? 0 : mode === 'distance' ? 1 : 2;
-    Animated.timing(metricAnim, {
-      toValue: targetVal,
-      duration: 220,
-      useNativeDriver: false,
-    }).start();
+    setExpandedSections((prev) => ({
+      ...prev,
+      [section]: !prev[section],
+    }));
   };
 
   return (
-    <View style={{ gap: 14 }}>
-      {/* Metric Mode Switcher Bar (Identical style to Profile Tab Chooser) */}
-      <View style={[styles.subTabBarContainer, { backgroundColor: isDark ? '#000000' : '#ffffff', borderBottomColor: isDark ? '#1f1f24' : '#e5e5ea' }]}>
-        <TouchableOpacity
-          style={styles.subTabBtn}
-          onPress={() => handleSwitchMetric('steps')}
-          activeOpacity={0.75}
-        >
-          <Text
+    <View style={{ gap: 12, paddingHorizontal: 16 }}>
+      {([
+        { key: 'steps' as const, label: 'Steps', icon: 'footsteps' as const, metricMode: 'steps' as const },
+        { key: 'distance' as const, label: `Distance (${distanceUnit})`, icon: 'navigate-outline' as const, metricMode: 'distance' as const },
+      ]).map((section) => {
+        const isExpanded = expandedSections[section.key];
+        return (
+          <View
+            key={section.key}
             style={[
-              styles.subTabText,
+              styles.expandableCard,
               {
-                color: metricMode === 'steps' ? (isDark ? '#ffffff' : '#000000') : (isDark ? '#71717a' : '#9ca3af'),
-                fontWeight: metricMode === 'steps' ? '800' : '600',
+                backgroundColor: isDark ? '#141417' : '#ffffff',
+                borderColor: isDark ? '#27272f' : '#e4e4eb',
               },
             ]}
           >
-            steps
-          </Text>
-        </TouchableOpacity>
+            <TouchableOpacity
+              accessibilityRole="button"
+              accessibilityState={{ expanded: isExpanded }}
+              style={styles.expandableHeader}
+              onPress={() => toggleSection(section.key)}
+              activeOpacity={0.75}
+            >
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 }}>
+                <Ionicons
+                  name={section.icon}
+                  size={19}
+                  color={section.metricMode === 'distance' ? DISTANCE_COLOR : colors.primary}
+                />
+                <Text style={[styles.expandableTitle, { color: colors.text }]}>{section.label}</Text>
+              </View>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                {section.key === 'distance' && (
+                  <TouchableOpacity
+                    onPress={(e) => {
+                      e.stopPropagation();
+                      toggleDistanceUnit();
+                    }}
+                    style={[
+                      styles.unitPillBtn,
+                      {
+                        backgroundColor: isDark ? '#27272a' : '#f4f4f6',
+                        borderColor: isDark ? '#3f3f46' : '#e4e4e7',
+                      },
+                    ]}
+                    activeOpacity={0.75}
+                  >
+                    <Text style={[styles.unitPillText, { color: colors.textSecondary }]}>
+                      {distanceUnit.toUpperCase()}
+                    </Text>
+                  </TouchableOpacity>
+                )}
+                <Ionicons name={isExpanded ? 'chevron-up' : 'chevron-down'} size={18} color={colors.textMuted} />
+              </View>
+            </TouchableOpacity>
 
+            {isExpanded && (
+              <View style={[styles.chartsContentWrapper, { paddingHorizontal: 14, paddingBottom: 14 }]}>
+                <AIActivityInsightsCard
+                  userId={userId}
+                  metricMode={section.metricMode}
+                  distanceUnit={distanceUnit}
+                  stepsGoal={stepsGoal}
+                  distanceGoal={effectiveDistanceGoal}
+                />
+                <WeeklyBarChart
+                  userId={userId}
+                  stepsGoal={stepsGoal}
+                  distanceGoal={effectiveDistanceGoal}
+                  metricMode={section.metricMode}
+                  distanceUnit={distanceUnit}
+                  weekOffset={weekOffset}
+                  onWeekOffsetChange={setWeekOffset}
+                  selectedDate={selectedDate}
+                  onDaySelect={setSelectedDate}
+                  onScrollLock={onScrollLock}
+                />
+                <HourlyBarChart
+                  userId={userId}
+                  stepsGoal={stepsGoal}
+                  distanceGoal={effectiveDistanceGoal}
+                  metricMode={section.metricMode}
+                  distanceUnit={distanceUnit}
+                  selectedDate={selectedDate}
+                  onDayChange={handleDayChange}
+                  onScrollLock={onScrollLock}
+                />
+                <CumulativeLineChart
+                  userId={userId}
+                  stepsGoal={stepsGoal}
+                  distanceGoal={effectiveDistanceGoal}
+                  metricMode={section.metricMode}
+                  distanceUnit={distanceUnit}
+                  selectedDate={selectedDate}
+                />
+              </View>
+            )}
+          </View>
+        );
+      })}
+
+      {/* Expandable Walk History Section */}
+      <View
+        style={[
+          styles.expandableCard,
+          {
+            backgroundColor: isDark ? '#141417' : '#ffffff',
+            borderColor: isDark ? '#27272f' : '#e4e4eb',
+          },
+        ]}
+      >
         <TouchableOpacity
-          style={styles.subTabBtn}
-          onPress={() => handleSwitchMetric('distance')}
+          accessibilityRole="button"
+          accessibilityState={{ expanded: expandedSections.history }}
+          style={styles.expandableHeader}
+          onPress={() => toggleSection('history')}
           activeOpacity={0.75}
         >
-          <Text
-            style={[
-              styles.subTabText,
-              {
-                color: metricMode === 'distance' ? (isDark ? '#ffffff' : '#000000') : (isDark ? '#71717a' : '#9ca3af'),
-                fontWeight: metricMode === 'distance' ? '800' : '600',
-              },
-            ]}
-          >
-            distance
-          </Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 }}>
+            <Ionicons name="time-outline" size={19} color={colors.primary} />
+            <Text style={[styles.expandableTitle, { color: colors.text }]}>History</Text>
+          </View>
+          <Ionicons name={expandedSections.history ? 'chevron-up' : 'chevron-down'} size={18} color={colors.textMuted} />
         </TouchableOpacity>
-
-        <TouchableOpacity
-          style={styles.subTabBtn}
-          onPress={() => handleSwitchMetric('history')}
-          activeOpacity={0.75}
-        >
-          <Text
-            style={[
-              styles.subTabText,
-              {
-                color: metricMode === 'history' ? (isDark ? '#ffffff' : '#000000') : (isDark ? '#71717a' : '#9ca3af'),
-                fontWeight: metricMode === 'history' ? '800' : '600',
-              },
-            ]}
-          >
-            history
-          </Text>
-        </TouchableOpacity>
-
-        {/* Animated line highlighted under selected metric */}
-        <Animated.View
-          style={[
-            styles.subTabHighlightLine,
-            {
-              backgroundColor: isDark ? '#ffffff' : '#000000',
-              left: metricAnim.interpolate({
-                inputRange: [0, 1, 2],
-                outputRange: ['0%', '33.33%', '66.66%'],
-              }),
-              width: '33.33%',
-            },
-          ]}
-        />
+        {expandedSections.history && (
+          <View style={{ paddingHorizontal: 14, paddingBottom: 14 }}>
+            <WalkHistorySection userId={userId} unitSystem={unitSystem} />
+          </View>
+        )}
       </View>
-
-      {/* Content depending on whether history or steps/distance is selected */}
-      {metricMode === 'history' ? (
-        <WalkHistorySection
-          userId={userId}
-          unitSystem={unitSystem}
-        />
-      ) : (
-        <View style={styles.chartsContentWrapper}>
-          {/* AI Movement Insights Card with Live Generation & 4-Point Star Sweep */}
-          <AIActivityInsightsCard
-            userId={userId}
-            metricMode={metricMode}
-            distanceUnit={distanceUnit}
-            stepsGoal={stepsGoal}
-            distanceGoal={effectiveDistanceGoal}
-          />
-
-          <WeeklyBarChart
-            userId={userId}
-            stepsGoal={stepsGoal}
-            distanceGoal={effectiveDistanceGoal}
-            metricMode={metricMode}
-            distanceUnit={distanceUnit}
-            weekOffset={weekOffset}
-            onWeekOffsetChange={setWeekOffset}
-            selectedDate={selectedDate}
-            onDaySelect={setSelectedDate}
-            onScrollLock={onScrollLock}
-          />
-          <HourlyBarChart
-            userId={userId}
-            stepsGoal={stepsGoal}
-            distanceGoal={effectiveDistanceGoal}
-            metricMode={metricMode}
-            distanceUnit={distanceUnit}
-            selectedDate={selectedDate}
-            onDayChange={handleDayChange}
-            onScrollLock={onScrollLock}
-          />
-          <CumulativeLineChart
-            userId={userId}
-            stepsGoal={stepsGoal}
-            distanceGoal={effectiveDistanceGoal}
-            metricMode={metricMode}
-            distanceUnit={distanceUnit}
-            selectedDate={selectedDate}
-          />
-        </View>
-      )}
     </View>
   );
 }
@@ -1273,32 +1276,32 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  subTabBarContainer: {
+  expandableCard: {
+    borderRadius: 18,
+    borderWidth: 1,
+    overflow: 'hidden',
+  },
+  expandableHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    height: 44,
-    position: 'relative',
-    borderBottomWidth: 1,
-    marginBottom: 4,
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 14,
   },
-  subTabHighlightLine: {
-    position: 'absolute',
-    bottom: -1,
-    height: 3,
-    borderRadius: 1.5,
-    zIndex: 5,
-  },
-  subTabBtn: {
-    flex: 1,
-    height: '100%',
-    alignItems: 'center',
-    justifyContent: 'center',
-    zIndex: 2,
-  },
-  subTabText: {
-    fontSize: 14.5,
+  expandableTitle: {
+    fontSize: 15,
+    fontWeight: '700',
     letterSpacing: -0.2,
-    textTransform: 'lowercase',
+  },
+  unitPillBtn: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 8,
+    borderWidth: 1,
+  },
+  unitPillText: {
+    fontSize: 10.5,
+    fontWeight: '700',
   },
   comparisonPill: {
     flexDirection: 'row',
