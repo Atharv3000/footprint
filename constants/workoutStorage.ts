@@ -463,3 +463,44 @@ export async function saveManualMuscleSoreness(userId: string, overrides: Record
     await AsyncStorage.setItem(MANUAL_SORENESS_KEY(userId), JSON.stringify(overrides));
   } catch (e) {}
 }
+
+export interface WorkoutSplitState {
+  splitOrder: string[];
+  currentIndex: number;
+}
+
+const WORKOUT_SPLIT_KEY = (userId: string) => `@stridetrack_workout_split_${userId}`;
+
+export async function loadWorkoutSplitState(userId: string): Promise<WorkoutSplitState> {
+  try {
+    const raw = await AsyncStorage.getItem(WORKOUT_SPLIT_KEY(userId));
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      return {
+        splitOrder: Array.isArray(parsed.splitOrder) ? parsed.splitOrder : [],
+        currentIndex: typeof parsed.currentIndex === 'number' && parsed.currentIndex >= 0 ? parsed.currentIndex : 0,
+      };
+    }
+  } catch {}
+  return { splitOrder: [], currentIndex: 0 };
+}
+
+export async function saveWorkoutSplitState(userId: string, state: WorkoutSplitState): Promise<void> {
+  try {
+    await AsyncStorage.setItem(WORKOUT_SPLIT_KEY(userId), JSON.stringify(state));
+  } catch {}
+}
+
+export function resolveSplitRoutines(
+  allRoutines: CustomRoutine[],
+  splitState: WorkoutSplitState
+): { ordered: CustomRoutine[]; safeIndex: number } {
+  if (allRoutines.length === 0) return { ordered: [], safeIndex: 0 };
+  const byId = new Map(allRoutines.map((r) => [r.id, r]));
+  const inSplit = (splitState.splitOrder || [])
+    .map((id) => byId.get(id))
+    .filter((r): r is CustomRoutine => Boolean(r));
+  const ordered = inSplit.length > 0 ? inSplit : allRoutines;
+  const safeIndex = Math.max(0, Math.min(ordered.length - 1, splitState.currentIndex % ordered.length));
+  return { ordered, safeIndex };
+}

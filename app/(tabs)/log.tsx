@@ -44,6 +44,10 @@ import {
   deleteWorkoutLogsByIds,
   loadManualMuscleSoreness,
   saveManualMuscleSoreness,
+  WorkoutSplitState,
+  loadWorkoutSplitState,
+  saveWorkoutSplitState,
+  resolveSplitRoutines,
 } from '@/constants/workoutStorage';
 import { CameraFormTrackerModal } from '@/components/CameraFormTrackerModal';
 import { MuscleSorenessModal } from '@/components/MuscleSorenessModal';
@@ -1097,7 +1101,14 @@ export default function LogScreen() {
   const [showMuscleRecoveryModal, setShowMuscleRecoveryModal] = useState<boolean>(false);
   const [showBodyFatModal, setShowBodyFatModal] = useState<boolean>(false);
   const [activeSessionRoutine, setActiveSessionRoutine] = useState<CustomRoutine | null>(null);
+  const [splitState, setSplitState] = useState<WorkoutSplitState>({ splitOrder: [], currentIndex: 0 });
+  const [splitModalVisible, setSplitModalVisible] = useState<boolean>(false);
   const [manualMuscleOverrides, setManualMuscleOverrides] = useState<Record<string, number>>({});
+
+  const { ordered: orderedSplitRoutines, safeIndex: currentSplitIndex } = useMemo(
+    () => resolveSplitRoutines(routines, splitState),
+    [routines, splitState]
+  );
 
   const recoveryMap = useMemo(() => {
     return computeMuscleRecoveryMap(allLogs, manualMuscleOverrides);
@@ -1109,15 +1120,67 @@ export default function LogScreen() {
 
   const loadData = useCallback(async () => {
     const revision = routineRevision.current;
-    const [logs, loadedRoutines, loadedOverrides] = await Promise.all([
+    const [logs, loadedRoutines, loadedOverrides, loadedSplit] = await Promise.all([
       loadWorkoutLogs(userId),
       loadCustomRoutines(userId),
       loadManualMuscleSoreness(userId),
+      loadWorkoutSplitState(userId),
     ]);
     setAllLogs(logs);
     if (revision === routineRevision.current) setRoutines(loadedRoutines);
+    setSplitState(loadedSplit);
     setManualMuscleOverrides(loadedOverrides);
   }, [userId]);
+
+  const updateSplitState = useCallback(
+    async (next: WorkoutSplitState) => {
+      setSplitState(next);
+      await saveWorkoutSplitState(userId, next);
+    },
+    [userId]
+  );
+
+  const moveSplitDay = useCallback(
+    async (routineId: string, direction: -1 | 1) => {
+      const currentOrder = orderedSplitRoutines.map((r) => r.id);
+      const idx = currentOrder.indexOf(routineId);
+      const nextIdx = idx + direction;
+      if (idx < 0 || nextIdx < 0 || nextIdx >= currentOrder.length) return;
+      Haptics.selectionAsync().catch(() => {});
+      const copy = [...currentOrder];
+      const [moved] = copy.splice(idx, 1);
+      copy.splice(nextIdx, 0, moved);
+      const activeId = orderedSplitRoutines[currentSplitIndex]?.id;
+      const newCurIdx = activeId ? Math.max(0, copy.indexOf(activeId)) : 0;
+      await updateSplitState({ splitOrder: copy, currentIndex: newCurIdx });
+    },
+    [orderedSplitRoutines, currentSplitIndex, updateSplitState]
+  );
+
+  const toggleDayInSplit = useCallback(
+    async (routineId: string) => {
+      Haptics.selectionAsync().catch(() => {});
+      const allIds = routines.map((r) => r.id);
+      const activeOrder = splitState.splitOrder.length > 0
+        ? splitState.splitOrder.filter((id) => allIds.includes(id))
+        : allIds;
+      let nextOrder: string[];
+      if (activeOrder.includes(routineId)) {
+        if (activeOrder.length <= 1) {
+          Alert.alert('Keep at least one day', 'Your repeating split needs at least one workout day.');
+          return;
+        }
+        nextOrder = activeOrder.filter((id) => id !== routineId);
+      } else {
+        nextOrder = [...activeOrder, routineId];
+      }
+      await updateSplitState({
+        splitOrder: nextOrder,
+        currentIndex: Math.min(splitState.currentIndex, Math.max(0, nextOrder.length - 1)),
+      });
+    },
+    [routines, splitState, updateSplitState]
+  );
 
   const handleSetMuscleRecovery = async (muscle: MuscleGroupKey, percent: number) => {
     const next = { ...manualMuscleOverrides, [muscle]: percent };
@@ -1594,13 +1657,13 @@ export default function LogScreen() {
           ))}
         </TutorialAnchor>
 
-        {/* Individual Exercise Log Button (opens legacy individual logger) */}
+        {/* Individual Exercise Log Button (no border, opens legacy individual logger) */}
         <TouchableOpacity
           accessibilityRole="button"
           accessibilityLabel="Individual Log"
           style={[
             styles.individualLogBtn,
-            { backgroundColor: colors.surfaceElevated, borderColor: colors.border },
+            { backgroundColor: colors.surfaceElevated },
           ]}
           onPress={() => {
             Haptics.selectionAsync().catch(() => {});
@@ -1617,176 +1680,27 @@ export default function LogScreen() {
           <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
         </TouchableOpacity>
 
-        {/* ── SECTION 0: CUSTOM WORKOUT DAY PRESETS / ROUTINES (SLIDER: 2 LARGER CARDS AT ONCE) ── */}
-        <TutorialAnchor tutorialId="workout-days"><Text style={{ color: colors.text, fontSize: 14, fontWeight: '800', marginTop: 6, marginBottom: 10 }}>Workout days</Text>
-        <ScrollView
-          horizontal
-          pagingEnabled={false}
-          snapToInterval={ROUTINE_PAGE_SNAP_INTERVAL}
-          snapToAlignment="start"
-          decelerationRate="fast"
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.routinesSliderTrack}
-          onMomentumScrollEnd={(e) => {
-            const offsetX = e.nativeEvent.contentOffset.x;
-            const pageIndex = Math.min(
-              routinePageCount - 1,
-              Math.max(0, Math.round(offsetX / ROUTINE_PAGE_SNAP_INTERVAL))
-            );
-            setActiveRoutinePage(pageIndex);
-          }}
-        >
-          {routinePages.map((pageGroup, pIdx) => (
-            <View key={`routine_page_${pIdx}`} style={styles.routinePageGroup}>
-              {pageGroup.map((item, itemIdx) => {
-                if (item.type === 'new_day') {
-                  return (
-                    <TouchableOpacity
-                      key="routine_new_day_item"
-                      style={[
-                        styles.coloredRoutineCardSlider,
-                        styles.newDayCardSlider,
-                        {
-                          backgroundColor: colors.surfaceElevated,
-                          borderColor: colors.primary,
-                        },
-                      ]}
-                      onPress={() => {
-                        Haptics.selectionAsync().catch(() => {});
-                        openCreateRoutineModal();
-                      }}
-                      activeOpacity={0.8}
-                    >
-                      <View style={styles.newDayInnerRow}>
-                        <View style={[styles.newDayIconCircle, { backgroundColor: colors.surfaceSecondary }]}>
-                          <Ionicons name="add" size={23} color={colors.primary} />
-                        </View>
-                        <View style={{ flex: 1 }}>
-                          <Text
-                            style={[
-                              styles.routinePillTitle,
-                              { color: colors.primary },
-                            ]}
-                            numberOfLines={2}
-                          >
-                            New workout
-                          </Text>
-                        </View>
-                      </View>
-                    </TouchableOpacity>
-                  );
-                }
-
-                const routine = item.data;
-                const exCount = routine.exercises?.length ?? 0;
-                return (
-                  <View
-                    key={routine.id}
-                    style={[
-                      styles.coloredRoutineCardSlider,
-                      {
-                        backgroundColor: activeSessionRoutine?.id === routine.id ? routine.color + '22' : colors.surfaceElevated,
-                        borderWidth: 1,
-                        borderColor: activeSessionRoutine?.id === routine.id ? routine.color : 'transparent',
-                      },
-                    ]}
-                  >
-                    <TouchableOpacity
-                      style={styles.routineCardMainTap}
-                      accessibilityRole="button"
-                      accessibilityLabel={`Select ${routine.title} workout day`}
-                      accessibilityState={{ selected: activeSessionRoutine?.id === routine.id }}
-                      onPress={() => {
-                        Haptics.selectionAsync().catch(() => {});
-                        if (activeSessionRoutine?.id === routine.id) return;
-                        if (activeSessionRoutine) {
-                          Alert.alert('Switch workout day?', 'Unsaved sets in the current workout will be discarded.', [
-                            { text: 'Keep workout', style: 'cancel' },
-                            { text: 'Switch', style: 'destructive', onPress: () => setActiveSessionRoutine(routine) },
-                          ]);
-                        } else setActiveSessionRoutine(routine);
-                      }}
-                      activeOpacity={0.8}
-                    >
-                      <View style={styles.routinePillInner}>
-                        <Text
-                          style={[
-                            styles.routinePillTitle,
-                            { color: colors.text },
-                          ]}
-                          numberOfLines={2}
-                        >
-                          {routine.title}
-                        </Text>
-                      </View>
-                      <Text
-                        style={[
-                          styles.routinePillSub,
-                          { color: colors.textSecondary },
-                        ]}
-                        numberOfLines={2}
-                      >
-                        {exCount} {exCount === 1 ? 'exercise' : 'exercises'}
-                      </Text>
-                    </TouchableOpacity>
-
-                    {/* 3-dots Menu Button to edit day or select subset */}
-                    <TouchableOpacity
-                      style={styles.routineThreeDotsBtn}
-                      accessibilityLabel={`Edit ${routine.title} workout day`}
-                      onPress={() => {
-                        if (activeSessionRoutine?.id === routine.id) {
-                          Alert.alert('Edit active workout day?', 'Saving changes will reset unsaved sets for this workout.', [
-                            { text: 'Cancel', style: 'cancel' },
-                            { text: 'Edit', onPress: () => openEditRoutineModal(routine) },
-                          ]);
-                        } else openEditRoutineModal(routine);
-                      }}
-                      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                      activeOpacity={0.7}
-                    >
-                      <Ionicons
-                        name="ellipsis-vertical"
-                        size={14}
-                        color={colors.textMuted}
-                      />
-                    </TouchableOpacity>
-                  </View>
-                );
-              })}
-            </View>
-          ))}
-        </ScrollView>
-
-        </TutorialAnchor>
-        {/* Black Dots Indicator below the workout days/routines */}
-        {routinePageCount > 1 && (
-          <View style={styles.routineDotsRow}>
-            {Array.from({ length: routinePageCount }).map((_, pIdx) => {
-              const isSelectedPage = pIdx === activeRoutinePage;
-              return (
-                <View
-                  key={`routine_dot_${pIdx}`}
-                  style={[
-                    styles.routineDot,
-                    {
-                      backgroundColor: isSelectedPage ? '#000000' : (isDark ? 'rgba(255,255,255,0.25)' : 'rgba(0,0,0,0.2)'),
-                      transform: [{ scale: isSelectedPage ? 1.3 : 1 }],
-                    },
-                  ]}
-                />
-              );
-            })}
-          </View>
-        )}
-
         {batchSuccessMsg && <View style={styles.successTextRowBelowDays}>
           <Text style={[styles.loggedTextPlain, { color: colors.text }]}>{batchSuccessMsg}</Text>
           {lastLoggedIds.length > 0 && <TouchableOpacity onPress={triggerUndo}><Text style={styles.blueUndoTextOnly}>Undo</Text></TouchableOpacity>}
         </View>}
         <WorkoutRankProgress userId={userId} logIds={lastLoggedIds} weightUnit={effectiveWeightUnit} />
-        {!activeSessionRoutine && <WorkoutStartPanel routines={routines} logs={allLogs}
-          onSelectRoutine={setActiveSessionRoutine} onCreateRoutine={openCreateRoutineModal} />}
+        <TutorialAnchor tutorialId="workout-days">
+          {!activeSessionRoutine && (
+            <WorkoutStartPanel
+              routines={orderedSplitRoutines}
+              logs={allLogs}
+              initialIndex={currentSplitIndex}
+              splitLabel={orderedSplitRoutines.length > 0 ? `${orderedSplitRoutines.length}-Day Split` : 'Split'}
+              onOpenSplit={() => {
+                Haptics.selectionAsync().catch(() => {});
+                setSplitModalVisible(true);
+              }}
+              onSelectRoutine={setActiveSessionRoutine}
+              onCreateRoutine={openCreateRoutineModal}
+            />
+          )}
+        </TutorialAnchor>
         {activeSessionRoutine && (
           <WorkoutSessionModal
             key={activeSessionRoutine?.id || 'no-workout'}
@@ -1800,9 +1714,20 @@ export default function LogScreen() {
               { text: 'Keep workout', style: 'cancel' },
               { text: 'Close', style: 'destructive', onPress: () => setActiveSessionRoutine(null) },
             ])}
-            onFinishSession={(count, ids) => {
+            onFinishSession={async (count, ids) => {
+              const finishedId = activeSessionRoutine.id;
               setLastLoggedIds(ids);
               setActiveSessionRoutine(null);
+              if (orderedSplitRoutines.length > 0) {
+                const finIdx = orderedSplitRoutines.findIndex((r) => r.id === finishedId);
+                const nextIdx = finIdx >= 0
+                  ? (finIdx + 1) % orderedSplitRoutines.length
+                  : (currentSplitIndex + 1) % orderedSplitRoutines.length;
+                await updateSplitState({
+                  splitOrder: orderedSplitRoutines.map((r) => r.id),
+                  currentIndex: nextIdx,
+                });
+              }
               loadData();
               setBatchSuccessMsg(`Logged ${count} completed set${count === 1 ? '' : 's'}!`);
               if (undoTimer) clearTimeout(undoTimer);
@@ -1814,6 +1739,198 @@ export default function LogScreen() {
           />
         )}
       </TutorialScrollView>
+
+      {/* Workout Split & Order Management Modal */}
+      <InteractiveBottomModal
+        visible={splitModalVisible}
+        onDismiss={() => setSplitModalVisible(false)}
+        handleColor={colors.border}
+        cardStyle={[styles.modalSheet, { backgroundColor: colors.surfaceElevated, borderColor: colors.border }]}
+      >
+        <View style={styles.modalHeader}>
+          <View>
+            <Text style={[styles.modalTitle, { color: colors.text }]}>Workout Split</Text>
+            <Text style={[styles.modalSub, { color: colors.textMuted }]}>
+              Order your rotation — loops back to Day 1 when finished
+            </Text>
+          </View>
+          <TouchableOpacity onPress={() => setSplitModalVisible(false)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+            <Ionicons name="close-circle" size={26} color={colors.textMuted} />
+          </TouchableOpacity>
+        </View>
+
+        <ScrollView style={{ maxHeight: 360 }} showsVerticalScrollIndicator={false}>
+          <Text style={[styles.modalSectionLabel, { color: colors.text }]}>
+            Active Loop ({orderedSplitRoutines.length} {orderedSplitRoutines.length === 1 ? 'day' : 'days'})
+          </Text>
+          <View style={[styles.modalConnectedListWrap, { backgroundColor: colors.card, borderColor: colors.border }]}>
+            {orderedSplitRoutines.map((routine, idx) => {
+              const isNext = idx === currentSplitIndex;
+              const isLast = idx === orderedSplitRoutines.length - 1;
+              return (
+                <View
+                  key={routine.id}
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    paddingHorizontal: 14,
+                    paddingVertical: 12,
+                    gap: 10,
+                    backgroundColor: isNext ? (isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.03)') : 'transparent',
+                    borderBottomWidth: isLast ? 0 : StyleSheet.hairlineWidth,
+                    borderBottomColor: colors.border,
+                  }}
+                >
+                  <TouchableOpacity
+                    onPress={() => {
+                      Haptics.selectionAsync().catch(() => {});
+                      void updateSplitState({
+                        splitOrder: orderedSplitRoutines.map((r) => r.id),
+                        currentIndex: idx,
+                      });
+                    }}
+                    style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 10 }}
+                    activeOpacity={0.75}
+                  >
+                    <View
+                      style={{
+                        width: 26,
+                        height: 26,
+                        borderRadius: 13,
+                        backgroundColor: isNext ? colors.primary : (isDark ? 'rgba(255,255,255,0.08)' : '#e4e4e7'),
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                      }}
+                    >
+                      <Text style={{ fontSize: 12, fontWeight: '800', color: isNext ? (isDark ? '#09090b' : '#ffffff') : colors.text }}>
+                        {idx + 1}
+                      </Text>
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ fontSize: 15, fontWeight: '700', color: colors.text }} numberOfLines={1}>
+                        {routine.title}
+                      </Text>
+                      <Text style={{ fontSize: 12, color: isNext ? colors.primary : colors.textMuted }}>
+                        {isNext ? 'Up next in loop' : `${routine.exercises?.length ?? 0} exercises · Tap to set next`}
+                      </Text>
+                    </View>
+                  </TouchableOpacity>
+
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                    <TouchableOpacity
+                      disabled={idx === 0}
+                      onPress={() => void moveSplitDay(routine.id, -1)}
+                      style={{ padding: 6, opacity: idx === 0 ? 0.25 : 1 }}
+                    >
+                      <Ionicons name="chevron-up" size={18} color={colors.text} />
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      disabled={idx === orderedSplitRoutines.length - 1}
+                      onPress={() => void moveSplitDay(routine.id, 1)}
+                      style={{ padding: 6, opacity: idx === orderedSplitRoutines.length - 1 ? 0.25 : 1 }}
+                    >
+                      <Ionicons name="chevron-down" size={18} color={colors.text} />
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      onPress={() => {
+                        setSplitModalVisible(false);
+                        openEditRoutineModal(routine);
+                      }}
+                      style={{ padding: 6 }}
+                      accessibilityLabel={`Edit ${routine.title}`}
+                    >
+                      <Ionicons name="create-outline" size={17} color={colors.textMuted} />
+                    </TouchableOpacity>
+                    {routines.length > 1 && (
+                      <TouchableOpacity
+                        onPress={() => void toggleDayInSplit(routine.id)}
+                        style={{ padding: 6 }}
+                        accessibilityLabel={`Remove ${routine.title} from split`}
+                      >
+                        <Ionicons name="remove-circle-outline" size={17} color={colors.textMuted} />
+                      </TouchableOpacity>
+                    )}
+                  </View>
+                </View>
+              );
+            })}
+          </View>
+
+          {(() => {
+            const activeIds = new Set(orderedSplitRoutines.map((r) => r.id));
+            const extraRoutines = routines.filter((r) => !activeIds.has(r.id));
+            if (extraRoutines.length === 0) return null;
+            return (
+              <>
+                <Text style={[styles.modalSectionLabel, { color: colors.textMuted }]}>
+                  Available Workout Days (Tap + to add to split)
+                </Text>
+                <View style={[styles.modalConnectedListWrap, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                  {extraRoutines.map((routine, idx) => (
+                    <View
+                      key={routine.id}
+                      style={{
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        paddingHorizontal: 14,
+                        paddingVertical: 11,
+                        gap: 10,
+                        borderBottomWidth: idx === extraRoutines.length - 1 ? 0 : StyleSheet.hairlineWidth,
+                        borderBottomColor: colors.border,
+                      }}
+                    >
+                      <View style={{ flex: 1 }}>
+                        <Text style={{ fontSize: 14.5, fontWeight: '700', color: colors.text }}>{routine.title}</Text>
+                        <Text style={{ fontSize: 12, color: colors.textMuted }}>{routine.exercises?.length ?? 0} exercises</Text>
+                      </View>
+                      <TouchableOpacity
+                        onPress={() => void toggleDayInSplit(routine.id)}
+                        style={{
+                          flexDirection: 'row',
+                          alignItems: 'center',
+                          gap: 4,
+                          paddingHorizontal: 10,
+                          paddingVertical: 5,
+                          borderRadius: 999,
+                          backgroundColor: colors.primary,
+                        }}
+                      >
+                        <Ionicons name="add" size={14} color={isDark ? '#09090b' : '#ffffff'} />
+                        <Text style={{ fontSize: 12, fontWeight: '700', color: isDark ? '#09090b' : '#ffffff' }}>Add</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        onPress={() => {
+                          setSplitModalVisible(false);
+                          openEditRoutineModal(routine);
+                        }}
+                        style={{ padding: 6 }}
+                      >
+                        <Ionicons name="create-outline" size={17} color={colors.textMuted} />
+                      </TouchableOpacity>
+                    </View>
+                  ))}
+                </View>
+              </>
+            );
+          })()}
+        </ScrollView>
+
+        <View style={styles.modalActionsRow}>
+          <TouchableOpacity
+            style={[styles.saveRoutineBtn, { backgroundColor: colors.primary, flexDirection: 'row', gap: 8 }]}
+            onPress={() => {
+              setSplitModalVisible(false);
+              openCreateRoutineModal();
+            }}
+            activeOpacity={0.85}
+          >
+            <Ionicons name="add-circle-outline" size={18} color={isDark ? '#09090b' : '#ffffff'} />
+            <Text style={[styles.saveRoutineBtnText, { color: isDark ? '#09090b' : '#ffffff' }]}>
+              New Workout Day
+            </Text>
+          </TouchableOpacity>
+        </View>
+      </InteractiveBottomModal>
 
       {/* Custom Routine / Workout Day Creation Modal */}
       <RoutineBuilderModal
@@ -3462,7 +3579,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 12,
     borderRadius: 16,
-    borderWidth: 1,
     marginBottom: 8,
   },
   modalExerciseRowHeader: {

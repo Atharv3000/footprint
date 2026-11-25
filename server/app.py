@@ -21,6 +21,7 @@ from .counter import RepCounter
 from .boxing import BoxingGame
 from .country_quests import CountryQuests
 from .community_goals import CommunityGoals
+from .food_ai import analyze_food_image, describe_food
 
 
 def get_token():
@@ -598,3 +599,33 @@ async def goals(request: Request):
         if action in ('preview', 'join', 'get'):
             limiter.check(f'goals_fail:{caller_id}', 10, 300.0, 'Too many failed code lookups.')
         raise HTTPException(400, str(error))
+
+
+@app.post('/rep-api/food-analyze')
+async def food_analyze(request: Request):
+    caller_id = await auth(request)
+    limiter.check(f'food_analyze:{caller_id}', 30, 60.0)
+    data = await payload(request, FRAME_BODY_LIMIT)
+    encoded = data.get('image')
+    if not isinstance(encoded, str):
+        encoded = ''
+    meal_hint = str(data.get('mealHint', '') or '')[:120]
+    hint = str(data.get('hint', '') or '')[:400]
+    try:
+        result = await asyncio.to_thread(analyze_food_image, encoded, meal_hint, hint)
+        return {'type': 'food_analysis_result', 'success': True, 'data': result}
+    except ValueError as error:
+        return {'type': 'food_analysis_result', 'success': False, 'error': str(error)}
+
+
+@app.post('/rep-api/food-describe')
+async def food_describe(request: Request):
+    caller_id = await auth(request)
+    limiter.check(f'food_describe:{caller_id}', 60, 60.0)
+    data = await payload(request, JSON_BODY_LIMIT)
+    description = str(data.get('description', '') or '')[:500]
+    try:
+        result = await asyncio.to_thread(describe_food, description)
+        return {'type': 'describe_food_result', 'success': True, 'data': result}
+    except ValueError as error:
+        return {'type': 'describe_food_result', 'success': False, 'error': str(error)}

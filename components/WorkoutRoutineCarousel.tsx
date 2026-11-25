@@ -4,22 +4,34 @@ import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '@/constants/ThemeContext';
 import type { CustomRoutine } from '@/constants/workoutStorage';
 
-export function WorkoutRoutineCarousel({ routines, onSelect }: {
-  routines: CustomRoutine[]; onSelect: (routine: CustomRoutine) => void;
+export function WorkoutRoutineCarousel({
+  routines,
+  onSelect,
+  initialIndex = 0,
+}: {
+  routines: CustomRoutine[];
+  onSelect: (routine: CustomRoutine) => void;
+  initialIndex?: number;
 }) {
-  const { colors } = useTheme();
+  const { colors, isDark } = useTheme();
   const scroll = useRef<React.ElementRef<typeof ScrollView>>(null);
   const [width, setWidth] = useState(0);
-  const [index, setIndex] = useState(0);
+  const clampedInitial = routines.length > 0 ? Math.max(0, Math.min(routines.length - 1, initialIndex)) : 0;
+  const [index, setIndex] = useState(clampedInitial);
   const loop = routines.length > 1;
-  const routineKey = routines.map(routine => routine.id).join('|');
+  const routineKey = routines.map((routine) => routine.id).join('|');
   const pages = loop ? [routines[routines.length - 1], ...routines, routines[0]] : routines;
+
   useEffect(() => {
-    setIndex(0);
+    setIndex(clampedInitial);
     if (!width) return;
-    const frame = requestAnimationFrame(() => scroll.current?.scrollTo({ x: loop ? width : 0, animated: false }));
+    const targetPage = loop ? clampedInitial + 1 : 0;
+    const frame = requestAnimationFrame(() =>
+      scroll.current?.scrollTo({ x: width * targetPage, animated: false })
+    );
     return () => cancelAnimationFrame(frame);
-  }, [width, routineKey, loop]);
+  }, [width, routineKey, loop, clampedInitial]);
+
   const settle = (offset: number) => {
     if (!width || !routines.length) return;
     const page = Math.round(offset / width);
@@ -29,39 +41,114 @@ export function WorkoutRoutineCarousel({ routines, onSelect }: {
     } else if (loop && page >= routines.length + 1) {
       scroll.current?.scrollTo({ x: width, animated: false });
       setIndex(0);
-    } else setIndex(Math.max(0, Math.min(routines.length - 1, page - (loop ? 1 : 0))));
+    } else {
+      setIndex(Math.max(0, Math.min(routines.length - 1, page - (loop ? 1 : 0))));
+    }
   };
-  return <View onLayout={event => setWidth(event.nativeEvent.layout.width)}>
-    {width > 0 && <ScrollView ref={scroll} horizontal pagingEnabled directionalLockEnabled
-      showsHorizontalScrollIndicator={false} decelerationRate="fast" scrollEnabled={loop}
-      onMomentumScrollEnd={event => settle(event.nativeEvent.contentOffset.x)}>
-      {pages.map((routine, page) => {
-        const sentinel = loop && (page === 0 || page === pages.length - 1);
-        return <View key={`${page}-${routine.id}`} style={{ width }} accessibilityElementsHidden={sentinel} importantForAccessibility={sentinel ? 'no-hide-descendants' : 'auto'}>
-          <TouchableOpacity accessibilityRole="button" accessibilityLabel={`Start ${routine.title} workout`}
-            onPress={() => onSelect(routine)} style={[s.start, { backgroundColor: colors.primary }]}>
-            <Ionicons name="play" size={17} color="#101609" />
-            <Text numberOfLines={1} style={s.startText}>Start {routine.title}</Text>
-            <Ionicons name="arrow-forward" size={18} color="#101609" />
-          </TouchableOpacity>
-        </View>;
-      })}
-    </ScrollView>}
-    {loop && <View style={s.controls}>
-      <TouchableOpacity accessibilityRole="button" accessibilityLabel="Previous workout day" hitSlop={8}
-        onPress={() => scroll.current?.scrollTo({ x: width * index, animated: true })} style={s.arrow}>
-        <Ionicons name="chevron-back" size={18} color={colors.textMuted} />
-      </TouchableOpacity>
-      <Text accessibilityLiveRegion="polite" style={{ color: colors.textMuted, fontSize: 11 }}>{index + 1} / {routines.length}</Text>
-      <TouchableOpacity accessibilityRole="button" accessibilityLabel="Next workout day" hitSlop={8}
-        onPress={() => scroll.current?.scrollTo({ x: width * (index + 2), animated: true })} style={s.arrow}>
-        <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
-      </TouchableOpacity>
-    </View>}
-  </View>;
+
+  const buttonForeground = isDark ? '#09090b' : '#ffffff';
+
+  return (
+    <View onLayout={(event) => setWidth(event.nativeEvent.layout.width)}>
+      {width > 0 && (
+        <ScrollView
+          ref={scroll}
+          horizontal
+          pagingEnabled
+          directionalLockEnabled
+          showsHorizontalScrollIndicator={false}
+          decelerationRate="fast"
+          scrollEnabled={loop}
+          onMomentumScrollEnd={(event) => settle(event.nativeEvent.contentOffset.x)}
+        >
+          {pages.map((routine, page) => {
+            const sentinel = loop && (page === 0 || page === pages.length - 1);
+            return (
+              <View
+                key={`${page}-${routine.id}`}
+                style={{ width, paddingHorizontal: loop ? 5 : 0 }}
+                accessibilityElementsHidden={sentinel}
+                importantForAccessibility={sentinel ? 'no-hide-descendants' : 'auto'}
+              >
+                <TouchableOpacity
+                  accessibilityRole="button"
+                  accessibilityLabel={`Start ${routine.title} workout`}
+                  onPress={() => onSelect(routine)}
+                  style={[s.start, { backgroundColor: colors.primary }]}
+                  activeOpacity={0.85}
+                >
+                  <Ionicons name="play" size={16} color={buttonForeground} />
+                  <Text numberOfLines={1} style={[s.startText, { color: buttonForeground }]}>
+                    Start {routine.title}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            );
+          })}
+        </ScrollView>
+      )}
+      {loop && (
+        <View style={s.dotsRow}>
+          {routines.map((routine, i) => {
+            const active = i === index;
+            return (
+              <TouchableOpacity
+                key={routine.id}
+                accessibilityRole="button"
+                accessibilityLabel={`Select ${routine.title}`}
+                hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}
+                onPress={() => {
+                  setIndex(i);
+                  scroll.current?.scrollTo({ x: width * (i + 1), animated: true });
+                }}
+              >
+                <View
+                  style={[
+                    s.dot,
+                    {
+                      width: active ? 16 : 6,
+                      backgroundColor: active
+                        ? colors.primary
+                        : isDark
+                        ? 'rgba(255,255,255,0.22)'
+                        : 'rgba(0,0,0,0.18)',
+                    },
+                  ]}
+                />
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+      )}
+    </View>
+  );
 }
+
 const s = StyleSheet.create({
-  start: { minHeight: 48, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 9, borderRadius: 16, padding: 13 },
-  startText: { flex: 1, minWidth: 0, color: '#101609', fontSize: 14, fontWeight: '800', textAlign: 'center' },
-  controls: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 12, marginTop: 8 }, arrow: { padding: 5 },
+  start: {
+    minHeight: 48,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    borderRadius: 16,
+    paddingHorizontal: 16,
+    paddingVertical: 13,
+  },
+  startText: {
+    fontSize: 14.5,
+    fontWeight: '800',
+    textAlign: 'center',
+  },
+  dotsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    marginTop: 12,
+  },
+  dot: {
+    height: 6,
+    borderRadius: 3,
+  },
 });

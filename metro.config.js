@@ -15,6 +15,7 @@ config.resolver.resolveRequest = (context, moduleName, platform) => {
 const routes = new Map([
   ['/rep-api/goals', 'POST'], ['/rep-api/countries', 'POST'], ['/rep-api/calories', 'POST'], ['/rep-api/health', 'GET'], ['/rep-api/session', 'POST'], ['/rep-api/poll', 'GET'],
   ['/rep-api/command', 'POST'], ['/rep-api/frame', 'POST'], ['/rep-api/close', 'POST'],
+  ['/rep-api/food-analyze', 'POST'], ['/rep-api/food-describe', 'POST'],
 ]);
 const devTokenPath = path.join(__dirname, '.expo', 'rep-session-token');
 function readDevToken() {
@@ -27,7 +28,7 @@ config.server.enhanceMiddleware = (middleware, server) => {
     const route = req.url?.split('?')[0];
     if (!routes.has(route)) return next(req, res, nextMiddleware);
     if (routes.get(route) !== req.method) { res.writeHead(405); res.end(); return; }
-    const limit = route === '/rep-api/frame' ? 2900000 : 65536;
+    const limit = (route === '/rep-api/frame' || route === '/rep-api/food-analyze') ? 2900000 : 65536;
     if (Number(req.headers['content-length'] || 0) > limit) { res.writeHead(413); res.end(); return; }
     const headers = {
       'content-type': 'application/json',

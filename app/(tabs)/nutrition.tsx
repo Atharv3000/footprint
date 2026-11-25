@@ -386,7 +386,7 @@ export default function NutritionScreen() {
 
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
             <TutorialButton
-              tutorialId="nutrition-pet"
+              tutorialId={activeTab === 'pet' ? 'nutrition-tracker' : 'nutrition-pet'}
               accessibilityRole="button"
               accessibilityState={{ selected: activeTab === 'pet' }}
               accessibilityLabel="Toggle Pet Companion"
