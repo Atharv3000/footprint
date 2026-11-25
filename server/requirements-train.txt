@@ -1,0 +1,3 @@
+-r requirements.txt
+# Only needed to extract landmarks from video for server.rep_training / server.backtest
+opencv-python-headless>=4.9,<5

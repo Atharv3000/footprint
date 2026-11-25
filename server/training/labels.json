@@ -1,0 +1,561 @@
+{
+ "_about": "Manual reference rep counts from frame-by-frame review of contact sheets and joint-angle traces. 'role': train = used for fitting; test = held out from fitting and used only to report generalisation (then folded in for the shipped fit); hard = held out, reported only (poor light / heavy occlusion / unsupported view); negative clips must count 0 for every exercise listed in 'negative_for'. Expected counts are reps that start from an observed top/extended position, matching the app's rule that a rep must be seen from its start. Push-ups: 'expected' counts reps after the first straight-arm hold (>=0.35 s), because the app calibrates on that hold; 'expected_total' keeps every visible rep where they differ.",
+ "clips": [
+  {
+   "cache": "pushup2",
+   "exercise": "pushups",
+   "expected": 5,
+   "role": "train",
+   "view": "side/oblique",
+   "source": "shreyanshsatvik/personal_trainer-using-mediapipe@010a20c videos/pushup2.mp4"
+  },
+  {
+   "cache": "pushup3",
+   "exercise": "pushups",
+   "expected": 3,
+   "role": "test",
+   "view": "diagonal, modified push-ups",
+   "source": "shreyanshsatvik/personal_trainer-using-mediapipe videos/pushup3.mp4"
+  },
+  {
+   "cache": "pushup1",
+   "exercise": "pushups",
+   "expected": 5,
+   "role": "hard",
+   "view": "head-on (unsupported by design)",
+   "source": "shreyanshsatvik/personal_trainer-using-mediapipe videos/pushup1.mp4"
+  },
+  {
+   "cache": "awm_pushup",
+   "exercise": "pushups",
+   "expected": 6,
+   "role": "hard",
+   "view": "head-on, long rest (unsupported by design)",
+   "source": "airscholar/AI-Workout-Manager assets/pushup.mp4"
+  },
+  {
+   "cache": "squats1",
+   "exercise": "squats",
+   "expected": 4,
+   "role": "train",
+   "view": "side",
+   "source": "shreyanshsatvik/personal_trainer-using-mediapipe videos/squats1.mp4"
+  },
+  {
+   "cache": "squats2",
+   "exercise": "squats",
+   "expected": 4,
+   "role": "train",
+   "view": "front, phone portrait, partial depth",
+   "source": "shreyanshsatvik/personal_trainer-using-mediapipe videos/squats2.mp4"
+  },
+  {
+   "cache": "squats3",
+   "exercise": "squats",
+   "expected": 4,
+   "role": "test",
+   "view": "side, deep",
+   "source": "shreyanshsatvik/personal_trainer-using-mediapipe videos/squats3.mp4",
+   "note": "Clip opens mid-descent; the first squat is never seen from standing, and the app (by design) only counts reps that start from an observed top. 5 squats visible in total."
+  },
+  {
+   "cache": "weight_lifting_2",
+   "exercise": "bicep_curls",
+   "expected": 2,
+   "role": "train",
+   "view": "front, alternating dumbbell (1 per arm)",
+   "source": "shreyanshsatvik/personal_trainer-using-mediapipe videos/weight lifting 2.mp4"
+  },
+  {
+   "cache": "rr_demo2",
+   "exercise": "bicep_curls",
+   "expected": 3,
+   "role": "train",
+   "view": "front, barbell (both arms together)",
+   "source": "RiccardoRiccio/Fitness-AI-Trainer-With-Automatic-Exercise-Recognition-and-Counting demo_2.mp4"
+  },
+  {
+   "cache": "kedyi_2",
+   "exercise": "bicep_curls",
+   "expected": 3,
+   "role": "hard",
+   "view": "seated wheelchair, oblique, dark gym",
+   "source": "Kedyi/AI_trainer videos/2.mp4",
+   "note": "Clip opens curled; first rep starts unobserved. 4 curls visible in total."
+  },
+  {
+   "cache": "weight_lifting_1",
+   "exercise": "bicep_curls",
+   "expected": 3,
+   "role": "hard",
+   "view": "very low light, single arm",
+   "source": "shreyanshsatvik/personal_trainer-using-mediapipe videos/weight lifting 1.mp4"
+  },
+  {
+   "cache": "vv_pushup1",
+   "exercise": "pushups",
+   "expected": 1,
+   "role": "train",
+   "source": "vinvinz/Machine-Learning-Exercise-Counting-Classification training_videos/Push-up/pushup1"
+  },
+  {
+   "cache": "vv_pushup2",
+   "exercise": "pushups",
+   "expected": 1,
+   "role": "train",
+   "source": "vinvinz/Machine-Learning-Exercise-Counting-Classification training_videos/Push-up/pushup2",
+   "expected_total": 2,
+   "note": "First rep starts with no settled top; the app requires a brief straight-arm hold to calibrate, so it is not countable."
+  },
+  {
+   "cache": "vv_pushup3",
+   "exercise": "pushups",
+   "expected": 2,
+   "role": "train",
+   "source": "vinvinz/Machine-Learning-Exercise-Counting-Classification training_videos/Push-up/pushup3"
+  },
+  {
+   "cache": "vv_pushup4",
+   "exercise": "pushups",
+   "expected": 1,
+   "role": "excluded",
+   "source": "vinvinz/Machine-Learning-Exercise-Counting-Classification training_videos/Push-up/pushup4",
+   "note": "Only rep starts before any settled top position; nothing app-countable."
+  },
+  {
+   "cache": "vv_pushup5",
+   "exercise": "pushups",
+   "expected": 2,
+   "role": "test",
+   "source": "vinvinz/Machine-Learning-Exercise-Counting-Classification training_videos/Push-up/pushup5"
+  },
+  {
+   "cache": "vv_pushup6",
+   "exercise": "pushups",
+   "expected": 1,
+   "role": "excluded",
+   "source": "vinvinz/Machine-Learning-Exercise-Counting-Classification training_videos/Push-up/pushup6",
+   "note": "Only rep starts before any settled top position; nothing app-countable."
+  },
+  {
+   "cache": "vv_pushup8",
+   "exercise": "pushups",
+   "expected": 3,
+   "role": "train",
+   "source": "vinvinz/Machine-Learning-Exercise-Counting-Classification training_videos/Push-up/pushup8"
+  },
+  {
+   "cache": "vv_pushup9",
+   "exercise": "pushups",
+   "expected": 6,
+   "role": "test",
+   "source": "vinvinz/Machine-Learning-Exercise-Counting-Classification training_videos/Push-up/pushup9",
+   "expected_total": 7,
+   "note": "First rep starts with no settled top; the app requires a brief straight-arm hold to calibrate, so it is not countable."
+  },
+  {
+   "cache": "vv_pushup11",
+   "exercise": "pushups",
+   "expected": 6,
+   "role": "train",
+   "source": "vinvinz/Machine-Learning-Exercise-Counting-Classification training_videos/Push-up/pushup11",
+   "expected_total": 7,
+   "note": "First rep starts with no settled top; the app requires a brief straight-arm hold to calibrate, so it is not countable."
+  },
+  {
+   "cache": "vv_pushup12",
+   "exercise": "pushups",
+   "expected": 1,
+   "role": "train",
+   "source": "vinvinz/Machine-Learning-Exercise-Counting-Classification training_videos/Push-up/pushup12"
+  },
+  {
+   "cache": "vv_pushup13",
+   "exercise": "pushups",
+   "expected": 1,
+   "role": "test",
+   "source": "vinvinz/Machine-Learning-Exercise-Counting-Classification training_videos/Push-up/pushup13"
+  },
+  {
+   "cache": "vv_pushup14",
+   "exercise": "pushups",
+   "expected": 2,
+   "role": "train",
+   "source": "vinvinz/Machine-Learning-Exercise-Counting-Classification training_videos/Push-up/pushup14"
+  },
+  {
+   "cache": "vv_pushup15",
+   "exercise": "pushups",
+   "expected": 2,
+   "role": "test",
+   "source": "vinvinz/Machine-Learning-Exercise-Counting-Classification training_videos/Push-up/pushup15"
+  },
+  {
+   "cache": "vv_pushup7",
+   "exercise": "pushups",
+   "expected": 7,
+   "role": "hard",
+   "view": "head-on close-up (unsupported)",
+   "source": "vinvinz/Machine-Learning-Exercise-Counting-Classification training_videos/Push-up/pushup7.mp4"
+  },
+  {
+   "cache": "vv_squats-vid-1",
+   "exercise": "squats",
+   "expected": 9,
+   "role": "train",
+   "source": "vinvinz/Machine-Learning-Exercise-Counting-Classification training_videos/Squat/squats-vid-1.mp4"
+  },
+  {
+   "cache": "vv_squats-vid-4",
+   "exercise": "squats",
+   "expected": 6,
+   "role": "train",
+   "source": "vinvinz/Machine-Learning-Exercise-Counting-Classification training_videos/Squat/squats-vid-4.mp4"
+  },
+  {
+   "cache": "vv_squats-vid-5",
+   "exercise": "squats",
+   "expected": 5,
+   "role": "test",
+   "source": "vinvinz/Machine-Learning-Exercise-Counting-Classification training_videos/Squat/squats-vid-5.mp4"
+  },
+  {
+   "cache": "vv_squats-vid-6",
+   "exercise": "squats",
+   "expected": 4,
+   "role": "train",
+   "source": "vinvinz/Machine-Learning-Exercise-Counting-Classification training_videos/Squat/squats-vid-6.mp4"
+  },
+  {
+   "cache": "vv_squats-vid-11",
+   "exercise": "squats",
+   "expected": 4,
+   "role": "train",
+   "source": "vinvinz/Machine-Learning-Exercise-Counting-Classification training_videos/Squat/squats-vid-11.mp4"
+  },
+  {
+   "cache": "vv_squats-vid-12",
+   "exercise": "squats",
+   "expected": 7,
+   "role": "test",
+   "source": "vinvinz/Machine-Learning-Exercise-Counting-Classification training_videos/Squat/squats-vid-12.mp4"
+  },
+  {
+   "cache": "aig_squat1",
+   "exercise": "squats",
+   "expected": 4,
+   "role": "train",
+   "source": "Gangadharbhuvan/AI-Gym-with-OpenCV Squats_Count_with_Mediapipe/data/video-1.mp4"
+  },
+  {
+   "cache": "aig_squat2",
+   "exercise": "squats",
+   "expected": 3,
+   "role": "test",
+   "source": "Gangadharbhuvan/AI-Gym-with-OpenCV Squats_Count_with_Mediapipe/data/video-2.mp4"
+  }
+ ],
+ "negatives": [
+  {
+   "cache": "rr_shoulder_press",
+   "negative_for": [
+    "bicep_curls",
+    "squats",
+    "pushups"
+   ],
+   "what": "overhead shoulder press (elbow cycles above shoulders)",
+   "source": "RiccardoRiccio/... shoulder_press_form.mp4"
+  },
+  {
+   "cache": "pullup1",
+   "negative_for": [
+    "bicep_curls",
+    "squats",
+    "pushups"
+   ],
+   "what": "pull-ups",
+   "source": "shreyanshsatvik/... pullup1.mp4"
+  },
+  {
+   "cache": "pullup3",
+   "negative_for": [
+    "bicep_curls",
+    "squats",
+    "pushups"
+   ],
+   "what": "pull-ups",
+   "source": "shreyanshsatvik/... pullup3.mp4"
+  },
+  {
+   "cache": "crunches_1",
+   "negative_for": [
+    "bicep_curls",
+    "squats",
+    "pushups"
+   ],
+   "what": "crunches",
+   "source": "shreyanshsatvik/... crunches 1.mp4"
+  },
+  {
+   "cache": "kedyi_1",
+   "negative_for": [
+    "bicep_curls",
+    "squats",
+    "pushups"
+   ],
+   "what": "football juggling",
+   "source": "Kedyi/AI_trainer videos/1.mp4"
+  },
+  {
+   "cache": "fraud",
+   "negative_for": [
+    "bicep_curls",
+    "squats",
+    "pushups"
+   ],
+   "what": "food, no person",
+   "source": "shreyanshsatvik/... fraud.mp4"
+  },
+  {
+   "cache": "squats1",
+   "negative_for": [
+    "bicep_curls",
+    "pushups"
+   ]
+  },
+  {
+   "cache": "squats2",
+   "negative_for": [
+    "bicep_curls",
+    "pushups"
+   ]
+  },
+  {
+   "cache": "squats3",
+   "negative_for": [
+    "bicep_curls",
+    "pushups"
+   ]
+  },
+  {
+   "cache": "pushup2",
+   "negative_for": [
+    "bicep_curls",
+    "squats"
+   ]
+  },
+  {
+   "cache": "pushup3",
+   "negative_for": [
+    "bicep_curls",
+    "squats"
+   ]
+  },
+  {
+   "cache": "weight_lifting_2",
+   "negative_for": [
+    "squats",
+    "pushups"
+   ]
+  },
+  {
+   "cache": "rr_demo2",
+   "negative_for": [
+    "squats",
+    "pushups"
+   ]
+  },
+  {
+   "cache": "vv_planking-vid-1",
+   "negative_for": [
+    "bicep_curls",
+    "squats",
+    "pushups"
+   ],
+   "what": "plank hold",
+   "source": "vinvinz/Machine-Learning-Exercise-Counting-Classification training_videos/Plank/"
+  },
+  {
+   "cache": "vv_planking-vid-2",
+   "negative_for": [
+    "bicep_curls",
+    "squats",
+    "pushups"
+   ],
+   "what": "plank hold",
+   "source": "vinvinz/Machine-Learning-Exercise-Counting-Classification training_videos/Plank/"
+  },
+  {
+   "cache": "vv_planking-vid-3",
+   "negative_for": [
+    "bicep_curls",
+    "squats",
+    "pushups"
+   ],
+   "what": "plank hold",
+   "source": "vinvinz/Machine-Learning-Exercise-Counting-Classification training_videos/Plank/"
+  },
+  {
+   "cache": "vv_planking-vid-5",
+   "negative_for": [
+    "bicep_curls",
+    "squats",
+    "pushups"
+   ],
+   "what": "plank hold",
+   "source": "vinvinz/Machine-Learning-Exercise-Counting-Classification training_videos/Plank/"
+  },
+  {
+   "cache": "vv_planking-vid-7",
+   "negative_for": [
+    "bicep_curls",
+    "squats",
+    "pushups"
+   ],
+   "what": "plank hold",
+   "source": "vinvinz/Machine-Learning-Exercise-Counting-Classification training_videos/Plank/"
+  },
+  {
+   "cache": "vv_planking-vid-9",
+   "negative_for": [
+    "bicep_curls",
+    "squats",
+    "pushups"
+   ],
+   "what": "plank hold",
+   "source": "vinvinz/Machine-Learning-Exercise-Counting-Classification training_videos/Plank/"
+  },
+  {
+   "cache": "vv_pushup10",
+   "negative_for": [
+    "bicep_curls",
+    "squats",
+    "pushups"
+   ],
+   "what": "plank hold",
+   "source": "vinvinz/Machine-Learning-Exercise-Counting-Classification training_videos/Push-up/"
+  },
+  {
+   "cache": "vv_situps1",
+   "negative_for": [
+    "bicep_curls",
+    "squats",
+    "pushups"
+   ],
+   "what": "sit-ups",
+   "source": "vinvinz/Machine-Learning-Exercise-Counting-Classification training_videos/Sit-up/"
+  },
+  {
+   "cache": "vv_situps3",
+   "negative_for": [
+    "bicep_curls",
+    "squats",
+    "pushups"
+   ],
+   "what": "sit-ups",
+   "source": "vinvinz/Machine-Learning-Exercise-Counting-Classification training_videos/Sit-up/"
+  },
+  {
+   "cache": "vv_situps6",
+   "negative_for": [
+    "bicep_curls",
+    "squats",
+    "pushups"
+   ],
+   "what": "sit-ups",
+   "source": "vinvinz/Machine-Learning-Exercise-Counting-Classification training_videos/Sit-up/"
+  },
+  {
+   "cache": "vv_situps8",
+   "negative_for": [
+    "bicep_curls",
+    "squats",
+    "pushups"
+   ],
+   "what": "sit-ups",
+   "source": "vinvinz/Machine-Learning-Exercise-Counting-Classification training_videos/Sit-up/"
+  },
+  {
+   "cache": "vv_jumpjack-vid-1",
+   "negative_for": [
+    "bicep_curls",
+    "squats",
+    "pushups"
+   ],
+   "what": "jumping jacks",
+   "source": "vinvinz/Machine-Learning-Exercise-Counting-Classification training_videos/Jumping-jack/"
+  },
+  {
+   "cache": "vv_jumpjack-vid-2",
+   "negative_for": [
+    "bicep_curls",
+    "squats",
+    "pushups"
+   ],
+   "what": "jumping jacks",
+   "source": "vinvinz/Machine-Learning-Exercise-Counting-Classification training_videos/Jumping-jack/"
+  },
+  {
+   "cache": "vv_jumpjack-vid-6",
+   "negative_for": [
+    "squats",
+    "pushups"
+   ],
+   "what": "jumping jacks",
+   "source": "vinvinz/Machine-Learning-Exercise-Counting-Classification training_videos/Jumping-jack/",
+   "note": "Not a curl negative: between sets (7-13 s) he lifts one forearm to his chest, which is a genuine elbow curl."
+  },
+  {
+   "cache": "vv_jumpjack-vid-8",
+   "negative_for": [
+    "bicep_curls",
+    "squats",
+    "pushups"
+   ],
+   "what": "jumping jacks",
+   "source": "vinvinz/Machine-Learning-Exercise-Counting-Classification training_videos/Jumping-jack/"
+  },
+  {
+   "cache": "vv_pushup11",
+   "negative_for": [
+    "bicep_curls",
+    "squats"
+   ]
+  },
+  {
+   "cache": "vv_pushup9",
+   "negative_for": [
+    "bicep_curls",
+    "squats"
+   ]
+  },
+  {
+   "cache": "vv_pushup14",
+   "negative_for": [
+    "bicep_curls",
+    "squats"
+   ]
+  },
+  {
+   "cache": "vv_squats-vid-1",
+   "negative_for": [
+    "bicep_curls",
+    "pushups"
+   ]
+  },
+  {
+   "cache": "vv_squats-vid-4",
+   "negative_for": [
+    "bicep_curls",
+    "pushups"
+   ]
+  },
+  {
+   "cache": "aig_squat1",
+   "negative_for": [
+    "bicep_curls",
+    "pushups"
+   ]
+  }
+ ]
+}

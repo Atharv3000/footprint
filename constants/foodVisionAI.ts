@@ -1,4 +1,5 @@
 import { FoodItem } from './nutritionStorage';
+import { estimateDescription } from './foodTextMatcher';
 import Constants from 'expo-constants';
 
 /**
@@ -259,87 +260,34 @@ export async function describeFoodAsync(descriptionText: string): Promise<FoodVi
       }
     };
 
-    // Client-side fallback calculator in case AI server is momentarily unreachable
-    const clientSideFallback = () => {
-      const chunks = descriptionText.split(/[,;\n]|(?:\band\b)/i).map(s => s.trim()).filter(Boolean);
-      let totalCals = 0;
-      let totalProt = 0;
-      let totalCarbs = 0;
-      let totalFat = 0;
-      const items: FoodItem[] = [];
-
-      const wordToNum: Record<string, number> = {
-        'one': 1, 'two': 2, 'three': 3, 'four': 4, 'five': 5,
-        'six': 6, 'seven': 7, 'eight': 8, 'nine': 9, 'ten': 10,
-        'a': 1, 'an': 1, 'half': 0.5,
-      };
-
-      chunks.forEach((chunk, i) => {
-        let qty = 1;
-        const low = chunk.toLowerCase();
-        const numMatch = low.match(/^(\d+(?:\.\d+)?)\s*(?:of\s+)?(.*)$/);
-        let itemName = chunk;
-
-        if (numMatch) {
-          qty = parseFloat(numMatch[1]) || 1;
-          itemName = numMatch[2].trim();
-        } else {
-          const first = low.split(' ')[0];
-          if (wordToNum[first]) {
-            qty = wordToNum[first];
-            itemName = chunk.split(' ').slice(1).join(' ').trim();
-          }
-        }
-
-        let unitC = 150, unitP = 5, unitCb = 18, unitF = 5;
-        const inameLow = itemName.toLowerCase();
-        if (/cookie|donut|pastry|candy|chocolate/.test(inameLow)) {
-          unitC = 160; unitP = 2; unitCb = 22; unitF = 8;
-        } else if (/egg/.test(inameLow)) {
-          unitC = 78; unitP = 6.3; unitCb = 0.6; unitF = 5.3;
-        } else if (/toast|bread|bagel/.test(inameLow)) {
-          unitC = 85; unitP = 3.5; unitCb = 15; unitF = 1.2;
-        } else if (/lemonade|juice|soda/.test(inameLow)) {
-          unitC = 120; unitP = 0.2; unitCb = 30; unitF = 0.1;
-        } else if (/chicken|steak|beef|salmon|meat/.test(inameLow)) {
-          unitC = 220; unitP = 28; unitCb = 1; unitF = 10;
-        } else if (/rice|pasta|oats|potato/.test(inameLow)) {
-          unitC = 210; unitP = 4.5; unitCb = 44; unitF = 1;
-        }
-
-        const c = Math.round(unitC * qty);
-        const p = Math.round(unitP * qty * 10) / 10;
-        const cb = Math.round(unitCb * qty * 10) / 10;
-        const f = Math.round(unitF * qty * 10) / 10;
-
-        totalCals += c;
-        totalProt += p;
-        totalCarbs += cb;
-        totalFat += f;
-
-        items.push({
-          id: `desc_fall_${i}_${Date.now()}`,
-          name: itemName ? itemName.charAt(0).toUpperCase() + itemName.slice(1) : chunk,
-          portion: `${qty}x serving`,
-          calories: c,
-          proteinG: p,
-          carbsG: cb,
-          fatG: f,
-          confidence: 0.9,
-        });
-      });
-
+    // Client-side fallback in case the AI server is unreachable: match each
+    // part of the description against the app's nutrition index.
+    const clientSideFallback = (): FoodVisionAnalysisResult => {
+      const described = estimateDescription(descriptionText);
+      const items: FoodItem[] = described.map((d, i) => ({
+        id: `desc_fall_${i}_${Date.now()}`,
+        name: d.name,
+        portion: d.portion,
+        calories: d.calories,
+        proteinG: d.proteinG,
+        carbsG: d.carbsG,
+        fatG: d.fatG,
+        confidence: d.confidence,
+      }));
+      const sum = (k: 'calories' | 'proteinG' | 'carbsG' | 'fatG') => items.reduce((acc, it) => acc + (it[k] || 0), 0);
+      const matched = described.filter((d) => d.matchedId).length;
+      const confidence = items.length ? described.reduce((a, d) => a + d.confidence, 0) / items.length : 0;
       return {
         dishTitle: descriptionText.charAt(0).toUpperCase() + descriptionText.slice(1),
-        confidence: 0.9,
-        totalCalories: totalCals,
-        totalProteinG: Math.round(totalProt * 10) / 10,
-        totalCarbsG: Math.round(totalCarbs * 10) / 10,
-        totalFatG: Math.round(totalFat * 10) / 10,
+        confidence,
+        totalCalories: Math.round(sum('calories')),
+        totalProteinG: Math.round(sum('proteinG') * 10) / 10,
+        totalCarbsG: Math.round(sum('carbsG') * 10) / 10,
+        totalFatG: Math.round(sum('fatG') * 10) / 10,
         items,
         healthScore: 85,
-        dietaryTags: ['AI Described', 'Calculated'],
-        tips: `Calculated from your description: ${items.length} item(s).`,
+        dietaryTags: ['Offline estimate'],
+        tips: `AI server unreachable. Estimated offline: ${matched} of ${items.length} item(s) matched the nutrition index; check the rest before saving.`,
         isFood: true,
       };
     };

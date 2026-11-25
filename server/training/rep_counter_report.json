@@ -1,0 +1,474 @@
+[
+ {
+  "exercise": "pushups",
+  "train_clips": [
+   "pushup2",
+   "vv_pushup1",
+   "vv_pushup2",
+   "vv_pushup3",
+   "vv_pushup8",
+   "vv_pushup11",
+   "vv_pushup12",
+   "vv_pushup14"
+  ],
+  "test_clips": [
+   "pushup3",
+   "vv_pushup5",
+   "vv_pushup9",
+   "vv_pushup13",
+   "vv_pushup15"
+  ],
+  "held_out": {
+   "protocol": "fit on train clips only, scored on unseen test clips",
+   "fitted_on_train": {
+    "up_angle": 142.223,
+    "down_angle": 114.685,
+    "top_ratio": 0.821,
+    "bottom_ratio": 0.769,
+    "min_descent_s": 0.775,
+    "min_gap_s": 0.887,
+    "relabel_dist": 0.199,
+    "streak": 1,
+    "calib_frames": 2
+   },
+   "tuned": [
+    {
+     "clip": "pushup3",
+     "expected": 3,
+     "mae": 0.0,
+     "exact": 1.0,
+     "mean": 3.0
+    },
+    {
+     "clip": "vv_pushup5",
+     "expected": 2,
+     "mae": 0.5384615384615384,
+     "exact": 0.46153846153846156,
+     "mean": 1.4615384615384615
+    },
+    {
+     "clip": "vv_pushup9",
+     "expected": 6,
+     "mae": 4.384615384615385,
+     "exact": 0.0,
+     "mean": 1.6153846153846154
+    },
+    {
+     "clip": "vv_pushup13",
+     "expected": 1,
+     "mae": 0.23076923076923078,
+     "exact": 0.7692307692307693,
+     "mean": 0.7692307692307693
+    },
+    {
+     "clip": "vv_pushup15",
+     "expected": 2,
+     "mae": 1.2307692307692308,
+     "exact": 0.23076923076923078,
+     "mean": 0.7692307692307693
+    }
+   ],
+   "defaults": [
+    {
+     "clip": "pushup3",
+     "expected": 3,
+     "mae": 1.2307692307692308,
+     "exact": 0.3076923076923077,
+     "mean": 1.7692307692307692
+    },
+    {
+     "clip": "vv_pushup5",
+     "expected": 2,
+     "mae": 1.0769230769230769,
+     "exact": 0.23076923076923078,
+     "mean": 0.9230769230769231
+    },
+    {
+     "clip": "vv_pushup9",
+     "expected": 6,
+     "mae": 6.0,
+     "exact": 0.0,
+     "mean": 0.0
+    },
+    {
+     "clip": "vv_pushup13",
+     "expected": 1,
+     "mae": 0.6923076923076923,
+     "exact": 0.3076923076923077,
+     "mean": 0.3076923076923077
+    },
+    {
+     "clip": "vv_pushup15",
+     "expected": 2,
+     "mae": 2.0,
+     "exact": 0.0,
+     "mean": 0.0
+    }
+   ]
+  },
+  "final": {
+   "up_angle": 135.356,
+   "down_angle": 113.381,
+   "top_ratio": 0.848,
+   "bottom_ratio": 0.757,
+   "min_descent_s": 0.505,
+   "min_gap_s": 0.727,
+   "relabel_dist": 0.2,
+   "streak": 1,
+   "calib_frames": 2
+  },
+  "final_loss": 0.2438417016070702,
+  "final_on_all_clips": [
+   {
+    "clip": "pushup2",
+    "expected": 5,
+    "mae": 0.15384615384615385,
+    "exact": 0.8461538461538461,
+    "mean": 4.846153846153846
+   },
+   {
+    "clip": "vv_pushup1",
+    "expected": 1,
+    "mae": 0.6923076923076923,
+    "exact": 0.3076923076923077,
+    "mean": 0.3076923076923077
+   },
+   {
+    "clip": "vv_pushup2",
+    "expected": 1,
+    "mae": 0.07692307692307693,
+    "exact": 0.9230769230769231,
+    "mean": 0.9230769230769231
+   },
+   {
+    "clip": "vv_pushup3",
+    "expected": 2,
+    "mae": 0.9230769230769231,
+    "exact": 0.46153846153846156,
+    "mean": 1.0769230769230769
+   },
+   {
+    "clip": "vv_pushup8",
+    "expected": 3,
+    "mae": 0.0,
+    "exact": 1.0,
+    "mean": 3.0
+   },
+   {
+    "clip": "vv_pushup11",
+    "expected": 6,
+    "mae": 1.0769230769230769,
+    "exact": 0.15384615384615385,
+    "mean": 6.0
+   },
+   {
+    "clip": "vv_pushup12",
+    "expected": 1,
+    "mae": 0.38461538461538464,
+    "exact": 0.6153846153846154,
+    "mean": 0.6153846153846154
+   },
+   {
+    "clip": "vv_pushup14",
+    "expected": 2,
+    "mae": 0.0,
+    "exact": 1.0,
+    "mean": 2.0
+   },
+   {
+    "clip": "pushup3",
+    "expected": 3,
+    "mae": 0.0,
+    "exact": 1.0,
+    "mean": 3.0
+   },
+   {
+    "clip": "vv_pushup5",
+    "expected": 2,
+    "mae": 0.15384615384615385,
+    "exact": 0.8461538461538461,
+    "mean": 1.8461538461538463
+   },
+   {
+    "clip": "vv_pushup9",
+    "expected": 6,
+    "mae": 3.6153846153846154,
+    "exact": 0.07692307692307693,
+    "mean": 2.3846153846153846
+   },
+   {
+    "clip": "vv_pushup13",
+    "expected": 1,
+    "mae": 0.15384615384615385,
+    "exact": 0.8461538461538461,
+    "mean": 0.8461538461538461
+   },
+   {
+    "clip": "vv_pushup15",
+    "expected": 2,
+    "mae": 1.0,
+    "exact": 0.3076923076923077,
+    "mean": 1.0
+   }
+  ],
+  "final_phantom_reps": {}
+ },
+ {
+  "exercise": "squats",
+  "train_clips": [
+   "squats1",
+   "squats2",
+   "vv_squats-vid-1",
+   "vv_squats-vid-4",
+   "vv_squats-vid-6",
+   "vv_squats-vid-11",
+   "aig_squat1"
+  ],
+  "test_clips": [
+   "squats3",
+   "vv_squats-vid-5",
+   "vv_squats-vid-12",
+   "aig_squat2"
+  ],
+  "held_out": {
+   "protocol": "fit on train clips only, scored on unseen test clips",
+   "fitted_on_train": {
+    "up_angle": 154.204,
+    "down_angle": 95.376,
+    "drop_down": 0.157,
+    "drop_up": 0.085,
+    "min_descent_s": 0.504,
+    "min_gap_s": 0.549,
+    "streak": 1
+   },
+   "tuned": [
+    {
+     "clip": "squats3",
+     "expected": 4,
+     "mae": 0.15384615384615385,
+     "exact": 0.8461538461538461,
+     "mean": 3.8461538461538463
+    },
+    {
+     "clip": "vv_squats-vid-5",
+     "expected": 5,
+     "mae": 0.07692307692307693,
+     "exact": 0.9230769230769231,
+     "mean": 4.923076923076923
+    },
+    {
+     "clip": "vv_squats-vid-12",
+     "expected": 7,
+     "mae": 0.07692307692307693,
+     "exact": 0.9230769230769231,
+     "mean": 6.923076923076923
+    },
+    {
+     "clip": "aig_squat2",
+     "expected": 3,
+     "mae": 0.07692307692307693,
+     "exact": 0.9230769230769231,
+     "mean": 2.923076923076923
+    }
+   ],
+   "defaults": [
+    {
+     "clip": "squats3",
+     "expected": 4,
+     "mae": 0.46153846153846156,
+     "exact": 0.5384615384615384,
+     "mean": 3.5384615384615383
+    },
+    {
+     "clip": "vv_squats-vid-5",
+     "expected": 5,
+     "mae": 0.15384615384615385,
+     "exact": 0.9230769230769231,
+     "mean": 4.846153846153846
+    },
+    {
+     "clip": "vv_squats-vid-12",
+     "expected": 7,
+     "mae": 0.07692307692307693,
+     "exact": 0.9230769230769231,
+     "mean": 6.923076923076923
+    },
+    {
+     "clip": "aig_squat2",
+     "expected": 3,
+     "mae": 0.07692307692307693,
+     "exact": 0.9230769230769231,
+     "mean": 2.923076923076923
+    }
+   ]
+  },
+  "final": {
+   "up_angle": 151.382,
+   "down_angle": 96.224,
+   "drop_down": 0.159,
+   "drop_up": 0.087,
+   "min_descent_s": 0.554,
+   "min_gap_s": 0.645,
+   "streak": 1
+  },
+  "final_loss": 0.07091408609085789,
+  "final_on_all_clips": [
+   {
+    "clip": "squats1",
+    "expected": 4,
+    "mae": 0.9230769230769231,
+    "exact": 0.15384615384615385,
+    "mean": 3.076923076923077
+   },
+   {
+    "clip": "squats2",
+    "expected": 4,
+    "mae": 0.9230769230769231,
+    "exact": 0.15384615384615385,
+    "mean": 3.076923076923077
+   },
+   {
+    "clip": "vv_squats-vid-1",
+    "expected": 9,
+    "mae": 0.07692307692307693,
+    "exact": 0.9230769230769231,
+    "mean": 8.923076923076923
+   },
+   {
+    "clip": "vv_squats-vid-4",
+    "expected": 6,
+    "mae": 0.0,
+    "exact": 1.0,
+    "mean": 6.0
+   },
+   {
+    "clip": "vv_squats-vid-6",
+    "expected": 4,
+    "mae": 0.07692307692307693,
+    "exact": 0.9230769230769231,
+    "mean": 3.923076923076923
+   },
+   {
+    "clip": "vv_squats-vid-11",
+    "expected": 4,
+    "mae": 0.23076923076923078,
+    "exact": 0.7692307692307693,
+    "mean": 3.769230769230769
+   },
+   {
+    "clip": "aig_squat1",
+    "expected": 4,
+    "mae": 0.15384615384615385,
+    "exact": 0.8461538461538461,
+    "mean": 3.8461538461538463
+   },
+   {
+    "clip": "squats3",
+    "expected": 4,
+    "mae": 0.15384615384615385,
+    "exact": 0.8461538461538461,
+    "mean": 4.0
+   },
+   {
+    "clip": "vv_squats-vid-5",
+    "expected": 5,
+    "mae": 0.07692307692307693,
+    "exact": 0.9230769230769231,
+    "mean": 4.923076923076923
+   },
+   {
+    "clip": "vv_squats-vid-12",
+    "expected": 7,
+    "mae": 0.07692307692307693,
+    "exact": 0.9230769230769231,
+    "mean": 6.923076923076923
+   },
+   {
+    "clip": "aig_squat2",
+    "expected": 3,
+    "mae": 0.07692307692307693,
+    "exact": 0.9230769230769231,
+    "mean": 2.923076923076923
+   }
+  ],
+  "final_phantom_reps": {
+   "vv_jumpjack-vid-2": 0.25
+  }
+ },
+ {
+  "exercise": "bicep_curls",
+  "train_clips": [
+   "weight_lifting_2",
+   "rr_demo2"
+  ],
+  "test_clips": [],
+  "held_out": {
+   "protocol": "leave-one-clip-out (too few clips for a separate test split)",
+   "folds": [
+    {
+     "held_out": "weight_lifting_2",
+     "tuned": {
+      "clip": "weight_lifting_2",
+      "expected": 2,
+      "mae": 0.3076923076923077,
+      "exact": 0.7692307692307693,
+      "mean": 1.6923076923076923
+     },
+     "defaults": {
+      "clip": "weight_lifting_2",
+      "expected": 2,
+      "mae": 0.3076923076923077,
+      "exact": 0.7692307692307693,
+      "mean": 1.6923076923076923
+     }
+    },
+    {
+     "held_out": "rr_demo2",
+     "tuned": {
+      "clip": "rr_demo2",
+      "expected": 3,
+      "mae": 0.23076923076923078,
+      "exact": 0.7692307692307693,
+      "mean": 3.076923076923077
+     },
+     "defaults": {
+      "clip": "rr_demo2",
+      "expected": 3,
+      "mae": 0.23076923076923078,
+      "exact": 0.7692307692307693,
+      "mean": 3.076923076923077
+     }
+    }
+   ]
+  },
+  "final": {
+   "up_angle": 150.839,
+   "down_angle": 62.54,
+   "hang_ratio": 0.424,
+   "merge_s": 0.673,
+   "min_descent_s": 0.384,
+   "min_gap_s": 0.611,
+   "streak": 1,
+   "max_hip_motion": 0.22,
+   "wrist_rise": 0.27
+  },
+  "final_loss": 0.0640721553983791,
+  "final_on_all_clips": [
+   {
+    "clip": "weight_lifting_2",
+    "expected": 2,
+    "mae": 0.3076923076923077,
+    "exact": 0.7692307692307693,
+    "mean": 1.6923076923076923
+   },
+   {
+    "clip": "rr_demo2",
+    "expected": 3,
+    "mae": 0.07692307692307693,
+    "exact": 0.9230769230769231,
+    "mean": 2.923076923076923
+   }
+  ],
+  "final_phantom_reps": {}
+ }
+]
