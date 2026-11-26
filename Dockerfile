@@ -8,10 +8,13 @@ ENV PYTHONUNBUFFERED=1
 ENV PORT=9002
 
 # Install system dependencies required by OpenCV, MediaPipe, and GL
+# (mediapipe 0.10.30+ loads libGLESv2 / libEGL at startup, even when running on CPU)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     curl \
     libgl1 \
+    libgles2 \
+    libegl1 \
     libglib2.0-0 \
     libgomp1 \
     && rm -rf /var/lib/apt/lists/*
