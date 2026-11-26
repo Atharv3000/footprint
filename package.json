@@ -58,7 +58,12 @@
     "start:reps": "node scripts/rep-dev.cjs",
     "start:reps:tunnel": "node scripts/rep-dev.cjs --tunnel",
     "test:reps": "python -m unittest discover -s server/tests -v",
-    "test:rep-client": "node scripts/test-rep-client.cjs"
+    "test:rep-client": "node scripts/test-rep-client.cjs",
+    "start:ai": "node scripts/ai-dev.cjs",
+    "test:ai": "python -m pytest -q footprint_ai/tests",
+    "train:reps": "python -m server.rep_training fit --cache .rep-cache",
+    "eval:reps": "python -m server.rep_training evaluate --cache .rep-cache",
+    "test:food-matcher": "node --test scripts/test-food-text-matcher.cjs"
   },
   "private": true
 }

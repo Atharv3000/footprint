@@ -22,6 +22,7 @@ import * as ImagePicker from 'expo-image-picker';
 import * as Sharing from 'expo-sharing';
 import { useTheme, SERIF_FONT } from '@/constants/ThemeContext';
 import { ProgressPhoto } from '@/constants/workoutStorage';
+import { loadUserProfile } from '@/constants/userProfile';
 import {
   MuscleGroupTarget,
   MuscleAnalysisPhotoResult,
@@ -143,7 +144,19 @@ export function ProgressPhotoGalleryModal({
     if (viewMode === 'muscles' && sortedPhotos.length > 0) {
       let isMounted = true;
       setIsAnalyzingMuscles(true);
-      isolateMuscleGroupAcrossPhotos(sortedPhotos, selectedMuscle)
+      // With sex, height and weight on the profile, the abs analysis also reports how likely
+      // visible abs are (derived from the DXA-trained body-fat model, not from pixels).
+      loadUserProfile()
+        .catch(() => null)
+        .then((p) =>
+          isolateMuscleGroupAcrossPhotos(
+            sortedPhotos,
+            selectedMuscle,
+            p && (p.gender === 'male' || p.gender === 'female') && p.heightCm > 0 && p.weightKg > 0
+              ? { gender: p.gender, age: p.age || undefined, heightCm: p.heightCm, weightKg: p.weightKg }
+              : undefined
+          )
+        )
         .then((res) => {
           if (isMounted) {
             setMuscleIsolationData(res);
@@ -491,7 +504,11 @@ export function ProgressPhotoGalleryModal({
               <Text style={styles.aiBadgeText}>
                 {isAnalyzingMuscles
                   ? `AI Pose Tracker identifying ${selectedMuscle.toUpperCase()} across all photos...`
-                  : `${muscleIsolationData?.summary || 'Muscles isolated & aligned chronologically'}`}
+                  : `${muscleIsolationData?.summary || 'Muscles isolated & aligned chronologically'}${
+                      muscleIsolationData?.absVisibility
+                        ? ` · Abs ${muscleIsolationData.absVisibility.absVisibility} (${Math.round(muscleIsolationData.absVisibility.absVisibleProbability * 100)}% chance visible, from body fat${muscleIsolationData.bodyFatPercent != null ? ` ~${muscleIsolationData.bodyFatPercent}%` : ''})`
+                        : ''
+                    }`}
               </Text>
             </View>
 
@@ -558,14 +575,18 @@ export function ProgressPhotoGalleryModal({
                         {/* Clean Card Info: Only the Definition Score Tag */}
                         <View style={styles.tileDetails}>
                           <View style={styles.tileScoreRow}>
-                            <View style={[styles.scoreTag, { backgroundColor: `${colors.primary}25` }]}>
-                              <Text style={[styles.scoreTagText, { color: colors.primary }]}>
-                                {item.definitionScore}% Definition
+                            {item.definitionScore != null && (
+                              <View style={[styles.scoreTag, { backgroundColor: `${colors.primary}25` }]}>
+                                <Text style={[styles.scoreTagText, { color: colors.primary }]}>
+                                  {item.definitionScore}/100 detail
+                                </Text>
+                              </View>
+                            )}
+                            {item.vascularityScore != null && (
+                              <Text style={styles.tileVascScoreText}>
+                                {item.vascularityScore}% Vasc
                               </Text>
-                            </View>
-                            <Text style={styles.tileVascScoreText}>
-                              {item.vascularityScore}% Vasc
-                            </Text>
+                            )}
                           </View>
                         </View>
                       </View>

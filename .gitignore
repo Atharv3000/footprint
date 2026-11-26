@@ -49,3 +49,6 @@ server/models/
 
 # Private calorie challenge state
 server/data/
+
+# Cached pose landmarks for rep-counter training (derived from third-party clips)
+.rep-cache/

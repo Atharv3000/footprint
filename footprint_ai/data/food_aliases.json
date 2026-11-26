@@ -1,0 +1,3277 @@
+{
+"_about": "Curated everyday names -> USDA SR28 NDB numbers, or recipes of SR28 ingredients in grams per serving.",
+"egg": {
+"id": "01123"
+},
+"raw egg": {
+"id": "01123"
+},
+"scrambled egg": {
+"id": "01132"
+},
+"fried egg": {
+"id": "01128"
+},
+"boiled egg": {
+"id": "01129"
+},
+"hard boiled egg": {
+"id": "01129"
+},
+"poached egg": {
+"id": "01123"
+},
+"egg white": {
+"id": "01124"
+},
+"omelette": {
+"id": "01132"
+},
+"omelet": {
+"id": "01132"
+},
+"bacon": {
+"id": "10860"
+},
+"turkey bacon": {
+"id": "07974"
+},
+"sausage": {
+"id": "07064"
+},
+"breakfast sausage": {
+"id": "07064"
+},
+"sausage link": {
+"id": "07064"
+},
+"italian sausage": {
+"id": "07089"
+},
+"ham": {
+"id": "10136"
+},
+"deli ham": {
+"id": "07029"
+},
+"hash brown": {
+"id": "21026"
+},
+"hashbrown": {
+"id": "21026"
+},
+"pancake": {
+"id": "18936"
+},
+"waffle": {
+"id": "18403"
+},
+"french toast": {
+"id": "18269"
+},
+"oatmeal": {
+"id": "08121"
+},
+"oat": {
+"id": "08120"
+},
+"porridge": {
+"id": "08121"
+},
+"granola": {
+"id": "08037"
+},
+"cereal": {
+"id": "08013"
+},
+"cheerio": {
+"id": "08013"
+},
+"corn flake": {
+"id": "08020"
+},
+"bagel": {
+"id": "18001"
+},
+"croissant": {
+"id": "18239"
+},
+"english muffin": {
+"id": "18258"
+},
+"muffin": {
+"id": "18274"
+},
+"blueberry muffin": {
+"id": "18274"
+},
+"rice": {
+"id": "20045"
+},
+"white rice": {
+"id": "20045"
+},
+"brown rice": {
+"id": "20037"
+},
+"fried rice": {
+"id": "36602"
+},
+"spanish rice": {
+"id": "36417"
+},
+"pasta": {
+"id": "20121"
+},
+"spaghetti": {
+"id": "20121"
+},
+"noodle": {
+"id": "20310"
+},
+"egg noodle": {
+"id": "20310"
+},
+"rice noodle": {
+"id": "20134"
+},
+"macaroni": {
+"id": "20121"
+},
+"penne": {
+"id": "20121"
+},
+"quinoa": {
+"id": "20137"
+},
+"couscous": {
+"id": "20029"
+},
+"bread": {
+"id": "18069"
+},
+"white bread": {
+"id": "18069"
+},
+"toast": {
+"id": "18070"
+},
+"wheat bread": {
+"id": "18075"
+},
+"whole wheat bread": {
+"id": "18075"
+},
+"multigrain bread": {
+"id": "28397"
+},
+"sourdough": {
+"id": "18029"
+},
+"french bread": {
+"id": "18029"
+},
+"baguette": {
+"id": "18029"
+},
+"bun": {
+"id": "18350"
+},
+"hamburger bun": {
+"id": "18350"
+},
+"hot dog bun": {
+"id": "18350"
+},
+"roll": {
+"id": "18342"
+},
+"dinner roll": {
+"id": "18342"
+},
+"tortilla": {
+"id": "18364"
+},
+"flour tortilla": {
+"id": "18364"
+},
+"corn tortilla": {
+"id": "18363"
+},
+"pita": {
+"id": "18041"
+},
+"cracker": {
+"id": "18229"
+},
+"saltine": {
+"id": "18228"
+},
+"milk": {
+"id": "01079"
+},
+"whole milk": {
+"id": "01077"
+},
+"2% milk": {
+"id": "01079"
+},
+"skim milk": {
+"id": "01085"
+},
+"nonfat milk": {
+"id": "01085"
+},
+"1% milk": {
+"id": "01082"
+},
+"chocolate milk": {
+"id": "01103"
+},
+"almond milk": {
+"id": "14091"
+},
+"soy milk": {
+"id": "16139"
+},
+"oat milk": {
+"id": "14091"
+},
+"yogurt": {
+"id": "01117"
+},
+"plain yogurt": {
+"id": "01117"
+},
+"greek yogurt": {
+"id": "01287"
+},
+"cheese": {
+"id": "01009"
+},
+"cheddar": {
+"id": "01009"
+},
+"cheddar cheese": {
+"id": "01009"
+},
+"mozzarella": {
+"id": "01026"
+},
+"swiss cheese": {
+"id": "01040"
+},
+"american cheese": {
+"id": "01042"
+},
+"feta": {
+"id": "01019"
+},
+"parmesan": {
+"id": "01032"
+},
+"provolone": {
+"id": "01035"
+},
+"ricotta": {
+"id": "01036"
+},
+"cottage cheese": {
+"id": "01016"
+},
+"cream cheese": {
+"id": "01017"
+},
+"butter": {
+"id": "01001"
+},
+"half and half": {
+"id": "01049"
+},
+"heavy cream": {
+"id": "01053"
+},
+"cream": {
+"id": "01049"
+},
+"whipped cream": {
+"id": "01054"
+},
+"creamer": {
+"id": "01067"
+},
+"coffee creamer": {
+"id": "01067"
+},
+"ice cream": {
+"id": "19095"
+},
+"vanilla ice cream": {
+"id": "19095"
+},
+"chocolate ice cream": {
+"id": "19270"
+},
+"frozen yogurt": {
+"id": "42187"
+},
+"milkshake": {
+"id": "01111"
+},
+"milk shake": {
+"id": "01111"
+},
+"chocolate milkshake": {
+"id": "01110"
+},
+"pudding": {
+"id": "19183"
+},
+"peanut butter": {
+"id": "16098"
+},
+"almond butter": {
+"id": "12695"
+},
+"jelly": {
+"id": "19300"
+},
+"jam": {
+"id": "19297"
+},
+"honey": {
+"id": "19296"
+},
+"maple syrup": {
+"id": "19353"
+},
+"syrup": {
+"id": "19353"
+},
+"sugar": {
+"id": "19335"
+},
+"olive oil": {
+"id": "04053"
+},
+"oil": {
+"id": "04582"
+},
+"vegetable oil": {
+"id": "04582"
+},
+"canola oil": {
+"id": "04582"
+},
+"coconut oil": {
+"id": "04047"
+},
+"margarine": {
+"id": "04610"
+},
+"mayonnaise": {
+"id": "04025"
+},
+"mayo": {
+"id": "04025"
+},
+"ketchup": {
+"id": "11935"
+},
+"mustard": {
+"id": "02046"
+},
+"ranch": {
+"id": "04639"
+},
+"ranch dressing": {
+"id": "04639"
+},
+"italian dressing": {
+"id": "04114"
+},
+"caesar dressing": {
+"id": "43015"
+},
+"thousand island": {
+"id": "04017"
+},
+"dressing": {
+"id": "04114"
+},
+"salsa": {
+"id": "06164"
+},
+"hummus": {
+"id": "16158"
+},
+"bbq sauce": {
+"id": "06150"
+},
+"barbecue sauce": {
+"id": "06150"
+},
+"soy sauce": {
+"id": "16123"
+},
+"teriyaki sauce": {
+"id": "06112"
+},
+"hot sauce": {
+"id": "06168"
+},
+"marinara": {
+"id": "06931"
+},
+"marinara sauce": {
+"id": "06931"
+},
+"pasta sauce": {
+"id": "06931"
+},
+"gravy": {
+"id": "06119"
+},
+"nutella": {
+"id": "19125"
+},
+"chicken": {
+"id": "05064"
+},
+"chicken breast": {
+"id": "05064"
+},
+"grilled chicken": {
+"id": "05064"
+},
+"baked chicken": {
+"id": "05064"
+},
+"roast chicken": {
+"id": "05064"
+},
+"rotisserie chicken": {
+"id": "05064"
+},
+"chicken thigh": {
+"id": "05094"
+},
+"chicken leg": {
+"id": "05069"
+},
+"drumstick": {
+"id": "05069"
+},
+"chicken wing": {
+"recipe": [
+[
+"05103",
+34
+]
+],
+"serving": "wing, meat and skin, bone removed (34 g)"
+},
+"wing": {
+"recipe": [
+[
+"05103",
+34
+]
+],
+"serving": "wing, bone removed (34 g)"
+},
+"buffalo wing": {
+"recipe": [
+[
+"05103",
+34
+],
+[
+"06168",
+5
+],
+[
+"01001",
+2
+]
+],
+"serving": "wing, bone removed (41 g)"
+},
+"fried chicken wing": {
+"id": "05101"
+},
+"fried chicken": {
+"id": "05007"
+},
+"chicken nugget": {
+"id": "21229"
+},
+"nugget": {
+"id": "21229"
+},
+"chicken tender": {
+"id": "21401"
+},
+"chicken strip": {
+"id": "21401"
+},
+"chicken finger": {
+"id": "21401"
+},
+"popcorn chicken": {
+"id": "21422"
+},
+"turkey": {
+"id": "05711"
+},
+"turkey breast": {
+"id": "05711"
+},
+"deli turkey": {
+"id": "07944"
+},
+"ground turkey": {
+"id": "05306"
+},
+"beef": {
+"id": "23570"
+},
+"ground beef": {
+"id": "23570"
+},
+"hamburger patty": {
+"id": "23573"
+},
+"beef patty": {
+"id": "23573"
+},
+"steak": {
+"id": "13930"
+},
+"sirloin": {
+"id": "13930"
+},
+"sirloin steak": {
+"id": "13930"
+},
+"ribeye": {
+"id": "23100"
+},
+"rib eye": {
+"id": "23100"
+},
+"ribeye steak": {
+"id": "23100"
+},
+"flank steak": {
+"id": "13067"
+},
+"t bone": {
+"id": "13236"
+},
+"roast beef": {
+"id": "13930"
+},
+"pork": {
+"id": "10061"
+},
+"pork chop": {
+"id": "10038"
+},
+"pork tenderloin": {
+"id": "10061"
+},
+"rib": {
+"id": "10089"
+},
+"spare rib": {
+"id": "10089"
+},
+"pulled pork": {
+"id": "10061"
+},
+"lamb": {
+"id": "17227"
+},
+"hot dog": {
+"id": "21118"
+},
+"frankfurter": {
+"id": "07022"
+},
+"salami": {
+"id": "07068"
+},
+"pepperoni": {
+"id": "07057"
+},
+"meatball": {
+"id": "07972"
+},
+"salmon": {
+"id": "15237"
+},
+"grilled salmon": {
+"id": "15237"
+},
+"tuna": {
+"id": "15121"
+},
+"canned tuna": {
+"id": "15121"
+},
+"tuna steak": {
+"id": "15127"
+},
+"tilapia": {
+"id": "15262"
+},
+"cod": {
+"id": "15016"
+},
+"halibut": {
+"id": "15037"
+},
+"pollock": {
+"id": "15067"
+},
+"catfish": {
+"id": "15011"
+},
+"fried fish": {
+"id": "36033"
+},
+"fish": {
+"id": "15016"
+},
+"shrimp": {
+"id": "15271"
+},
+"fried shrimp": {
+"id": "15150"
+},
+"crab": {
+"id": "15140"
+},
+"imitation crab": {
+"id": "15138"
+},
+"lobster": {
+"id": "15148"
+},
+"scallop": {
+"id": "15172"
+},
+"tofu": {
+"id": "16426"
+},
+"tempeh": {
+"id": "16114"
+},
+"bean": {
+"id": "16015"
+},
+"black bean": {
+"id": "16015"
+},
+"pinto bean": {
+"id": "16043"
+},
+"kidney bean": {
+"id": "16033"
+},
+"baked bean": {
+"id": "16006"
+},
+"refried bean": {
+"id": "16171"
+},
+"chickpea": {
+"id": "16057"
+},
+"garbanzo": {
+"id": "16057"
+},
+"lentil": {
+"id": "16070"
+},
+"edamame": {
+"id": "11212"
+},
+"almond": {
+"id": "12061"
+},
+"walnut": {
+"id": "12155"
+},
+"peanut": {
+"id": "16090"
+},
+"cashew": {
+"id": "12585"
+},
+"pistachio": {
+"id": "12152"
+},
+"pecan": {
+"id": "12142"
+},
+"mixed nut": {
+"id": "12637"
+},
+"trail mix": {
+"id": "19059"
+},
+"sunflower seed": {
+"id": "12036"
+},
+"chia seed": {
+"id": "12006"
+},
+"flaxseed": {
+"id": "12220"
+},
+"apple": {
+"id": "09003"
+},
+"banana": {
+"id": "09040"
+},
+"orange": {
+"id": "09200"
+},
+"grape": {
+"id": "09132"
+},
+"strawberry": {
+"id": "09316"
+},
+"blueberry": {
+"id": "09050"
+},
+"raspberry": {
+"id": "09302"
+},
+"blackberry": {
+"id": "09042"
+},
+"watermelon": {
+"id": "09326"
+},
+"cantaloupe": {
+"id": "09181"
+},
+"honeydew": {
+"id": "09184"
+},
+"melon": {
+"id": "09181"
+},
+"pineapple": {
+"id": "09266"
+},
+"mango": {
+"id": "09176"
+},
+"peach": {
+"id": "09236"
+},
+"pear": {
+"id": "09412"
+},
+"plum": {
+"id": "09279"
+},
+"cherry": {
+"id": "09070"
+},
+"kiwi": {
+"id": "09148"
+},
+"avocado": {
+"id": "09037"
+},
+"lemon": {
+"id": "09150"
+},
+"lime": {
+"id": "09159"
+},
+"grapefruit": {
+"id": "09111"
+},
+"raisin": {
+"id": "09298"
+},
+"date": {
+"id": "09087"
+},
+"applesauce": {
+"id": "09019"
+},
+"fruit salad": {
+"id": "09096"
+},
+"dried cranberry": {
+"id": "09079"
+},
+"cranberry": {
+"id": "09078"
+},
+"pomegranate": {
+"id": "09286"
+},
+"clementine": {
+"id": "09433"
+},
+"tangerine": {
+"id": "09218"
+},
+"broccoli": {
+"id": "11091"
+},
+"carrot": {
+"id": "11124"
+},
+"baby carrot": {
+"id": "11960"
+},
+"spinach": {
+"id": "11457"
+},
+"lettuce": {
+"id": "11252"
+},
+"romaine": {
+"id": "11251"
+},
+"tomato": {
+"id": "11529"
+},
+"cherry tomato": {
+"id": "11529"
+},
+"cucumber": {
+"id": "11205"
+},
+"onion": {
+"id": "11282"
+},
+"bell pepper": {
+"id": "11333"
+},
+"green pepper": {
+"id": "11333"
+},
+"red pepper": {
+"id": "11821"
+},
+"corn": {
+"id": "11168"
+},
+"corn on the cob": {
+"id": "11168"
+},
+"pea": {
+"id": "11313"
+},
+"green bean": {
+"id": "11053"
+},
+"potato": {
+"id": "11674"
+},
+"baked potato": {
+"id": "11674"
+},
+"mashed potato": {
+"id": "11934"
+},
+"sweet potato": {
+"id": "11508"
+},
+"french fry": {
+"id": "21138"
+},
+"fry": {
+"id": "21138"
+},
+"fries": {
+"id": "21138"
+},
+"mushroom": {
+"id": "11260"
+},
+"zucchini": {
+"id": "11477"
+},
+"cauliflower": {
+"id": "11135"
+},
+"cabbage": {
+"id": "11109"
+},
+"kale": {
+"id": "11233"
+},
+"celery": {
+"id": "11143"
+},
+"asparagus": {
+"id": "11012"
+},
+"brussels sprout": {
+"id": "11099"
+},
+"coleslaw": {
+"id": "36035"
+},
+"onion ring": {
+"id": "21130"
+},
+"pickle": {
+"id": "11937"
+},
+"olive": {
+"id": "09195"
+},
+"jalapeno": {
+"id": "11979"
+},
+"garlic": {
+"id": "11215"
+},
+"beet": {
+"id": "11080"
+},
+"squash": {
+"id": "11644"
+},
+"eggplant": {
+"id": "11209"
+},
+"potato chip": {
+"id": "19411"
+},
+"chip": {
+"id": "19411"
+},
+"tortilla chip": {
+"id": "19056"
+},
+"popcorn": {
+"id": "19034"
+},
+"pretzel": {
+"id": "19047"
+},
+"chocolate": {
+"id": "19120"
+},
+"milk chocolate": {
+"id": "19120"
+},
+"dark chocolate": {
+"id": "19904"
+},
+"candy": {
+"id": "19107"
+},
+"candy bar": {
+"id": "19155"
+},
+"snickers": {
+"id": "19155"
+},
+"cookie": {
+"id": "18159"
+},
+"chocolate chip cookie": {
+"id": "18159"
+},
+"oatmeal cookie": {
+"id": "18178"
+},
+"sugar cookie": {
+"id": "18204"
+},
+"oreo": {
+"id": "18166"
+},
+"brownie": {
+"id": "18151"
+},
+"cake": {
+"id": "18141"
+},
+"chocolate cake": {
+"id": "18096"
+},
+"birthday cake": {
+"id": "18141"
+},
+"cheesecake": {
+"id": "18147"
+},
+"pie": {
+"id": "18301"
+},
+"apple pie": {
+"id": "18301"
+},
+"pumpkin pie": {
+"id": "18326"
+},
+"cherry pie": {
+"id": "18308"
+},
+"donut": {
+"id": "18255"
+},
+"doughnut": {
+"id": "18255"
+},
+"glazed donut": {
+"id": "18255"
+},
+"cupcake": {
+"id": "18141"
+},
+"granola bar": {
+"id": "19015"
+},
+"kind bar": {
+"recipe": [
+[
+"12061",
+25
+],
+[
+"19296",
+8
+],
+[
+"19904",
+7
+]
+],
+"serving": "1 bar (40 g)"
+},
+"nut bar": {
+"id": "19016"
+},
+"clif bar": {
+"id": "19015"
+},
+"protein bar": {
+"id": "25067"
+},
+"rice cake": {
+"id": "19816"
+},
+"gummy bear": {
+"id": "19106"
+},
+"water": {
+"id": "14411"
+},
+"coffee": {
+"id": "14209"
+},
+"black coffee": {
+"id": "14209"
+},
+"espresso": {
+"id": "14210"
+},
+"tea": {
+"id": "14355"
+},
+"green tea": {
+"id": "14278"
+},
+"orange juice": {
+"id": "09206"
+},
+"apple juice": {
+"id": "09016"
+},
+"juice": {
+"id": "09206"
+},
+"soda": {
+"id": "14148"
+},
+"coke": {
+"id": "14148"
+},
+"cola": {
+"id": "14148"
+},
+"pepsi": {
+"id": "14148"
+},
+"diet coke": {
+"id": "14146"
+},
+"diet soda": {
+"id": "14146"
+},
+"sprite": {
+"id": "14145"
+},
+"beer": {
+"id": "14003"
+},
+"light beer": {
+"id": "14006"
+},
+"wine": {
+"id": "14096"
+},
+"red wine": {
+"id": "14096"
+},
+"white wine": {
+"id": "14106"
+},
+"vodka": {
+"id": "14051"
+},
+"whiskey": {
+"id": "14052"
+},
+"rum": {
+"id": "14050"
+},
+"gin": {
+"id": "14049"
+},
+"liquor": {
+"id": "14037"
+},
+"shot": {
+"id": "14037"
+},
+"energy drink": {
+"id": "14154"
+},
+"red bull": {
+"id": "14154"
+},
+"sports drink": {
+"id": "14461"
+},
+"gatorade": {
+"id": "14461"
+},
+"powerade": {
+"id": "14461"
+},
+"lemonade": {
+"id": "14293"
+},
+"coconut water": {
+"id": "14090"
+},
+"hot chocolate": {
+"id": "01105"
+},
+"hot cocoa": {
+"id": "01105"
+},
+"whey protein": {
+"id": "14066"
+},
+"protein powder": {
+"id": "14066"
+},
+"pizza": {
+"id": "21293"
+},
+"cheese pizza": {
+"id": "21293"
+},
+"pepperoni pizza": {
+"id": "21296"
+},
+"pizza slice": {
+"id": "21293"
+},
+"hamburger": {
+"id": "21108"
+},
+"burger": {
+"id": "21108"
+},
+"cheeseburger": {
+"id": "21090"
+},
+"double cheeseburger": {
+"id": "21094"
+},
+"burrito": {
+"id": "21064"
+},
+"bean burrito": {
+"id": "21061"
+},
+"taco": {
+"id": "21082"
+},
+"soft taco": {
+"id": "21486"
+},
+"chicken taco": {
+"id": "21487"
+},
+"taco salad": {
+"id": "21083"
+},
+"quesadilla": {
+"id": "36052"
+},
+"chicken quesadilla": {
+"id": "21488"
+},
+"nacho": {
+"id": "21080"
+},
+"nachos": {
+"id": "21080"
+},
+"enchilada": {
+"id": "36050"
+},
+"tamale": {
+"id": "36056"
+},
+"sub": {
+"id": "21124"
+},
+"sub sandwich": {
+"id": "21124"
+},
+"chicken sandwich": {
+"id": "21102"
+},
+"grilled chicken sandwich": {
+"id": "21490"
+},
+"fish sandwich": {
+"id": "21105"
+},
+"lasagna": {
+"id": "36041"
+},
+"mac and cheese": {
+"id": "32005"
+},
+"macaroni and cheese": {
+"id": "32005"
+},
+"spaghetti and meatball": {
+"id": "36038"
+},
+"ravioli": {
+"id": "36055"
+},
+"chili": {
+"id": "22904"
+},
+"chicken noodle soup": {
+"id": "06419"
+},
+"tomato soup": {
+"id": "06359"
+},
+"ramen": {
+"recipe": [
+[
+"06583",
+85
+]
+],
+"serving": "1 package, prepared (85 g dry)"
+},
+"instant noodle": {
+"recipe": [
+[
+"06583",
+85
+]
+],
+"serving": "1 package, prepared (85 g dry)"
+},
+"egg roll": {
+"id": "36601"
+},
+"spring roll": {
+"id": "36601"
+},
+"general tso chicken": {
+"id": "36618"
+},
+"orange chicken": {
+"id": "36629"
+},
+"sweet and sour chicken": {
+"id": "36621"
+},
+"kung pao chicken": {
+"id": "36619"
+},
+"lo mein": {
+"id": "36625"
+},
+"chow mein": {
+"id": "36623"
+},
+"chicken and vegetable": {
+"id": "36626"
+},
+"beef and broccoli": {
+"id": "36603"
+},
+"dumpling": {
+"id": "32025"
+},
+"fish and chip": {
+"id": "36033"
+},
+"fish stick": {
+"id": "15027"
+},
+"mozzarella stick": {
+"id": "36012"
+},
+"biscuit": {
+"id": "21008"
+},
+"breakfast sandwich": {
+"id": "21021"
+},
+"egg mcmuffin": {
+"id": "21021"
+},
+"smoothie": {
+"recipe": [
+[
+"09040",
+120
+],
+[
+"09316",
+100
+],
+[
+"01117",
+120
+],
+[
+"01079",
+120
+]
+],
+"serving": "16 fl oz (460 g)"
+},
+"corn dog": {
+"id": "21120"
+},
+"hotdog with chili": {
+"id": "21119"
+},
+"guacamole": {
+"recipe": [
+[
+"09037",
+100
+],
+[
+"11529",
+20
+],
+[
+"11282",
+10
+],
+[
+"09160",
+5
+]
+],
+"serving": "1/2 cup (135 g)"
+},
+"sushi": {
+"recipe": [
+[
+"20045",
+160
+],
+[
+"15138",
+40
+],
+[
+"09037",
+25
+],
+[
+"11446",
+4
+]
+],
+"serving": "1 roll, 8 pieces (229 g)"
+},
+"california roll": {
+"recipe": [
+[
+"20045",
+160
+],
+[
+"15138",
+40
+],
+[
+"09037",
+25
+],
+[
+"11446",
+4
+]
+],
+"serving": "1 roll, 8 pieces (229 g)"
+},
+"salmon roll": {
+"recipe": [
+[
+"20045",
+120
+],
+[
+"15237",
+45
+],
+[
+"11446",
+3
+]
+],
+"serving": "6 pieces (168 g)"
+},
+"sashimi": {
+"recipe": [
+[
+"15127",
+85
+]
+],
+"serving": "6 slices (85 g)"
+},
+"pad thai": {
+"recipe": [
+[
+"20134",
+200
+],
+[
+"05064",
+70
+],
+[
+"01132",
+40
+],
+[
+"16090",
+12
+],
+[
+"04582",
+14
+],
+[
+"19335",
+10
+],
+[
+"06179",
+10
+]
+],
+"serving": "1 plate (356 g)"
+},
+"chicken curry": {
+"recipe": [
+[
+"05064",
+120
+],
+[
+"12118",
+80
+],
+[
+"11282",
+40
+],
+[
+"11529",
+50
+],
+[
+"04582",
+10
+],
+[
+"02015",
+3
+]
+],
+"serving": "1 cup (303 g)"
+},
+"curry": {
+"recipe": [
+[
+"05064",
+120
+],
+[
+"12118",
+80
+],
+[
+"11282",
+40
+],
+[
+"11529",
+50
+],
+[
+"04582",
+10
+],
+[
+"02015",
+3
+]
+],
+"serving": "1 cup (303 g)"
+},
+"grilled cheese": {
+"recipe": [
+[
+"18069",
+56
+],
+[
+"01042",
+42
+],
+[
+"01001",
+10
+]
+],
+"serving": "1 sandwich (108 g)"
+},
+"grilled cheese sandwich": {
+"recipe": [
+[
+"18069",
+56
+],
+[
+"01042",
+42
+],
+[
+"01001",
+10
+]
+],
+"serving": "1 sandwich (108 g)"
+},
+"peanut butter and jelly": {
+"recipe": [
+[
+"18069",
+56
+],
+[
+"16098",
+32
+],
+[
+"19300",
+20
+]
+],
+"serving": "1 sandwich (108 g)"
+},
+"pb and j": {
+"recipe": [
+[
+"18069",
+56
+],
+[
+"16098",
+32
+],
+[
+"19300",
+20
+]
+],
+"serving": "1 sandwich (108 g)"
+},
+"pbj": {
+"recipe": [
+[
+"18069",
+56
+],
+[
+"16098",
+32
+],
+[
+"19300",
+20
+]
+],
+"serving": "1 sandwich (108 g)"
+},
+"ham sandwich": {
+"recipe": [
+[
+"18069",
+56
+],
+[
+"07029",
+56
+],
+[
+"01042",
+21
+],
+[
+"04025",
+10
+]
+],
+"serving": "1 sandwich (143 g)"
+},
+"turkey sandwich": {
+"recipe": [
+[
+"18075",
+56
+],
+[
+"07944",
+56
+],
+[
+"01040",
+21
+],
+[
+"11252",
+10
+],
+[
+"04025",
+10
+]
+],
+"serving": "1 sandwich (153 g)"
+},
+"tuna sandwich": {
+"recipe": [
+[
+"18069",
+56
+],
+[
+"15128",
+100
+]
+],
+"serving": "1 sandwich (156 g)"
+},
+"blt": {
+"recipe": [
+[
+"18070",
+56
+],
+[
+"10860",
+16
+],
+[
+"11252",
+15
+],
+[
+"11529",
+30
+],
+[
+"04025",
+14
+]
+],
+"serving": "1 sandwich (131 g)"
+},
+"sandwich": {
+"recipe": [
+[
+"18069",
+56
+],
+[
+"07944",
+56
+],
+[
+"01042",
+21
+],
+[
+"04025",
+10
+]
+],
+"serving": "1 sandwich (143 g)"
+},
+"salad": {
+"recipe": [
+[
+"11252",
+80
+],
+[
+"11529",
+50
+],
+[
+"11205",
+50
+],
+[
+"11124",
+20
+]
+],
+"serving": "1 bowl (200 g)"
+},
+"garden salad": {
+"recipe": [
+[
+"11252",
+80
+],
+[
+"11529",
+50
+],
+[
+"11205",
+50
+],
+[
+"11124",
+20
+]
+],
+"serving": "1 bowl (200 g)"
+},
+"side salad": {
+"recipe": [
+[
+"11252",
+50
+],
+[
+"11529",
+30
+],
+[
+"11205",
+30
+]
+],
+"serving": "1 side (110 g)"
+},
+"caesar salad": {
+"recipe": [
+[
+"11251",
+100
+],
+[
+"43015",
+30
+],
+[
+"01032",
+10
+],
+[
+"18243",
+15
+]
+],
+"serving": "1 bowl (155 g)"
+},
+"chicken caesar salad": {
+"recipe": [
+[
+"11251",
+100
+],
+[
+"43015",
+30
+],
+[
+"01032",
+10
+],
+[
+"18243",
+15
+],
+[
+"05064",
+85
+]
+],
+"serving": "1 bowl (240 g)"
+},
+"chicken salad": {
+"recipe": [
+[
+"05064",
+85
+],
+[
+"04025",
+15
+],
+[
+"11143",
+15
+]
+],
+"serving": "1/2 cup (115 g)"
+},
+"protein shake": {
+"recipe": [
+[
+"14066",
+30
+],
+[
+"01079",
+244
+]
+],
+"serving": "1 shake with 2% milk (274 g)"
+},
+"latte": {
+"recipe": [
+[
+"14210",
+60
+],
+[
+"01079",
+300
+]
+],
+"serving": "16 fl oz with 2% milk (360 g)"
+},
+"cappuccino": {
+"recipe": [
+[
+"14210",
+60
+],
+[
+"01079",
+180
+]
+],
+"serving": "12 fl oz with 2% milk (240 g)"
+},
+"iced coffee": {
+"recipe": [
+[
+"14209",
+300
+],
+[
+"01049",
+30
+],
+[
+"19335",
+8
+]
+],
+"serving": "16 fl oz (338 g)"
+},
+"mocha": {
+"recipe": [
+[
+"14210",
+60
+],
+[
+"01079",
+250
+],
+[
+"14181",
+30
+]
+],
+"serving": "16 fl oz (340 g)"
+},
+"fruit smoothie": {
+"recipe": [
+[
+"09040",
+120
+],
+[
+"09316",
+100
+],
+[
+"01117",
+120
+],
+[
+"01079",
+120
+]
+],
+"serving": "1 large glass (460 g)"
+},
+"acai bowl": {
+"recipe": [
+[
+"09040",
+100
+],
+[
+"09050",
+100
+],
+[
+"08037",
+30
+],
+[
+"19296",
+10
+],
+[
+"14091",
+100
+]
+],
+"serving": "1 bowl (340 g)"
+},
+"yogurt parfait": {
+"recipe": [
+[
+"01117",
+170
+],
+[
+"08037",
+30
+],
+[
+"09316",
+50
+]
+],
+"serving": "1 cup (250 g)"
+},
+"overnight oat": {
+"recipe": [
+[
+"08120",
+40
+],
+[
+"01079",
+120
+],
+[
+"01287",
+60
+],
+[
+"19296",
+7
+]
+],
+"serving": "1 jar (227 g)"
+},
+"avocado toast": {
+"recipe": [
+[
+"18029",
+50
+],
+[
+"09037",
+70
+]
+],
+"serving": "1 slice (120 g)"
+},
+"burrito bowl": {
+"recipe": [
+[
+"20045",
+150
+],
+[
+"16015",
+90
+],
+[
+"05064",
+110
+],
+[
+"06164",
+60
+],
+[
+"01009",
+28
+],
+[
+"09037",
+50
+]
+],
+"serving": "1 bowl (488 g)"
+},
+"poke bowl": {
+"recipe": [
+[
+"20045",
+200
+],
+[
+"15127",
+110
+],
+[
+"09037",
+40
+],
+[
+"11205",
+40
+],
+[
+"11212",
+40
+],
+[
+"16123",
+15
+],
+[
+"04025",
+15
+]
+],
+"serving": "1 bowl (460 g)"
+},
+"stir fry": {
+"recipe": [
+[
+"05064",
+110
+],
+[
+"11091",
+80
+],
+[
+"11821",
+50
+],
+[
+"11282",
+40
+],
+[
+"04582",
+14
+],
+[
+"16123",
+15
+]
+],
+"serving": "1 plate (309 g)"
+},
+"chicken and rice": {
+"recipe": [
+[
+"05064",
+120
+],
+[
+"20045",
+160
+]
+],
+"serving": "1 plate (280 g)"
+},
+"rice and bean": {
+"recipe": [
+[
+"20045",
+150
+],
+[
+"16015",
+130
+]
+],
+"serving": "1 plate (280 g)"
+},
+"spaghetti bolognese": {
+"recipe": [
+[
+"20121",
+200
+],
+[
+"06931",
+120
+],
+[
+"23570",
+60
+]
+],
+"serving": "1 plate (380 g)"
+},
+"pasta with sauce": {
+"recipe": [
+[
+"20121",
+200
+],
+[
+"06931",
+125
+]
+],
+"serving": "1 plate (325 g)"
+},
+"chicken alfredo": {
+"recipe": [
+[
+"20121",
+200
+],
+[
+"05064",
+100
+],
+[
+"01053",
+60
+],
+[
+"01032",
+20
+],
+[
+"01001",
+10
+]
+],
+"serving": "1 plate (390 g)"
+},
+"fettuccine alfredo": {
+"recipe": [
+[
+"20121",
+200
+],
+[
+"01053",
+60
+],
+[
+"01032",
+20
+],
+[
+"01001",
+10
+]
+],
+"serving": "1 plate (290 g)"
+},
+"tuna salad": {
+"id": "15128"
+},
+"egg salad": {
+"recipe": [
+[
+"01129",
+100
+],
+[
+"04025",
+15
+]
+],
+"serving": "1/2 cup (115 g)"
+},
+"deviled egg": {
+"recipe": [
+[
+"01129",
+30
+],
+[
+"04025",
+5
+]
+],
+"serving": "1 half (35 g)"
+},
+"pho": {
+"recipe": [
+[
+"20134",
+150
+],
+[
+"13930",
+70
+],
+[
+"06172",
+450
+],
+[
+"11282",
+20
+]
+],
+"serving": "1 bowl (690 g)"
+},
+"fried egg sandwich": {
+"recipe": [
+[
+"18069",
+56
+],
+[
+"01128",
+46
+],
+[
+"01042",
+21
+]
+],
+"serving": "1 sandwich (123 g)"
+},
+"shawarma": {
+"recipe": [
+[
+"18041",
+60
+],
+[
+"05064",
+110
+],
+[
+"16158",
+30
+],
+[
+"11529",
+30
+],
+[
+"11252",
+20
+]
+],
+"serving": "1 wrap (250 g)"
+},
+"gyro": {
+"recipe": [
+[
+"18041",
+60
+],
+[
+"17227",
+100
+],
+[
+"11529",
+30
+],
+[
+"11282",
+15
+],
+[
+"01117",
+30
+]
+],
+"serving": "1 wrap (235 g)"
+},
+"wrap": {
+"recipe": [
+[
+"18364",
+70
+],
+[
+"05064",
+85
+],
+[
+"11252",
+20
+],
+[
+"01009",
+21
+],
+[
+"04639",
+15
+]
+],
+"serving": "1 wrap (211 g)"
+},
+"chicken wrap": {
+"recipe": [
+[
+"18364",
+70
+],
+[
+"05064",
+85
+],
+[
+"11252",
+20
+],
+[
+"01009",
+21
+],
+[
+"04639",
+15
+]
+],
+"serving": "1 wrap (211 g)"
+},
+"cobb salad": {
+"recipe": [
+[
+"11251",
+120
+],
+[
+"05064",
+85
+],
+[
+"10860",
+16
+],
+[
+"01129",
+50
+],
+[
+"09037",
+50
+],
+[
+"01009",
+28
+],
+[
+"11529",
+50
+],
+[
+"04639",
+30
+]
+],
+"serving": "1 bowl (429 g)"
+},
+"chef salad": {
+"recipe": [
+[
+"11252",
+120
+],
+[
+"07029",
+56
+],
+[
+"07944",
+56
+],
+[
+"01129",
+50
+],
+[
+"01040",
+28
+],
+[
+"11529",
+50
+],
+[
+"04639",
+30
+]
+],
+"serving": "1 bowl (390 g)"
+},
+"tikka masala": {
+"recipe": [
+[
+"05064",
+150
+],
+[
+"01053",
+60
+],
+[
+"11529",
+120
+],
+[
+"11282",
+40
+],
+[
+"01001",
+15
+],
+[
+"02015",
+4
+]
+],
+"serving": "1 cup (389 g)"
+},
+"butter chicken": {
+"recipe": [
+[
+"05064",
+150
+],
+[
+"01053",
+60
+],
+[
+"11529",
+120
+],
+[
+"11282",
+40
+],
+[
+"01001",
+15
+],
+[
+"02015",
+4
+]
+],
+"serving": "1 cup (389 g)"
+},
+"naan": {
+"id": "28307"
+},
+"sushi roll": {
+"recipe": [
+[
+"20045",
+160
+],
+[
+"15138",
+40
+],
+[
+"09037",
+25
+],
+[
+"11446",
+4
+]
+],
+"serving": "1 roll, 8 pieces (229 g)"
+},
+"spicy tuna roll": {
+"recipe": [
+[
+"20045",
+160
+],
+[
+"15127",
+60
+],
+[
+"04025",
+10
+],
+[
+"11446",
+4
+]
+],
+"serving": "1 roll, 8 pieces (234 g)"
+},
+"chicken burrito": {
+"recipe": [
+[
+"18364",
+100
+],
+[
+"05064",
+100
+],
+[
+"20045",
+100
+],
+[
+"16015",
+80
+],
+[
+"01009",
+28
+],
+[
+"06164",
+40
+]
+],
+"serving": "1 burrito (448 g)"
+},
+"steak burrito": {
+"recipe": [
+[
+"18364",
+100
+],
+[
+"13930",
+100
+],
+[
+"20045",
+100
+],
+[
+"16015",
+80
+],
+[
+"01009",
+28
+],
+[
+"06164",
+40
+]
+],
+"serving": "1 burrito (448 g)"
+},
+"baklava": {
+"recipe": [
+[
+"20581",
+18
+],
+[
+"12155",
+25
+],
+[
+"01001",
+12
+],
+[
+"19296",
+15
+]
+],
+"serving": "1 piece (70 g)"
+},
+"bread pudding": {
+"recipe": [
+[
+"18069",
+60
+],
+[
+"01077",
+80
+],
+[
+"01123",
+30
+],
+[
+"19335",
+15
+],
+[
+"01001",
+8
+],
+[
+"09298",
+10
+]
+],
+"serving": "1 cup (203 g)"
+},
+"beignet": {
+"recipe": [
+[
+"18255",
+60
+],
+[
+"19336",
+8
+]
+],
+"serving": "2 beignets (68 g)"
+},
+"beef carpaccio": {
+"recipe": [
+[
+"13917",
+85
+],
+[
+"04053",
+10
+],
+[
+"01032",
+10
+],
+[
+"11251",
+15
+]
+],
+"serving": "1 plate (120 g)"
+},
+"steak tartare": {
+"recipe": [
+[
+"13917",
+120
+],
+[
+"01125",
+17
+],
+[
+"11282",
+10
+]
+],
+"serving": "1 portion (147 g)"
+},
+"beet salad": {
+"recipe": [
+[
+"11081",
+150
+],
+[
+"01159",
+30
+],
+[
+"12155",
+10
+],
+[
+"04053",
+10
+],
+[
+"11457",
+30
+]
+],
+"serving": "1 bowl (230 g)"
+},
+"bibimbap": {
+"recipe": [
+[
+"20045",
+200
+],
+[
+"23562",
+70
+],
+[
+"01128",
+46
+],
+[
+"11458",
+50
+],
+[
+"11124",
+30
+],
+[
+"11212",
+30
+],
+[
+"04582",
+10
+],
+[
+"06631",
+15
+]
+],
+"serving": "1 bowl (451 g)"
+},
+"breakfast burrito": {
+"recipe": [
+[
+"18364",
+70
+],
+[
+"01132",
+100
+],
+[
+"01009",
+28
+],
+[
+"11391",
+50
+],
+[
+"07064",
+30
+]
+],
+"serving": "1 burrito (278 g)"
+},
+"poke": {
+"recipe": [
+[
+"20045",
+200
+],
+[
+"15127",
+110
+],
+[
+"09037",
+40
+],
+[
+"11205",
+40
+],
+[
+"11212",
+40
+],
+[
+"16123",
+15
+],
+[
+"04025",
+15
+]
+],
+"serving": "1 bowl (460 g)"
+},
+"miso soup": {
+"recipe": [
+[
+"16112",
+18
+],
+[
+"16426",
+30
+],
+[
+"14411",
+240
+],
+[
+"11446",
+2
+]
+],
+"serving": "1 bowl (290 g)"
+},
+"banana split": {
+"recipe": [
+[
+"09040",
+118
+],
+[
+"19095",
+200
+],
+[
+"14181",
+30
+],
+[
+"01054",
+15
+]
+],
+"serving": "1 sundae (363 g)"
+},
+"sundae": {
+"recipe": [
+[
+"19095",
+132
+],
+[
+"14181",
+30
+],
+[
+"01054",
+10
+]
+],
+"serving": "1 sundae (172 g)"
+},
+"eggs benedict": {
+"recipe": [
+[
+"18258",
+57
+],
+[
+"01123",
+100
+],
+[
+"10136",
+40
+],
+[
+"04025",
+30
+]
+],
+"serving": "2 halves (227 g)"
+},
+"caprese salad": {
+"recipe": [
+[
+"01026",
+85
+],
+[
+"11529",
+150
+],
+[
+"04053",
+10
+],
+[
+"02044",
+3
+]
+],
+"serving": "1 plate (248 g)"
+},
+"croque madame": {
+"recipe": [
+[
+"18029",
+70
+],
+[
+"07029",
+60
+],
+[
+"01040",
+40
+],
+[
+"01001",
+10
+],
+[
+"01128",
+46
+],
+[
+"01077",
+40
+],
+[
+"20081",
+5
+]
+],
+"serving": "1 sandwich (271 g)"
+},
+"croque monsieur": {
+"recipe": [
+[
+"18029",
+70
+],
+[
+"07029",
+60
+],
+[
+"01040",
+40
+],
+[
+"01001",
+10
+],
+[
+"01077",
+40
+],
+[
+"20081",
+5
+]
+],
+"serving": "1 sandwich (225 g)"
+},
+"escargot": {
+"recipe": [
+[
+"90560",
+40
+],
+[
+"01001",
+20
+],
+[
+"11215",
+5
+]
+],
+"serving": "6 snails with garlic butter (65 g)"
+},
+"lobster roll": {
+"recipe": [
+[
+"15148",
+100
+],
+[
+"04025",
+20
+],
+[
+"18350",
+50
+],
+[
+"01001",
+7
+]
+],
+"serving": "1 roll (177 g)"
+},
+"panna cotta": {
+"recipe": [
+[
+"01053",
+100
+],
+[
+"01077",
+40
+],
+[
+"19335",
+20
+],
+[
+"19177",
+2
+]
+],
+"serving": "1 ramekin (162 g)"
+},
+"poutine": {
+"recipe": [
+[
+"21138",
+150
+],
+[
+"06116",
+120
+],
+[
+"01009",
+60
+]
+],
+"serving": "1 regular (330 g)"
+},
+"shrimp and grits": {
+"recipe": [
+[
+"08161",
+250
+],
+[
+"15271",
+100
+],
+[
+"01009",
+30
+],
+[
+"01001",
+14
+],
+[
+"10862",
+15
+]
+],
+"serving": "1 bowl (409 g)"
+},
+"risotto": {
+"recipe": [
+[
+"20053",
+200
+],
+[
+"01032",
+15
+],
+[
+"01001",
+14
+],
+[
+"04053",
+5
+],
+[
+"11282",
+20
+]
+],
+"serving": "1 plate (254 g)"
+},
+"cannoli": {
+"recipe": [
+[
+"18237",
+35
+],
+[
+"01036",
+60
+],
+[
+"19336",
+10
+],
+[
+"19080",
+5
+]
+],
+"serving": "1 cannoli (110 g)"
+},
+"takoyaki": {
+"recipe": [
+[
+"20081",
+30
+],
+[
+"01123",
+25
+],
+[
+"15230",
+30
+],
+[
+"04025",
+10
+],
+[
+"04053",
+5
+],
+[
+"14411",
+50
+]
+],
+"serving": "6 balls (150 g)"
+},
+"spaghetti carbonara": {
+"recipe": [
+[
+"20121",
+200
+],
+[
+"10862",
+30
+],
+[
+"01123",
+50
+],
+[
+"01032",
+20
+]
+],
+"serving": "1 plate (300 g)"
+},
+"tuna tartare": {
+"recipe": [
+[
+"15127",
+120
+],
+[
+"09038",
+40
+],
+[
+"16124",
+10
+],
+[
+"04058",
+5
+]
+],
+"serving": "1 portion (175 g)"
+},
+"lobster bisque": {
+"recipe": [
+[
+"15148",
+40
+],
+[
+"01053",
+60
+],
+[
+"01001",
+10
+],
+[
+"11282",
+20
+],
+[
+"20081",
+5
+],
+[
+"14411",
+110
+]
+],
+"serving": "1 cup (245 g)"
+},
+"prime rib": {
+"id": "13835"
+},
+"filet mignon": {
+"id": "13921"
+},
+"beef tenderloin": {
+"id": "13921"
+}
+}

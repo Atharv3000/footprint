@@ -86,7 +86,7 @@ export function FoodLoggingModal({
   // Request camera permission when modal becomes visible if not yet determined
   useEffect(() => {
     if (visible && !permission?.granted && permission?.canAskAgain) {
-      requestPermission().catch(() => {});
+      requestPermission().catch(() => { });
     }
   }, [visible, permission]);
 
@@ -182,7 +182,7 @@ export function FoodLoggingModal({
   // Capture snapshot directly from CameraView and analyze
   const handleCaptureFromCamera = async (overrideMode?: FoodScanMode) => {
     const activeTargetMode = overrideMode || scanMode;
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => { });
     if (!cameraRef.current) {
       // Fallback to ImagePicker camera if CameraView ref is not ready
       await handleFallbackCamera(activeTargetMode);
@@ -192,7 +192,7 @@ export function FoodLoggingModal({
     try {
       setIsCapturing(true);
       const photo = await cameraRef.current.takePictureAsync({
-        quality: 0.7,
+        quality: 0.5,
         base64: true,
         skipProcessing: false,
       });
@@ -220,7 +220,7 @@ export function FoodLoggingModal({
       mediaTypes: ['images'],
       allowsEditing: true,
       aspect: [4, 3],
-      quality: 0.7,
+      quality: 0.5,
       base64: true,
     });
     if (!result.canceled && result.assets && result.assets.length > 0) {
@@ -233,12 +233,12 @@ export function FoodLoggingModal({
 
   // Upload an already existing photo from gallery
   const handlePickLibrary = async () => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => { });
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ['images'],
       allowsEditing: true,
       aspect: [4, 3],
-      quality: 0.7,
+      quality: 0.5,
       base64: true,
     });
 
@@ -255,15 +255,15 @@ export function FoodLoggingModal({
     setAnalysisResult(null);
     setServingMultiplier(1);
     try {
-      const contextHint = modeHint === 'receipt' 
-        ? `${mealType} (grocery receipt / itemized bill)` 
-        : modeHint === 'label' 
-        ? `${mealType} (nutrition facts label / barcode)` 
-        : mealType;
+      const contextHint = modeHint === 'receipt'
+        ? `${mealType} (grocery receipt / itemized bill)`
+        : modeHint === 'label'
+          ? `${mealType} (nutrition facts label / barcode)`
+          : mealType;
 
       const result = await analyzeFoodImageAsync(base64, contextHint, descriptionInput);
       setAnalysisResult(result);
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => { });
     } catch (e) {
       console.error('Vision analysis error:', e);
     } finally {
@@ -277,7 +277,7 @@ export function FoodLoggingModal({
       alert('Please type what you ate (e.g. 3 cookies and a glass of lemonade).');
       return;
     }
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => { });
     setIsAnalyzing(true);
     setAnalysisResult(null);
     setServingMultiplier(1);
@@ -286,7 +286,7 @@ export function FoodLoggingModal({
     try {
       const result = await describeFoodAsync(descriptionInput);
       setAnalysisResult(result);
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => { });
     } catch (e) {
       console.error('Describe food error:', e);
     } finally {
@@ -296,7 +296,7 @@ export function FoodLoggingModal({
 
   // Quick Recipe / Food Index Tap Selection ("Choose from preselected stuff")
   const handleSelectRecipe = (rec: FoodItemIndex) => {
-    Haptics.selectionAsync().catch(() => {});
+    Haptics.selectionAsync().catch(() => { });
     setActiveSheet('none');
     setServingMultiplier(1);
     setAnalysisResult({
@@ -329,7 +329,7 @@ export function FoodLoggingModal({
   const handleSaveMeal = async () => {
     Keyboard.dismiss();
     if (!analysisResult) return;
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => { });
 
     const scaledItems = analysisResult.items.map((item) => ({
       ...item,
@@ -384,7 +384,7 @@ export function FoodLoggingModal({
 
   // Switch scan mode without interrupting the live camera
   const handleModePress = (mode: FoodScanMode) => {
-    Haptics.selectionAsync().catch(() => {});
+    Haptics.selectionAsync().catch(() => { });
     setScanMode(mode);
   };
 
@@ -610,7 +610,7 @@ export function FoodLoggingModal({
                                 isSelected && styles.catChipClearSelected,
                               ]}
                               onPress={() => {
-                                Haptics.selectionAsync().catch(() => {});
+                                Haptics.selectionAsync().catch(() => { });
                                 setSelectedCategory(cat);
                               }}
                             >
@@ -748,30 +748,30 @@ export function FoodLoggingModal({
                         <TouchableOpacity
                           key={cand.id}
                           onPress={() => {
-                            Haptics.selectionAsync().catch(() => {});
+                            Haptics.selectionAsync().catch(() => { });
                             setAnalysisResult((prev) =>
                               prev
                                 ? {
-                                    ...prev,
-                                    dishTitle: cand.title,
-                                    totalCalories: cand.calories,
-                                    totalProteinG: cand.proteinG,
-                                    totalCarbsG: cand.carbsG,
-                                    totalFatG: cand.fatG,
-                                    confidence: cand.confidence,
-                                    items: [
-                                      {
-                                        id: cand.id,
-                                        name: cand.title,
-                                        portion: cand.portion,
-                                        calories: cand.calories,
-                                        proteinG: cand.proteinG,
-                                        carbsG: cand.carbsG,
-                                        fatG: cand.fatG,
-                                        confidence: cand.confidence,
-                                      },
-                                    ],
-                                  }
+                                  ...prev,
+                                  dishTitle: cand.title,
+                                  totalCalories: cand.calories,
+                                  totalProteinG: cand.proteinG,
+                                  totalCarbsG: cand.carbsG,
+                                  totalFatG: cand.fatG,
+                                  confidence: cand.confidence,
+                                  items: [
+                                    {
+                                      id: cand.id,
+                                      name: cand.title,
+                                      portion: cand.portion,
+                                      calories: cand.calories,
+                                      proteinG: cand.proteinG,
+                                      carbsG: cand.carbsG,
+                                      fatG: cand.fatG,
+                                      confidence: cand.confidence,
+                                    },
+                                  ],
+                                }
                                 : prev
                             );
                           }}
@@ -838,7 +838,7 @@ export function FoodLoggingModal({
                       style={[styles.stepperBtn, { backgroundColor: colors.surfaceElevated, borderColor: colors.border }]}
                       onPress={() => {
                         if (servingMultiplier > 0.25) {
-                          Haptics.selectionAsync().catch(() => {});
+                          Haptics.selectionAsync().catch(() => { });
                           const step = servingMultiplier <= 1 ? 0.25 : 0.5;
                           setServingMultiplier((prev) => Math.max(0.25, Math.round((prev - step) * 100) / 100));
                         }
@@ -855,7 +855,7 @@ export function FoodLoggingModal({
                       style={[styles.stepperBtn, { backgroundColor: colors.surfaceElevated, borderColor: colors.border }]}
                       onPress={() => {
                         if (servingMultiplier < 20) {
-                          Haptics.selectionAsync().catch(() => {});
+                          Haptics.selectionAsync().catch(() => { });
                           const step = servingMultiplier < 1 ? 0.25 : 0.5;
                           setServingMultiplier((prev) => Math.round((prev + step) * 100) / 100);
                         }
@@ -943,7 +943,7 @@ export function FoodLoggingModal({
                       <TouchableOpacity
                         style={[styles.gridButton, activeSheet === 'describe' && styles.gridButtonActive]}
                         onPress={() => {
-                          Haptics.selectionAsync().catch(() => {});
+                          Haptics.selectionAsync().catch(() => { });
                           setActiveSheet((curr) => (curr === 'describe' ? 'none' : 'describe'));
                         }}
                         activeOpacity={0.7}
@@ -960,7 +960,7 @@ export function FoodLoggingModal({
                       <TouchableOpacity
                         style={[styles.gridButton, activeSheet === 'preselected' && styles.gridButtonActive]}
                         onPress={() => {
-                          Haptics.selectionAsync().catch(() => {});
+                          Haptics.selectionAsync().catch(() => { });
                           setActiveSheet((curr) => (curr === 'preselected' ? 'none' : 'preselected'));
                         }}
                         activeOpacity={0.7}
@@ -1085,7 +1085,7 @@ export function FoodLoggingModal({
                           },
                         ]}
                         onPress={() => {
-                          Haptics.selectionAsync().catch(() => {});
+                          Haptics.selectionAsync().catch(() => { });
                           setSelectedCategory(cat);
                         }}
                       >
@@ -1225,7 +1225,7 @@ const styles = StyleSheet.create({
     height: '100%',
   },
   viewfinderOverlay: {
-    ...StyleSheet.absoluteFill,
+    ...StyleSheet.absoluteFillObject,
     padding: 24,
     justifyContent: 'space-between',
     alignItems: 'center',
@@ -1331,7 +1331,7 @@ const styles = StyleSheet.create({
 
   /* Camera Overlay Floating Modal / Menu (clearish in front of camera view) */
   cameraSheetOverlayWrap: {
-    ...StyleSheet.absoluteFill,
+    ...StyleSheet.absoluteFillObject,
     backgroundColor: 'rgba(0,0,0,0.6)',
     paddingHorizontal: 14,
     paddingTop: 56,

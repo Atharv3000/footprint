@@ -27,6 +27,7 @@ import {
 } from '@/constants/userProfile';
 import { InteractiveScaleRuler } from '@/components/InteractiveScaleRuler';
 import { FlipNumberPicker } from '@/components/FlipNumberPicker';
+import { isAgeConfirmed, saveAgeConfirmation } from '@/constants/ageConfirmation';
 import { getOrCreateMyUsername, setMyUsername } from '@/constants/socialEngine';
 import { loadWeightLogs, recordWeightLog } from '@/constants/workoutStorage';
 
@@ -70,6 +71,11 @@ export default function OnboardingScreen() {
   const [heightInches, setHeightInches] = useState(profile?.heightInches || 9);
   const [heightCm, setHeightCm] = useState(profile?.heightCm || 175);
   const [age, setAge] = useState(profile?.age || 26);
+  // "I'm 13 or older" (required to continue past this step; remembered on the device)
+  const [ageConfirmed, setAgeConfirmed] = useState(false);
+  useEffect(() => {
+    isAgeConfirmed().then((ok) => { if (ok) setAgeConfirmed(true); });
+  }, []);
   const [gender, setGender] = useState<GenderOption>(profile?.gender || 'na');
 
   // Step 5: Profile Identity & Daily Step Goal
@@ -437,6 +443,20 @@ export default function OnboardingScreen() {
             </View>
           </View>
 
+          <TouchableOpacity
+            style={styles.ageConfirmRow}
+            onPress={() => {
+              Haptics.selectionAsync().catch(() => {});
+              setAgeConfirmed((v) => !v);
+            }}
+            activeOpacity={0.8}
+            accessibilityRole="checkbox"
+            accessibilityState={{ checked: ageConfirmed }}
+          >
+            <Ionicons name={ageConfirmed ? 'checkbox' : 'square-outline'} size={22} color={ageConfirmed ? colors?.primary : colors?.textMuted} />
+            <Text style={[styles.ageConfirmText, { color: colors?.text }]}>I confirm I'm 13 or older</Text>
+          </TouchableOpacity>
+
           {/* Biological Sex */}
           <Text style={[styles.fieldLabel, { color: colors?.textMuted, marginTop: 12 }]}>BIOLOGICAL SEX</Text>
           <View style={[styles.genderRow, { backgroundColor: colors?.surface, borderColor: colors?.border }]}>
@@ -458,8 +478,13 @@ export default function OnboardingScreen() {
           </View>
 
           <TouchableOpacity
-            style={[styles.nextBtn, { backgroundColor: colors?.primary }]}
-            onPress={handleNext}
+            style={[styles.nextBtn, { backgroundColor: colors?.primary, opacity: ageConfirmed ? 1 : 0.45 }]}
+            onPress={() => {
+              if (!ageConfirmed) return;
+              saveAgeConfirmation().catch(() => {});
+              handleNext();
+            }}
+            disabled={!ageConfirmed}
             activeOpacity={0.85}
           >
             <Text style={[styles.nextBtnText, { color: isDark ? '#09090b' : '#ffffff' }]}>Continue</Text>
@@ -572,6 +597,8 @@ export default function OnboardingScreen() {
 }
 
 const styles = StyleSheet.create({
+  ageConfirmRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 4, marginBottom: 8, paddingVertical: 6 },
+  ageConfirmText: { fontSize: 15, fontWeight: '600' },
   container: { flex: 1 },
   header: {
     flexDirection: 'row',

@@ -1,10 +1,10 @@
-import { AI_SERVER_WS_URL } from '@/constants/foodVisionAI';
 import { ProgressPhoto } from '@/constants/workoutStorage';
+import { aiRequest } from '@/constants/aiServer';
 
 export type MuscleGroupTarget = 'abs' | 'chest' | 'arms' | 'shoulders' | 'back' | 'legs';
 
 export interface MuscleCropBox {
-  // Relative percentages (0..1)
+  // Relative to the photo (0..1)
   x: number;
   y: number;
   width: number;
@@ -17,10 +17,13 @@ export interface MuscleAnalysisPhotoResult {
   photoUri: string;
   date: string;
   cropBox: MuscleCropBox;
-  definitionScore: number; // 0..100
-  vascularityScore: number; // 0..100
-  hasMuscleVisibility: boolean; // strict classification gate
+  /** Relative surface detail across this user's photos (0-100); null when not measurable. */
+  definitionScore: number | null;
+  /** Not measurable from a photo; always null (kept for compatibility). */
+  vascularityScore: number | null;
+  hasMuscleVisibility: boolean;
   label: string;
+  reason?: string | null;
 }
 
 export interface MuscleGroupIsolationResult {
@@ -28,6 +31,29 @@ export interface MuscleGroupIsolationResult {
   groupLabel: string;
   summary: string;
   photos: MuscleAnalysisPhotoResult[];
+  scoreMeaning?: string;
+  offline?: boolean;
+  /** abs only, when body stats were passed: derived from the DXA-trained body-fat model. */
+  absVisibility?: {
+    absVisibility: string;
+    absVisibleProbability: number;
+    bodyFatForVisibleAbs: number;
+    clearlyVisibleBelow: number;
+    method: string;
+  };
+  bodyFatPercent?: number;
+}
+
+/** Optional body stats; with them the abs analysis also reports how likely visible abs are. */
+export interface MuscleBodyStats {
+  gender: string;
+  age?: number;
+  heightCm: number;
+  weightKg: number;
+  waistCm?: number;
+  neckCm?: number;
+  hipCm?: number;
+  athleticLevel?: string;
 }
 
 export const MUSCLE_GROUPS_CONFIG: {
@@ -37,165 +63,94 @@ export const MUSCLE_GROUPS_CONFIG: {
   description: string;
   defaultBox: MuscleCropBox;
 }[] = [
-  {
-    id: 'abs',
-    label: 'Abs & Core',
-    icon: 'grid-outline',
-    description: 'Rectus abdominis, obliques & midsection',
-    defaultBox: { x: 0.22, y: 0.35, width: 0.56, height: 0.28, zoomScale: 2.1 },
-  },
-  {
-    id: 'chest',
-    label: 'Chest',
-    icon: 'shield-outline',
-    description: 'Pectoralis major, upper chest & sternum line',
-    defaultBox: { x: 0.20, y: 0.22, width: 0.60, height: 0.22, zoomScale: 2.2 },
-  },
-  {
-    id: 'arms',
-    label: 'Arms & Biceps',
-    icon: 'barbell-outline',
-    description: 'Biceps peak, triceps lateral head & forearms',
-    defaultBox: { x: 0.10, y: 0.24, width: 0.80, height: 0.30, zoomScale: 1.8 },
-  },
-  {
-    id: 'shoulders',
-    label: 'Shoulders & Delts',
-    icon: 'fitness-outline',
-    description: 'Lateral, anterior & posterior deltoids',
-    defaultBox: { x: 0.14, y: 0.16, width: 0.72, height: 0.20, zoomScale: 2.0 },
-  },
-  {
-    id: 'back',
-    label: 'Back & Lats',
-    icon: 'layers-outline',
-    description: 'Latissimus dorsi, traps & rear taper',
-    defaultBox: { x: 0.18, y: 0.20, width: 0.64, height: 0.35, zoomScale: 1.9 },
-  },
-  {
-    id: 'legs',
-    label: 'Quads & Legs',
-    icon: 'walk-outline',
-    description: 'Quadriceps sweep, tear drop & calves',
-    defaultBox: { x: 0.20, y: 0.55, width: 0.60, height: 0.38, zoomScale: 1.7 },
-  },
+  { id: 'abs', label: 'Abs & Core', icon: 'grid-outline', description: 'Rectus abdominis, obliques & midsection', defaultBox: { x: 0.22, y: 0.35, width: 0.56, height: 0.28, zoomScale: 2.1 } },
+  { id: 'chest', label: 'Chest', icon: 'shield-outline', description: 'Pectoralis major, upper chest & sternum line', defaultBox: { x: 0.20, y: 0.22, width: 0.60, height: 0.22, zoomScale: 2.2 } },
+  { id: 'arms', label: 'Arms & Biceps', icon: 'barbell-outline', description: 'Biceps peak, triceps lateral head & forearms', defaultBox: { x: 0.10, y: 0.24, width: 0.80, height: 0.30, zoomScale: 1.8 } },
+  { id: 'shoulders', label: 'Shoulders & Delts', icon: 'fitness-outline', description: 'Lateral, anterior & posterior deltoids', defaultBox: { x: 0.14, y: 0.16, width: 0.72, height: 0.20, zoomScale: 2.0 } },
+  { id: 'back', label: 'Back & Lats', icon: 'layers-outline', description: 'Latissimus dorsi, traps & rear taper', defaultBox: { x: 0.18, y: 0.20, width: 0.64, height: 0.35, zoomScale: 1.9 } },
+  { id: 'legs', label: 'Quads & Legs', icon: 'walk-outline', description: 'Quadriceps sweep, tear drop & calves', defaultBox: { x: 0.20, y: 0.55, width: 0.60, height: 0.38, zoomScale: 1.7 } },
 ];
 
-/**
- * Anatomical crop heuristic for muscle framing
- */
-function computeAnatomicalCrop(muscle: MuscleGroupTarget, index: number): MuscleCropBox {
-  const base = MUSCLE_GROUPS_CONFIG.find((m) => m.id === muscle)?.defaultBox || {
-    x: 0.2,
-    y: 0.3,
-    width: 0.6,
-    height: 0.3,
-    zoomScale: 2.0,
-  };
+const MAX_PHOTOS = 12;
+const MAX_TOTAL_BASE64 = 12_000_000;
 
-  const subtleVariance = ((index * 7) % 5) * 0.008;
-  return {
-    x: Math.max(0.05, Math.min(0.75, base.x + subtleVariance)),
-    y: Math.max(0.05, Math.min(0.75, base.y - subtleVariance * 0.5)),
-    width: base.width,
-    height: base.height,
-    zoomScale: base.zoomScale,
-  };
+async function readBase64(uri: string): Promise<string | null> {
+  try {
+    // SDK 54+ object API
+    const fs: any = require('expo-file-system');
+    if (fs?.File) {
+      const file = new fs.File(uri);
+      if (typeof file.base64 === 'function') return await file.base64();
+    }
+  } catch {}
+  try {
+    const legacy: any = require('expo-file-system/legacy');
+    return await legacy.readAsStringAsync(uri, { encoding: 'base64' });
+  } catch {}
+  return null;
 }
 
 /**
- * Strict Trained Classifier:
- * Determines if a progress check-in photo actually demonstrates identifiable
- * muscle definition for the target muscle group (e.g. visible abdominal wall,
- * linea alba, rectus abdominis separation, or lean midsection).
- * 
- * Images with loose clothing, heavy bulk without core engagement, or obscured angles
- * are rejected (hasMuscleVisibility = false) so the grid ONLY contains real visible progress.
- */
-function classifyMuscleVisibility(
-  photo: ProgressPhoto,
-  muscle: MuscleGroupTarget,
-  index: number,
-  total: number
-): { isVisible: boolean; defScore: number; vascScore: number } {
-  const caption = (photo.caption || '').toLowerCase();
-  const uri = (photo.uri || '').toLowerCase();
-
-  // Keyword indicators in user note/tagging
-  const strongKeywords = ['ab', 'core', 'shred', 'cut', 'fasted', 'abs', 'six-pack', 'definition', 'check-in', 'lean', 'physique', 'transformation', 'striation'];
-  const obscureKeywords = ['hoodie', 'sweatshirt', 'baggy', 'heavy bulk', 'covered', 'obscured', 'cardio only'];
-
-  const hasStrongTag = strongKeywords.some((k) => caption.includes(k));
-  const hasObscureTag = obscureKeywords.some((k) => caption.includes(k));
-
-  if (hasObscureTag) {
-    return { isVisible: false, defScore: 40, vascScore: 35 };
-  }
-
-  // Weight progression factor: if weight was logged and is lower or trending lean (<82kg), higher definition probability
-  let weightBonus = 0;
-  if (photo.weightKg) {
-    if (photo.weightKg <= 75) weightBonus = 12;
-    else if (photo.weightKg <= 80) weightBonus = 7;
-    else if (photo.weightKg >= 95) weightBonus = -12;
-  }
-
-  // Chronological progression modeling
-  const progressRatio = total > 1 ? index / (total - 1) : 0.6;
-  const learnedScore = Math.round(58 + progressRatio * 28 + weightBonus + (hasStrongTag ? 10 : 0));
-  const defScore = Math.min(98, Math.max(35, learnedScore));
-  const vascScore = Math.min(95, Math.max(30, learnedScore - 5));
-
-  // Threshold: For Abs and core, require >= 68% definition score to qualify as visible abs
-  // For Chest/Arms, require >= 62%
-  const threshold = muscle === 'abs' ? 68 : 62;
-  const isVisible = defScore >= threshold;
-
-  return {
-    isVisible,
-    defScore,
-    vascScore,
-  };
-}
-
-/**
- * Isolates and filters progress photos, only returning those that strictly look
- * like they have visible definition in the selected muscle group.
+ * Finds the selected muscle group in each progress photo with the AI server
+ * (pose landmarks), crops to it, and reports which photos actually show it.
+ * Photos are never "scored" without being analysed: if the server is
+ * unreachable, every photo is returned unscored with an explanation.
  */
 export async function isolateMuscleGroupAcrossPhotos(
   photos: ProgressPhoto[],
-  muscle: MuscleGroupTarget
+  muscle: MuscleGroupTarget,
+  body?: MuscleBodyStats
 ): Promise<MuscleGroupIsolationResult> {
-  const groupCfg = MUSCLE_GROUPS_CONFIG.find((m) => m.id === muscle) || MUSCLE_GROUPS_CONFIG[0];
-
-  // Chronological order: oldest -> newest
+  const cfg = MUSCLE_GROUPS_CONFIG.find((m) => m.id === muscle) || MUSCLE_GROUPS_CONFIG[0];
   const sorted = [...photos].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+  const recent = sorted.slice(-MAX_PHOTOS);
 
-  const photoResults: MuscleAnalysisPhotoResult[] = [];
+  const payload: { id: string; date: string; image: string }[] = [];
+  let total = 0;
+  for (const p of recent) {
+    const b64 = await readBase64(p.uri);
+    if (!b64) continue;
+    if (total + b64.length > MAX_TOTAL_BASE64) break;
+    total += b64.length;
+    payload.push({ id: p.id, date: p.date, image: b64 });
+  }
 
-  sorted.forEach((p, idx) => {
-    const classification = classifyMuscleVisibility(p, muscle, idx, sorted.length);
-
-    // Only include in the grid if it passes the muscle vision classifier
-    if (classification.isVisible) {
-      const cropBox = computeAnatomicalCrop(muscle, idx);
-      photoResults.push({
-        photoId: p.id,
-        photoUri: p.uri,
-        date: p.date,
-        cropBox,
-        definitionScore: classification.defScore,
-        vascularityScore: classification.vascScore,
-        hasMuscleVisibility: true,
-        label: groupCfg.label,
-      });
-    }
+  const unscored = (reason: string, offline = false): MuscleGroupIsolationResult => ({
+    muscleGroup: muscle,
+    groupLabel: cfg.label,
+    summary: reason,
+    offline,
+    photos: [],
   });
+  if (!payload.length) return unscored('Could not read the progress photos on this device.');
 
+  const res = await aiRequest<any>('analyze_muscle', { muscle, photos: payload, ...(body ? { body } : {}) }, 45000);
+  if (!res.ok || !res.data) return unscored(res.error || 'Muscle analysis is unavailable right now.', !!res.offline);
+
+  const byId = new Map(recent.map((p) => [p.id, p]));
+  const results: MuscleAnalysisPhotoResult[] = [];
+  for (const r of res.data.photos || []) {
+    const p = byId.get(r.photoId);
+    if (!p || !r.hasMuscleVisibility || !r.cropBox) continue;
+    results.push({
+      photoId: p.id,
+      photoUri: p.uri,
+      date: p.date,
+      cropBox: r.cropBox,
+      definitionScore: typeof r.definitionScore === 'number' ? r.definitionScore : null,
+      vascularityScore: null,
+      hasMuscleVisibility: true,
+      label: cfg.label,
+      reason: null,
+    });
+  }
   return {
     muscleGroup: muscle,
-    groupLabel: groupCfg.label,
-    summary: `${photoResults.length} of ${sorted.length} photos verified with visible ${groupCfg.label.toLowerCase()}`,
-    photos: photoResults,
+    groupLabel: cfg.label,
+    summary: res.data.summary || `${results.length} of ${payload.length} photos show the ${cfg.label.toLowerCase()}`,
+    scoreMeaning: res.data.scoreMeaning,
+    photos: results,
+    absVisibility: res.data.absVisibility,
+    bodyFatPercent: res.data.bodyFatPercent,
   };
 }

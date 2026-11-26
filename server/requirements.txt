@@ -1,10 +1,15 @@
 fastapi>=0.115,<1
 uvicorn[standard]>=0.30,<1
-mediapipe==0.10.21
-protobuf>=4.25.3,<5
-numpy>=1.26,<2
-Pillow>=10.4,<12
+# 0.10.21 has wheels for Python 3.9-3.12; 0.10.30+ adds Python 3.13. Both run the same Pose Landmarker model.
+mediapipe>=0.10.21,<0.11
+protobuf>=4.25.3,<6
+numpy>=1.26,<3
+Pillow>=10.4,<13
 httpx>=0.27,<1
+# Food photo model runtime (Google AIY food classifier, .tflite)
+ai-edge-litert>=1.2,<3
+onnxruntime>=1.17
+websockets>=12,<16
 
 # IANA challenge time zones on Windows
 tzdata>=2025.2

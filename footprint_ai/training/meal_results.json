@@ -1,0 +1,17 @@
+{
+ "meal_benchmark": {
+  "within_25pct": 69,
+  "n": 69,
+  "median_abs_err": 0.007
+ },
+ "meal_heldout": {
+  "within_25pct": 37,
+  "n": 40,
+  "median_abs_err": 0.089
+ },
+ "meal_final_test": {
+  "within_25pct": 26,
+  "n": 30,
+  "median_abs_err": 0.026
+ }
+}

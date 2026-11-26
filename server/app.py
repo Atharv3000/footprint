@@ -22,6 +22,8 @@ from .boxing import BoxingGame
 from .country_quests import CountryQuests
 from .community_goals import CommunityGoals
 from .food_ai import analyze_food_image, describe_food
+from footprint_ai.server import RESULT_TYPE as AI_RESULT_TYPE, handle as ai_handle, warm_up as ai_warm_up
+from footprint_ai.food_vision import ImageError as AIImageError
 
 
 def get_token():
@@ -34,8 +36,8 @@ def is_dev_token_allowed():
 
 TOKEN = get_token()
 ALLOW_DEV_TOKEN = is_dev_token_allowed()
-SUPABASE_URL = os.environ.get('SUPABASE_URL', '').strip().rstrip('/')
-SUPABASE_ANON_KEY = os.environ.get('SUPABASE_ANON_KEY', '').strip()
+SUPABASE_URL = (os.environ.get('SUPABASE_URL', '') or os.environ.get('EXPO_PUBLIC_SUPABASE_URL', '')).strip().rstrip('/')
+SUPABASE_ANON_KEY = (os.environ.get('SUPABASE_ANON_KEY', '') or os.environ.get('EXPO_PUBLIC_SUPABASE_ANON_KEY', '')).strip()
 SUPABASE_JWT_SECRET = os.environ.get('SUPABASE_JWT_SECRET', '').strip()
 
 battles = Battles()
@@ -52,6 +54,8 @@ MAX_SESSIONS_PER_USER = 2
 FRAME_TTL_SECONDS = 3.0
 JSON_BODY_LIMIT = 65_536
 FRAME_BODY_LIMIT = 2_900_000
+# Muscle-photo comparisons send up to 12 photos at once.
+AI_BODY_LIMIT = 16_000_000
 
 
 class RateLimiter:
@@ -128,8 +132,8 @@ async def _verify_supabase_jwt(token: str) -> str:
     if cached and cached[1] > now:
         return cached[0]
 
-    sb_url = (os.environ.get('SUPABASE_URL', '').strip() or SUPABASE_URL).rstrip('/')
-    sb_key = os.environ.get('SUPABASE_ANON_KEY', '').strip() or SUPABASE_ANON_KEY
+    sb_url = (os.environ.get('SUPABASE_URL', '').strip() or os.environ.get('EXPO_PUBLIC_SUPABASE_URL', '').strip() or SUPABASE_URL).rstrip('/')
+    sb_key = os.environ.get('SUPABASE_ANON_KEY', '').strip() or os.environ.get('EXPO_PUBLIC_SUPABASE_ANON_KEY', '').strip() or SUPABASE_ANON_KEY
     if not sb_url:
         raise HTTPException(401, 'Authentication verifier is not configured.')
     headers = {'Authorization': f'Bearer {token}'}
@@ -239,7 +243,7 @@ async def clean_stale():
 async def lifespan(app):
     global vision
     allow_dev = is_dev_token_allowed() or ALLOW_DEV_TOKEN
-    has_jwt_verifier = bool(os.environ.get('SUPABASE_JWT_SECRET', '').strip() or SUPABASE_JWT_SECRET or os.environ.get('SUPABASE_URL', '').strip() or SUPABASE_URL)
+    has_jwt_verifier = bool(os.environ.get('SUPABASE_JWT_SECRET', '').strip() or SUPABASE_JWT_SECRET or os.environ.get('SUPABASE_URL', '').strip() or os.environ.get('EXPO_PUBLIC_SUPABASE_URL', '').strip() or SUPABASE_URL)
     if allow_dev and len(get_token() or TOKEN) < 32:
         raise RuntimeError('Start through scripts/rep-dev.cjs to set the development session token.')
     if not allow_dev and not has_jwt_verifier:
@@ -248,6 +252,11 @@ async def lifespan(app):
         from .vision import Vision
         vision = Vision(os.environ.get('REP_POSE_MODEL', str(Path(__file__).parent / 'models/pose_landmarker_full.task')))
     cleaner = asyncio.create_task(clean_stale())
+    if os.environ.get('FOOTPRINT_AI_WARMUP', '1') != '0':
+        # Load the food/body models in the background so the first AI request does not time out.
+        warm = asyncio.create_task(asyncio.to_thread(ai_warm_up))
+        tasks.add(warm)
+        warm.add_done_callback(tasks.discard)
     yield
     cleaner.cancel()
     for task in list(tasks):
@@ -272,19 +281,23 @@ async def add_security_headers(request: Request, call_next):
 async def auth(request: Request) -> str:
     auth_header = request.headers.get('authorization', '')
     bearer = auth_header[7:].strip() if auth_header.lower().startswith('bearer ') else ''
+    dev_allowed = is_dev_token_allowed() or ALLOW_DEV_TOKEN
+    current_token = get_token() or TOKEN
+    dev_header = request.headers.get('x-rep-dev-token', '').strip()
+    dev_candidate = dev_header or bearer
+    valid_dev_token = bool(dev_allowed and current_token and dev_candidate and hmac.compare_digest(dev_candidate, current_token))
 
     # 1. Verify per-user Supabase JWT when supplied
     if bearer and bearer.count('.') == 2:
-        return await _verify_supabase_jwt(bearer)
+        try:
+            return await _verify_supabase_jwt(bearer)
+        except HTTPException:
+            if not (dev_allowed and current_token and dev_header and hmac.compare_digest(dev_header, current_token)):
+                raise
 
     # 2. Ephemeral local-dev / test token ONLY when explicitly permitted (never in production)
-    dev_allowed = is_dev_token_allowed() or ALLOW_DEV_TOKEN
-    if dev_allowed:
-        current_token = get_token() or TOKEN
-        dev_header = request.headers.get('x-rep-dev-token', '').strip()
-        candidate = dev_header or bearer
-        if current_token and candidate and hmac.compare_digest(candidate, current_token):
-            return f'dev:{_client_ip(request)}'
+    if valid_dev_token:
+        return f'dev:{_client_ip(request)}'
 
     raise HTTPException(401, 'Authentication required. Sign in to your Footprint account.')
 
@@ -629,3 +642,22 @@ async def food_describe(request: Request):
         return {'type': 'describe_food_result', 'success': True, 'data': result}
     except ValueError as error:
         return {'type': 'describe_food_result', 'success': False, 'error': str(error)}
+
+
+@app.post('/rep-api/ai')
+async def ai_request(request: Request):
+    """All trained Footprint AI features over the authenticated rep server (used in the cloud and over tunnels).
+
+    Body: the same JSON the AI server's WebSocket takes, e.g. {"type": "estimate_body_fat", ...}.
+    """
+    caller_id = await auth(request)
+    limiter.check(f'ai:{caller_id}', 30, 60.0)
+    data = await payload(request, AI_BODY_LIMIT)
+    kind = data.get('type')
+    if kind not in AI_RESULT_TYPE:
+        raise HTTPException(400, 'Unsupported AI request type.')
+    try:
+        result = await asyncio.to_thread(ai_handle, data)
+        return {'type': AI_RESULT_TYPE[kind], 'success': True, 'data': result}
+    except (ValueError, AIImageError) as error:
+        return {'type': AI_RESULT_TYPE[kind], 'success': False, 'error': str(error)}

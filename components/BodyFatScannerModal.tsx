@@ -18,7 +18,8 @@ import * as Haptics from 'expo-haptics';
 import { useTheme } from '@/constants/ThemeContext';
 import { UserProfile } from '@/constants/userProfile';
 import { recordBodyFatLog, BodyFatLogEntry } from '@/constants/workoutStorage';
-import { AI_SERVER_WS_URL } from '@/constants/foodVisionAI';
+import { aiRequest } from '@/constants/aiServer';
+import { estimateBodyFat } from '@/constants/bodyFatEquations';
 
 interface BodyFatScannerModalProps {
   visible: boolean;
@@ -53,6 +54,11 @@ export function BodyFatScannerModal({
     visualFeatures: string[];
     evaluationMethod: string;
     abTier?: string;
+    bodyFatRange?: [number, number];
+    methodValues?: { dxaModel?: number; rfm?: number; usNavy?: number };
+    photoBmi?: { bmi: number; mae: number } | null;
+    weightFromPhoto?: boolean;
+    abs?: { absVisibility: string; absVisibleProbability: number; method?: string };
   } | null>(null);
 
   const isUS = profile.unitSystem !== 'metric';
@@ -107,173 +113,63 @@ export function BodyFatScannerModal({
     }
   };
 
-  // Run AI Body Fat & Ab Definition Analysis via WebSocket
+  // Body fat (DXA-trained model) + optional photo checks on the AI server; same model on-device if unreachable.
   const handleAnalyze = async () => {
     setIsAnalyzing(true);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
 
-    const serverUrl = AI_SERVER_WS_URL;
-    console.log(`[BodyFat Scanner] Connecting to AI Server: ${serverUrl}`);
+    const toCm = (v: string) => {
+      const n = includeCircumferences ? parseFloat(v) || 0 : 0;
+      return n > 0 ? +(isUS ? n * 2.54 : n).toFixed(1) : undefined;
+    };
+    const payload = {
+      testType: scanMode,
+      image: photoBase64,
+      // Missing values stay undefined: the server then assumes a typical age or, with a photo,
+      // estimates weight from the silhouette (photo-BMI model) and widens the range.
+      age: profile.age || undefined,
+      gender: profile.gender || 'male',
+      weightKg: profile.weightKg || undefined,
+      heightCm: profile.heightCm || 175,
+      waistCm: toCm(waistInput),
+      neckCm: toCm(neckInput),
+      hipCm: toCm(hipInput),
+      athleticLevel,
+    };
 
-    try {
-      const ws = new WebSocket(serverUrl);
-      let resolved = false;
-
-      const timeoutId = setTimeout(() => {
-        if (!resolved) {
-          console.log('[BodyFat Scanner] Server timed out, falling back to local analysis');
-          resolved = true;
-          try { ws.close(); } catch {}
-          fallbackLocalAnalysis();
-        }
-      }, 7000);
-
-      ws.onopen = () => {
-        console.log('[BodyFat Scanner] Transmitting image & biometrics to AI Vision engine...');
-        
-        const waistVal = includeCircumferences ? (parseFloat(waistInput) || 0) : 0;
-        const neckVal = includeCircumferences ? (parseFloat(neckInput) || 0) : 0;
-        const hipVal = includeCircumferences ? (parseFloat(hipInput) || 0) : 0;
-
-        const waistCm = isUS ? +(waistVal * 2.54).toFixed(1) : waistVal;
-        const neckCm = isUS ? +(neckVal * 2.54).toFixed(1) : neckVal;
-        const hipCm = isUS ? +(hipVal * 2.54).toFixed(1) : hipVal;
-
-        const payload = {
-          type: 'estimate_body_fat',
-          testType: scanMode,
-          image: photoBase64,
-          age: profile.age || 26,
-          gender: profile.gender || 'male',
-          weightKg: profile.weightKg || 70,
-          heightCm: profile.heightCm || 175,
-          waistCm: (includeCircumferences && waistCm > 0) ? waistCm : undefined,
-          neckCm: (includeCircumferences && neckCm > 0) ? neckCm : undefined,
-          hipCm: (includeCircumferences && hipCm > 0) ? hipCm : undefined,
-          athleticLevel,
-        };
-        ws.send(JSON.stringify(payload));
-      };
-
-      ws.onmessage = async (event) => {
-        if (resolved) return;
-        resolved = true;
-        clearTimeout(timeoutId);
-        try {
-          const resp = JSON.parse(event.data);
-          if (resp.type === 'body_fat_result' && resp.success && resp.data) {
-            setAnalysisResult(resp.data);
-            const saved = await recordBodyFatLog(userId, resp.data.bodyFatPercent, {
-              photoUri: photoUri || undefined,
-              weightKg: profile.weightKg,
-              method: 'ai_scan',
-            });
-            if (onScanSaved) onScanSaved(saved);
-            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
-          } else {
-            fallbackLocalAnalysis();
-          }
-        } catch (e) {
-          console.warn('[BodyFat Scanner] Error parsing server message', e);
-          fallbackLocalAnalysis();
-        } finally {
-          setIsAnalyzing(false);
-          try { ws.close(); } catch {}
-        }
-      };
-
-      ws.onerror = (err) => {
-        console.warn('[BodyFat Scanner] WebSocket error:', err);
-        if (!resolved) {
-          resolved = true;
-          clearTimeout(timeoutId);
-          fallbackLocalAnalysis();
-        }
-      };
-    } catch (e) {
-      console.warn('[BodyFat Scanner] WebSocket connection failed:', e);
-      fallbackLocalAnalysis();
+    const resp = await aiRequest<any>('estimate_body_fat', payload, photoBase64 ? 20000 : 8000);
+    if (!resp.ok || !resp.data) {
+      if (resp.error) console.warn('[BodyFat Scanner] Using on-device model:', resp.error);
+      await fallbackLocalAnalysis();
+      return;
     }
+    setAnalysisResult(resp.data);
+    setIsAnalyzing(false);
+    const saved = await recordBodyFatLog(userId, resp.data.bodyFatPercent, {
+      photoUri: photoUri || undefined,
+      weightKg: profile.weightKg,
+      method: 'ai_scan',
+    });
+    if (onScanSaved) onScanSaved(saved);
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
   };
 
-  // Local fallback formula integrating U.S. Navy Method & Athletic Calibration
+  // Offline fallback: the same validated equations as the AI server (constants/bodyFatEquations.ts)
   const fallbackLocalAnalysis = async () => {
-    const age = profile.age || 26;
-    const gender = profile.gender || 'male';
     const weightKg = profile.weightKg || 70;
-    const heightCm = profile.heightCm || 175;
-    const heightM = Math.max(1.0, heightCm / 100);
-    const bmi = +(weightKg / (heightM * heightM)).toFixed(1);
-    const isFemale = gender.toLowerCase().includes('fe');
-    const sexFactor = isFemale ? 0 : 1;
-
-    const waistVal = parseFloat(waistInput) || 0;
-    const neckVal = parseFloat(neckInput) || 0;
-    const hipVal = parseFloat(hipInput) || 0;
-    const waistCm = isUS ? waistVal * 2.54 : waistVal;
-    const neckCm = isUS ? neckVal * 2.54 : neckVal;
-    const hipCm = isUS ? hipVal * 2.54 : hipVal;
-
-    let bf = 0;
-    let evalMethod = 'U.S. Navy Circumference Standard';
-    const visualNotes: string[] = [];
-
-    // Calculate U.S. Navy formula if inputs are provided
-    if (waistCm > 30 && neckCm > 15) {
-      try {
-        if (!isFemale) {
-          const diff = Math.max(5.0, waistCm - neckCm);
-          const density = 1.0324 - 0.19077 * Math.log10(diff) + 0.15456 * Math.log10(heightCm);
-          bf = (495.0 / Math.max(0.95, density)) - 450.0;
-        } else {
-          const diff = Math.max(5.0, waistCm + (hipCm || waistCm * 1.15) - neckCm);
-          const density = 1.29579 - 0.35004 * Math.log10(diff) + 0.22100 * Math.log10(heightCm);
-          bf = (495.0 / Math.max(0.95, density)) - 450.0;
-        }
-        visualNotes.push(`Waist-to-neck ratio: ${(waistCm / neckCm).toFixed(2)}`);
-      } catch {
-        bf = (1.20 * bmi) + (0.23 * age) - (10.8 * sexFactor) - 5.4;
-        evalMethod = 'Deurenberg Anthropometric Regression';
-      }
-    } else {
-      bf = (1.20 * bmi) + (0.23 * age) - (10.8 * sexFactor) - 5.4;
-      evalMethod = 'Deurenberg Anthropometric Regression';
-    }
-
-    // Apply athletic modifier
-    if (athleticLevel === 'bodybuilder') {
-      bf -= 3.5;
-      visualNotes.push('Ab Definition: Deep 6-pack brick separation & clear linea alba');
-      visualNotes.push('Vascularity: High surface vascularity & striations');
-    } else if (athleticLevel === 'athletic') {
-      bf -= 1.8;
-      visualNotes.push('Ab Definition: Distinct 4-pack & athletic abdominal separation');
-      visualNotes.push('Obliques & Serratus: Visible oblique taper');
-    } else if (athleticLevel === 'beginner') {
-      bf += 1.5;
-      visualNotes.push('Ab Definition: Smooth midsection, subcutaneous softness');
-    } else {
-      visualNotes.push('Ab Definition: Flat midsection with subtle ab outline');
-    }
-
-    bf = Math.max(4.5, Math.min(50.0, +bf.toFixed(1)));
-    const fatMass = +(weightKg * (bf / 100)).toFixed(1);
-    const leanMass = +(weightKg - fatMass).toFixed(1);
-
-    const category = !isFemale
-      ? (bf < 10 ? 'Essential / Shredded' : bf <= 14 ? 'Athletic / Lean' : bf <= 20 ? 'Fitness / Moderate' : bf <= 25 ? 'Average' : 'Higher Fat Mass')
-      : (bf < 16 ? 'Essential / Very Lean' : bf <= 22 ? 'Athletic / Lean' : bf <= 28 ? 'Fitness / Moderate' : bf <= 32 ? 'Average' : 'Higher Fat Mass');
-
-    const data = {
-      bodyFatPercent: bf,
-      category,
-      fatMassKg: fatMass,
-      leanMassKg: leanMass,
-      confidence: 0.94,
-      bmi,
-      visualFeatures: visualNotes,
-      evaluationMethod: evalMethod,
-    };
+    const toCm = (v: string) => { const n = parseFloat(v) || 0; return includeCircumferences && n > 0 ? (isUS ? n * 2.54 : n) : undefined; };
+    const estimate = estimateBodyFat({
+      gender: profile.gender || 'male',
+      age: profile.age || 26,
+      weightKg,
+      heightCm: profile.heightCm || 175,
+      waistCm: toCm(waistInput),
+      neckCm: toCm(neckInput),
+      hipCm: toCm(hipInput),
+      athleticLevel,
+    });
+    const bf = estimate.bodyFatPercent;
+    const data = estimate;
 
     setAnalysisResult(data);
     setIsAnalyzing(false);
@@ -517,11 +413,55 @@ export function BodyFatScannerModal({
                 </View>
               </View>
 
+              {/* 80% range, ab visibility, photo BMI and method comparison from the trained models */}
+              {(analysisResult.bodyFatRange || analysisResult.abs || analysisResult.photoBmi || analysisResult.methodValues) && (
+                <View style={styles.featuresSection}>
+                  <Text style={[styles.featuresSectionTitle, { color: colors.textMuted }]}>MODEL DETAILS</Text>
+                  <View style={styles.featuresList}>
+                    {analysisResult.bodyFatRange && (
+                      <View style={[styles.featureCard, { backgroundColor: isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.02)' }]}>
+                        <Ionicons name="swap-horizontal-outline" size={15} color="#22c55e" style={{ marginTop: 1 }} />
+                        <Text style={[styles.featureCardText, { color: colors.text }]}>
+                          Likely range: {analysisResult.bodyFatRange[0]}–{analysisResult.bodyFatRange[1]}% (80% of people with your numbers)
+                        </Text>
+                      </View>
+                    )}
+                    {analysisResult.abs && (
+                      <View style={[styles.featureCard, { backgroundColor: isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.02)' }]}>
+                        <Ionicons name="grid-outline" size={15} color="#38bdf8" style={{ marginTop: 1 }} />
+                        <Text style={[styles.featureCardText, { color: colors.text }]}>
+                          Abs: {analysisResult.abs.absVisibility} ({Math.round(analysisResult.abs.absVisibleProbability * 100)}% chance visible). Based on body fat, not read from the photo.
+                        </Text>
+                      </View>
+                    )}
+                    {analysisResult.photoBmi && (
+                      <View style={[styles.featureCard, { backgroundColor: isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.02)' }]}>
+                        <Ionicons name="body-outline" size={15} color="#a78bfa" style={{ marginTop: 1 }} />
+                        <Text style={[styles.featureCardText, { color: colors.text }]}>
+                          Photo BMI: {analysisResult.photoBmi.bmi.toFixed(1)} (±{analysisResult.photoBmi.mae}){analysisResult.weightFromPhoto ? ' · used because no weight was given' : ' · cross-check only, your scale weight is used'}
+                        </Text>
+                      </View>
+                    )}
+                    {analysisResult.methodValues && (analysisResult.methodValues.usNavy != null || analysisResult.methodValues.rfm != null) && (
+                      <View style={[styles.featureCard, { backgroundColor: isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.02)' }]}>
+                        <Ionicons name="analytics-outline" size={15} color="#f59e0b" style={{ marginTop: 1 }} />
+                        <Text style={[styles.featureCardText, { color: colors.text }]}>
+                          Other formulas (comparison only): {[
+                            analysisResult.methodValues.usNavy != null ? `US Navy ${analysisResult.methodValues.usNavy}% (reads ~5 pts lower than DXA)` : null,
+                            analysisResult.methodValues.rfm != null ? `RFM ${analysisResult.methodValues.rfm}%` : null,
+                          ].filter(Boolean).join(' · ')}
+                        </Text>
+                      </View>
+                    )}
+                  </View>
+                </View>
+              )}
+
               {/* Detected Abs & Physique Highlights */}
               {analysisResult.visualFeatures && analysisResult.visualFeatures.length > 0 && (
                 <View style={styles.featuresSection}>
                   <Text style={[styles.featuresSectionTitle, { color: colors.textMuted }]}>
-                    PHYSIQUE & DEFINITION DETECTED
+                    NOTES
                   </Text>
                   <View style={styles.featuresList}>
                     {analysisResult.visualFeatures.map((feat, i) => {

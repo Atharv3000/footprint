@@ -1,4 +1,4 @@
-# Production Cloud Container for StrideTrack Backend
+# Production Cloud Container for StrideTrack Backend (rep counter, community features and Footprint AI)
 # Multi-stage lightweight Python 3.11 image with OpenCV & MediaPipe dependencies
 FROM python:3.11-slim
 
@@ -28,6 +28,9 @@ RUN pip install --no-cache-dir --upgrade pip && \
 # Copy server application code and assets
 COPY server/ ./server/
 COPY assets/ ./assets/
+# Trained Footprint AI (food photo, meal text, body fat, photo BMI, muscle photos) with its models and USDA data.
+# Served by the same process at POST /rep-api/ai, so the cloud needs only this one service.
+COPY footprint_ai/ ./footprint_ai/
 
 # Download MediaPipe pose model at build time so runtime startup is instant
 RUN python -m server.download_model

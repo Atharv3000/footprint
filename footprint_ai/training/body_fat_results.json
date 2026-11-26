@@ -1,0 +1,42 @@
+{
+ "no_waist": {
+  "train_n": 25813,
+  "degree": 3,
+  "holdout_n": 2092,
+  "holdout_mae": 2.95,
+  "old_model_holdout_mae": 3.02,
+  "external_n": 2442,
+  "external_mae": 3.05,
+  "old_model_external_mae": 3.14,
+  "external_interval80_coverage": 0.781,
+  "baselines_holdout_mae": {
+   "cun_bae": 4.07,
+   "deurenberg": 4.64
+  },
+  "baselines_external_mae": {
+   "cun_bae": 4.16,
+   "deurenberg": 4.59
+  }
+ },
+ "with_waist": {
+  "train_n": 25288,
+  "degree": 3,
+  "holdout_n": 2054,
+  "holdout_mae": 2.56,
+  "old_model_holdout_mae": 2.66,
+  "external_n": 2426,
+  "external_mae": 2.66,
+  "old_model_external_mae": 2.77,
+  "external_interval80_coverage": 0.786,
+  "baselines_holdout_mae": {
+   "rfm": 3.01,
+   "cun_bae": 4.07,
+   "deurenberg": 4.62
+  },
+  "baselines_external_mae": {
+   "rfm": 3.16,
+   "cun_bae": 4.15,
+   "deurenberg": 4.58
+  }
+ }
+}
