@@ -52,3 +52,7 @@ server/data/
 
 # Cached pose landmarks for rep-counter training (derived from third-party clips)
 .rep-cache/
+
+# Branded product database: products.sqlite.gz is checked in, the unpacked copy is made on first use
+footprint_ai/data/products.sqlite
+footprint_ai/data/products.part

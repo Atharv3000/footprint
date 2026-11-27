@@ -606,7 +606,7 @@ def plan_items(text: str) -> list[str]:
             continue
         if _whole_alias(seg):
             parts.append(seg); continue
-        if re.search(r'(with|and)', seg, re.I) and dish_match(db().correct(parse_item(seg).food_phrase))[0] is not None:
+        if re.search(r'\b(with|and)\b', seg, re.I) and dish_match(db().correct(parse_item(seg).food_phrase))[0] is not None:
             parts.append(seg); continue  # a named dish such as "chili with beans" stays one item
         pieces = split_meal(seg)
         # "burrito bowl with chicken, rice and beans": ingredients of a recipe dish are already counted

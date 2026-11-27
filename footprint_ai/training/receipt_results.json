@@ -1,0 +1,21 @@
+{
+ "what": "Receipt item extraction on CORD v2 test receipts (OCR + footprint_ai.receipt.extract_items)",
+ "dev_0_49": {
+  "set": "dev",
+  "receipts": 50,
+  "item_precision": 0.855,
+  "item_recall": 0.889,
+  "item_f1": 0.872,
+  "quantity_right_on_found_items": 0.884,
+  "receipts_all_items_exact": 0.7
+ },
+ "held_out_50_99": {
+  "set": "test",
+  "receipts": 50,
+  "item_precision": 0.854,
+  "item_recall": 0.84,
+  "item_f1": 0.847,
+  "quantity_right_on_found_items": 0.924,
+  "receipts_all_items_exact": 0.66
+ }
+}

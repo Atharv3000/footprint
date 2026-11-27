@@ -1,0 +1,27 @@
+{
+ "what": "Nutrition label reader (OCR + parser) on rendered phone-photo-like labels (US panels and EU tables)",
+ "dev_while_writing": {
+  "set": "dev",
+  "labels": 40,
+  "all_fields_right": 0.975
+ },
+ "held_out_test": {
+  "set": "test",
+  "labels": 150,
+  "all_fields_right": 0.893,
+  "per_field": {
+   "calories": 1.0,
+   "fatG": 0.98,
+   "carbsG": 1.0,
+   "proteinG": 0.987,
+   "sugarG": 0.987,
+   "fiberG": 0.98,
+   "sodiumMg": 0.96,
+   "servingSizeG": 1.0
+  },
+  "macros_agree": 0.967,
+  "no_calories_found": 0
+ },
+ "first_version_dev_all_fields_right": 0.7,
+ "note": "Rendered labels, not real photos; real packaging adds glare, curvature and odd layouts."
+}

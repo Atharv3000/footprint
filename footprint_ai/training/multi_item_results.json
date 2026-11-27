@@ -1,0 +1,82 @@
+{
+ "train": {
+  "scenes": 1500,
+  "item_precision": 0.682,
+  "item_recall": 0.421,
+  "item_f1": 0.521,
+  "exact_scene": 0.291,
+  "by_kind": {
+   "plates": {
+    "scenes": 599,
+    "exact": 0.085,
+    "right_item_count": 0.145,
+    "dish_recall": 0.393
+   },
+   "shared": {
+    "scenes": 387,
+    "exact": 0.059,
+    "right_item_count": 0.147,
+    "dish_recall": 0.309
+   },
+   "single": {
+    "scenes": 514,
+    "exact": 0.706,
+    "right_item_count": 0.895,
+    "dish_recall": 0.796
+   }
+  },
+  "baseline_single_answer": {
+   "item_precision": 0.429,
+   "item_recall": 0.208,
+   "item_f1": 0.28,
+   "exact_scene": 0.242
+  }
+ },
+ "test": {
+  "scenes": 700,
+  "item_precision": 0.757,
+  "item_recall": 0.477,
+  "item_f1": 0.585,
+  "exact_scene": 0.329,
+  "by_kind": {
+   "plates": {
+    "scenes": 283,
+    "exact": 0.134,
+    "right_item_count": 0.187,
+    "dish_recall": 0.472
+   },
+   "shared": {
+    "scenes": 168,
+    "exact": 0.083,
+    "right_item_count": 0.131,
+    "dish_recall": 0.353
+   },
+   "single": {
+    "scenes": 249,
+    "exact": 0.715,
+    "right_item_count": 0.928,
+    "dish_recall": 0.787
+   }
+  },
+  "baseline_single_answer": {
+   "item_precision": 0.481,
+   "item_recall": 0.233,
+   "item_f1": 0.314,
+   "exact_scene": 0.259
+  }
+ },
+ "threshold": 0.46,
+ "model": "logistic",
+ "suggestions": {
+  "suggest_threshold": 0.1,
+  "multi_dish_recall_items_plus_suggestions": {
+   "train": 0.571,
+   "test": 0.645
+  },
+  "avg_suggestions_per_photo": {
+   "train": 1.77,
+   "test": 1.66
+  }
+ },
+ "note": "Scenes are composed from Food-101 test photos (plates on a table, or sectors of one plate). Training scenes use Food-101 test file 0, test scenes file 1, which hold different dish classes, so the scorer is tested on dishes it never saw. Real meal photos differ (overlapping foods, sauces, mixed dishes), so expect lower numbers on them."
+}

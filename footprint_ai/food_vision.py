@@ -19,6 +19,7 @@ from __future__ import annotations
 import base64
 import io
 import json
+import re
 from functools import lru_cache
 from pathlib import Path
 
@@ -142,6 +143,11 @@ PORTIONS = [{'label': 'Small', 'sublabel': '~0.7× typical serving', 'multiplier
 def classify(img: Image.Image) -> dict:
     """Vision-only result: food probability and ranked dish candidates (with nutrition)."""
     emb, prob = model().run_tta(img)
+    return classify_vec(emb, prob)
+
+
+def classify_vec(emb: np.ndarray, prob: np.ndarray) -> dict:
+    """classify() for an AIY embedding + softmax already computed (whole photo or one region of it)."""
     x = emb / (np.linalg.norm(emb) + 1e-9)
     H = heads()
     p_food = _sigmoid(float(x @ H['gate_w'] + H['gate_b']))
@@ -229,10 +235,57 @@ def analyze_food(image_b64: str, hint: str = '') -> dict:
             'dietaryTags': dietary_tags(n), 'tips': tip, 'usdaDescription': n['usdaDescription'], 'source': top['source']}
 
 
+PACK_WORDS = re.compile(r'\b(bag|bags|pack|packs|packet|packets|package|box|boxes|can|cans|bottle|bottles|tub|pouch|carton|sleeve)\b', re.I)
+
+
+def _with_brands(text: str, meal: dict) -> dict:
+    """Use branded products for the parts of the text that name a brand ("a bag of doritos", "2 oreos").
+
+    Works per comma-separated part so a brand name that contains "and" ("KIND dark chocolate nuts and
+    sea salt") stays one product. Text without a brand keeps the USDA answer unchanged.
+    """
+    from . import products
+    from .nutrition import estimate_meal, parse_item, plan_items
+    if not products.available():
+        return meal
+    segs = [s.strip(' .') for s in re.split(r'[,;\n]', text) if s.strip(' .')]
+    def find(p):
+        return products.branded(re.sub(PACK_WORDS, ' ', p.food_phrase), pieces=p.unit is None and p.counted)
+
+    hits = []
+    for seg in segs:
+        p = parse_item(seg)
+        hits.append((p, find(p)))
+    if not any(h for _, h in hits) and not any(find(parse_item(part)) for seg in segs for part in plan_items(seg)):
+        return meal
+    def product_item(text_part, p, hit):
+        score, prod = hit
+        unit = 'packet' if PACK_WORDS.search(text_part) and p.unit not in ('g', 'oz', 'ml') else p.unit
+        grams, label = products.grams_for(prod, p.quantity, unit)
+        return {**prod.as_item(grams, confidence=score * .95, how='brand name'), 'portion': label}
+
+    items = []
+    for seg, (p, hit) in zip(segs, hits):
+        if hit:
+            items.append(product_item(seg, p, hit))
+            continue
+        for part in plan_items(seg):  # "toast and a bag of lays": check each food in the part
+            pp = parse_item(part)
+            h = find(pp)
+            items.extend([product_item(part, pp, h)] if h else estimate_meal(part)['items'])
+    matched = [i for i in items if i['matched']]
+    tot = {k: round(sum(i[k] for i in matched), 1) for k in ('calories', 'proteinG', 'carbsG', 'fatG')}
+    tot['calories'] = round(tot['calories'])
+    return {'items': items, 'totals': tot, 'confidence': round(sum(i['confidence'] for i in items) / len(items), 2),
+            'unmatched': [i['name'] for i in items if not i['matched']]}
+
+
 def describe_food(text: str) -> dict:
     """Response `data` for the app's describe_food message."""
     text = (text or '').strip()[:500]
     meal = estimate_meal(text) if text else {'items': [], 'totals': {}, 'confidence': 0, 'unmatched': []}
+    if text:
+        meal = _with_brands(text, meal)
     items = [{'id': f'desc_{k}', 'name': i['name'], 'portion': i['portion'], 'calories': i['calories'], 'proteinG': i['proteinG'],
               'carbsG': i['carbsG'], 'fatG': i['fatG'], 'confidence': i['confidence'], 'usdaDescription': i.get('usdaDescription')}
              for k, i in enumerate(meal['items']) if i['matched']]

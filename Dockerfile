@@ -28,6 +28,12 @@ COPY server/requirements.txt ./requirements.txt
 RUN pip install --no-cache-dir --upgrade pip && \
     pip install --no-cache-dir -r requirements.txt
 
+# Text reader for nutrition labels, receipts, recipe photos and pack text (RapidOCR, Apache-2.0; its PP-OCR
+# models ship in the wheel). Installed without its opencv-python-headless pin so it shares the OpenCV
+# build mediapipe already installed (two OpenCV packages in one image overwrite each other's cv2).
+RUN pip install --no-cache-dir --no-deps rapidocr==3.10.0 && \
+    pip install --no-cache-dir "pyclipper>=1.2" "shapely>=1.7.1,!=2.0.4" "six>=1.15" "omegaconf>=2.3" colorlog tqdm requests pyyaml
+
 # Copy server application code and assets
 COPY server/ ./server/
 COPY assets/ ./assets/
@@ -37,6 +43,8 @@ COPY footprint_ai/ ./footprint_ai/
 
 # Download MediaPipe pose model at build time so runtime startup is instant
 RUN python -m server.download_model
+# Unpack the branded product database (products.sqlite.gz) and load the text reader once at build time
+RUN python -c "from footprint_ai import products, ocr; assert products.available(); ocr.engine()"
 
 # Ensure data directory exists for SQLite persistent volume mount
 RUN mkdir -p /data /app/server/data

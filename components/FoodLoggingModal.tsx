@@ -22,7 +22,15 @@ import { CameraView, useCameraPermissions } from 'expo-camera';
 import * as ImagePicker from 'expo-image-picker';
 import * as Haptics from 'expo-haptics';
 import { useTheme, SERIF_FONT } from '@/constants/ThemeContext';
-import { analyzeFoodImageAsync, describeFoodAsync, FoodVisionAnalysisResult } from '@/constants/foodVisionAI';
+import {
+  analyzeFoodImageAsync,
+  describeFoodAsync,
+  FoodVisionAnalysisResult,
+  looksLikeRecipe,
+  readReceiptAsync,
+  readRecipeAsync,
+  scanLabelAsync,
+} from '@/constants/foodVisionAI';
 import { MealLog, MealType, saveMealLog, getTodayDateKey } from '@/constants/nutritionStorage';
 import { FoodItemIndex, HUGE_FOOD_INDEX } from '@/constants/foodDatabase';
 
@@ -30,7 +38,7 @@ const { height: SCREEN_HEIGHT, width: SCREEN_WIDTH } = Dimensions.get('window');
 
 const CATEGORIES = ['All', 'Popular Foods', 'Snacks & Treats', 'Drinks & Shakes', 'Protein & Dairy', 'Breakfast & Bakery', 'Fruits & Veggies'] as const;
 
-export type FoodScanMode = 'food' | 'label' | 'receipt';
+export type FoodScanMode = 'food' | 'label' | 'receipt' | 'recipe';
 
 interface FoodLoggingModalProps {
   visible: boolean;
@@ -58,7 +66,7 @@ export function FoodLoggingModal({
   const [analysisResult, setAnalysisResult] = useState<FoodVisionAnalysisResult | null>(null);
   const [servingMultiplier, setServingMultiplier] = useState<number>(1);
 
-  // Active scan mode: 'food' | 'label' | 'receipt'
+  // Active scan mode: 'food' | 'label' | 'receipt' | 'recipe'
   const [scanMode, setScanMode] = useState<FoodScanMode>('food');
 
   // Sub-feature drawers/sections: 'none' | 'describe' | 'preselected'
@@ -67,6 +75,8 @@ export function FoodLoggingModal({
   // Camera permissions & ref
   const [permission, requestPermission] = useCameraPermissions();
   const cameraRef = useRef<CameraView>(null);
+  // Last barcode the camera read in Label mode (so one pack is looked up once)
+  const lastBarcode = useRef<{ code: string; at: number } | null>(null);
 
   // Animation values
   const pulseAnim = useRef(new Animated.Value(1)).current;
@@ -140,10 +150,15 @@ export function FoodLoggingModal({
       const phases = scanMode === 'receipt' ? [
         { text: 'Scanning receipt text & line items...', pct: 25, delay: 0 },
         { text: 'Detecting grocery items & quantities...', pct: 50, delay: 900 },
-        { text: 'Matching products to USDA nutrition...', pct: 75, delay: 1900 },
+        { text: 'Matching items to products & USDA nutrition...', pct: 75, delay: 1900 },
         { text: 'Calculating cumulative macros...', pct: 92, delay: 2800 },
+      ] : scanMode === 'recipe' ? [
+        { text: 'Reading recipe text...', pct: 25, delay: 0 },
+        { text: 'Finding ingredients & servings...', pct: 55, delay: 900 },
+        { text: 'Matching ingredients to USDA data...', pct: 80, delay: 1900 },
+        { text: 'Working out one serving...', pct: 95, delay: 2800 },
       ] : scanMode === 'label' ? [
-        { text: 'Scanning Nutrition Facts panel...', pct: 25, delay: 0 },
+        { text: 'Looking for a barcode or Nutrition Facts panel...', pct: 25, delay: 0 },
         { text: 'Reading serving size & calories...', pct: 55, delay: 900 },
         { text: 'Extracting protein, carbs & fats...', pct: 80, delay: 1900 },
         { text: 'Validating label macros...', pct: 95, delay: 2800 },
@@ -255,13 +270,11 @@ export function FoodLoggingModal({
     setAnalysisResult(null);
     setServingMultiplier(1);
     try {
-      const contextHint = modeHint === 'receipt'
-        ? `${mealType} (grocery receipt / itemized bill)`
-        : modeHint === 'label'
-          ? `${mealType} (nutrition facts label / barcode)`
-          : mealType;
-
-      const result = await analyzeFoodImageAsync(base64, contextHint, descriptionInput);
+      const result =
+        modeHint === 'label' ? await scanLabelAsync(base64)
+          : modeHint === 'receipt' ? await readReceiptAsync(base64)
+            : modeHint === 'recipe' ? await readRecipeAsync({ image: base64 })
+              : await analyzeFoodImageAsync(base64, mealType, descriptionInput);
       setAnalysisResult(result);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => { });
     } catch (e) {
@@ -269,6 +282,71 @@ export function FoodLoggingModal({
     } finally {
       setIsAnalyzing(false);
     }
+  };
+
+  // Label mode: the camera reads product barcodes itself; look the product up without taking a photo.
+  const handleBarcodeScanned = async ({ data }: { data: string }) => {
+    const code = String(data || '').replace(/\D/g, '');
+    if (scanMode !== 'label' || isAnalyzing || selectedImage || analysisResult || code.length < 8) return;
+    const now = Date.now();
+    if (lastBarcode.current && lastBarcode.current.code === code && now - lastBarcode.current.at < 8000) return;
+    lastBarcode.current = { code, at: now };
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => { });
+    setIsAnalyzing(true);
+    setServingMultiplier(1);
+    try {
+      const result = await scanLabelAsync('', code);
+      setAnalysisResult(result);
+      if (result.isFood !== false) Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => { });
+    } finally {
+      setIsAnalyzing(false);
+    }
+  };
+
+  // "Also spotted": add a less certain food the photo may contain.
+  const handleAddSpotted = (id: string) => {
+    Haptics.selectionAsync().catch(() => { });
+    setAnalysisResult((prev) => {
+      const add = prev?.alsoSpotted?.find((it) => it.id === id);
+      if (!prev || !add) return prev;
+      const items = [...prev.items, add];
+      const sum = (k: 'calories' | 'proteinG' | 'carbsG' | 'fatG') => Math.round(items.reduce((a, it) => a + (it[k] || 0), 0) * 10) / 10;
+      const names = items.map((it) => it.name);
+      return {
+        ...prev,
+        items,
+        candidates: [],
+        alsoSpotted: prev.alsoSpotted?.filter((it) => it.id !== id),
+        isMultiItem: true,
+        dishTitle: names.slice(0, 3).join(' + ') + (names.length > 3 ? ` + ${names.length - 3} more` : ''),
+        totalCalories: Math.round(sum('calories')),
+        totalProteinG: sum('proteinG'),
+        totalCarbsG: sum('carbsG'),
+        totalFatG: sum('fatG'),
+      };
+    });
+  };
+
+  // Multi-item results: drop a food that was found by mistake and update the totals.
+  const handleRemoveItem = (id: string) => {
+    Haptics.selectionAsync().catch(() => { });
+    setAnalysisResult((prev) => {
+      if (!prev || prev.items.length <= 1) return prev;
+      const items = prev.items.filter((it) => it.id !== id);
+      const sum = (k: 'calories' | 'proteinG' | 'carbsG' | 'fatG') => Math.round(items.reduce((a, it) => a + (it[k] || 0), 0) * 10) / 10;
+      const names = items.map((it) => it.name);
+      return {
+        ...prev,
+        items,
+        dishTitle: prev.isReceipt
+          ? `Receipt: ${items.length} food item(s)`
+          : names.slice(0, 3).join(' + ') + (names.length > 3 ? ` + ${names.length - 3} more` : ''),
+        totalCalories: Math.round(sum('calories')),
+        totalProteinG: sum('proteinG'),
+        totalCarbsG: sum('carbsG'),
+        totalFatG: sum('fatG'),
+      };
+    });
   };
 
   // AI Description Text Calculator ("Write what it is")
@@ -284,7 +362,9 @@ export function FoodLoggingModal({
     setActiveSheet('none');
 
     try {
-      const result = await describeFoodAsync(descriptionInput);
+      const result = looksLikeRecipe(descriptionInput)
+        ? await readRecipeAsync({ text: descriptionInput })
+        : await describeFoodAsync(descriptionInput);
       setAnalysisResult(result);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => { });
     } catch (e) {
@@ -454,7 +534,13 @@ export function FoodLoggingModal({
               </View>
             ) : permission?.granted ? (
               <View style={styles.cameraContainer}>
-                <CameraView ref={cameraRef} style={styles.cameraFill} facing="back">
+                <CameraView
+                  ref={cameraRef}
+                  style={styles.cameraFill}
+                  facing="back"
+                  barcodeScannerSettings={{ barcodeTypes: ['ean13', 'ean8', 'upc_a', 'upc_e'] }}
+                  onBarcodeScanned={scanMode === 'label' && !isAnalyzing && !analysisResult ? handleBarcodeScanned : undefined}
+                >
                   {/* Viewfinder target bounds */}
                   <View style={styles.viewfinderOverlay}>
                     <View style={[styles.cornerTL, { top: insets.top + 68 }]} />
@@ -465,7 +551,7 @@ export function FoodLoggingModal({
                     {/* Mode tag indicator inside the viewfinder */}
                     <View style={[styles.cameraModeIndicator, { marginTop: insets.top + 62 }]}>
                       <Text style={styles.cameraModeIndicatorText}>
-                        {scanMode === 'food' ? 'FOOD SCAN' : scanMode === 'label' ? 'NUTRITION LABEL' : 'RECEIPT'}
+                        {scanMode === 'food' ? 'FOOD SCAN' : scanMode === 'label' ? 'BARCODE OR LABEL' : scanMode === 'recipe' ? 'RECIPE' : 'RECEIPT'}
                       </Text>
                     </View>
                   </View>
@@ -476,7 +562,7 @@ export function FoodLoggingModal({
                 <Ionicons name="camera-outline" size={44} color="#ffffff" />
                 <Text style={[styles.permissionTitle, { color: '#ffffff' }]}>Camera Access Required</Text>
                 <Text style={[styles.permissionSubtitle, { color: 'rgba(255,255,255,0.6)' }]}>
-                  StrideTrack uses live vision to scan meals, nutrition labels, and grocery receipts.
+                  StrideTrack uses live vision to scan meals, barcodes, nutrition labels, receipts and recipes.
                 </Text>
                 <TouchableOpacity
                   style={[styles.grantPermissionBtn, { backgroundColor: '#ffffff' }]}
@@ -792,6 +878,55 @@ export function FoodLoggingModal({
                   </ScrollView>
                 )}
 
+                {analysisResult.items.length > 1 && (
+                  <View style={{ gap: 6 }}>
+                    <Text style={[styles.qtyLabel, { color: colors.textMuted }]}>
+                      {analysisResult.isReceipt ? 'FOOD ON THIS RECEIPT (REMOVE WHAT YOU DID NOT EAT)' : `${analysisResult.items.length} FOODS FOUND (REMOVE ANY THAT ARE WRONG)`}
+                    </Text>
+                    {analysisResult.items.map((it) => (
+                      <View
+                        key={it.id}
+                        style={{ flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 6, paddingHorizontal: 10, borderRadius: 10, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surfaceSecondary }}
+                      >
+                        <View style={{ flex: 1 }}>
+                          <Text style={{ fontSize: 13, fontWeight: '700', color: colors.text }} numberOfLines={1}>{it.name}</Text>
+                          <Text style={{ fontSize: 11, color: colors.textMuted }} numberOfLines={1}>{it.portion}</Text>
+                        </View>
+                        <Text style={{ fontSize: 13, fontWeight: '700', color: colors.text }}>{Math.round(it.calories * servingMultiplier)} kcal</Text>
+                        <TouchableOpacity onPress={() => handleRemoveItem(it.id)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }} accessibilityLabel={`Remove ${it.name}`}>
+                          <Ionicons name="close-circle" size={20} color={colors.textMuted} />
+                        </TouchableOpacity>
+                      </View>
+                    ))}
+                  </View>
+                )}
+
+                {analysisResult.alsoSpotted && analysisResult.alsoSpotted.length > 0 && (
+                  <View style={{ gap: 4 }}>
+                    <Text style={[styles.qtyLabel, { color: colors.textMuted }]}>ALSO SPOTTED? TAP TO ADD</Text>
+                    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6, paddingVertical: 2 }}>
+                      {analysisResult.alsoSpotted.map((it) => (
+                        <TouchableOpacity
+                          key={it.id}
+                          onPress={() => handleAddSpotted(it.id)}
+                          style={[styles.catChip, { backgroundColor: colors.surfaceSecondary, borderColor: colors.border, flexDirection: 'row', alignItems: 'center', gap: 4 }]}
+                          accessibilityLabel={`Add ${it.name}`}
+                        >
+                          <Ionicons name="add" size={12} color={colors.text} />
+                          <Text style={{ fontSize: 11, fontWeight: '600', color: colors.text }}>{`${it.name} · ${it.calories} kcal`}</Text>
+                        </TouchableOpacity>
+                      ))}
+                    </ScrollView>
+                  </View>
+                )}
+
+                {analysisResult.isRecipe && analysisResult.ingredients && analysisResult.ingredients.length > 0 && (
+                  <Text style={{ fontSize: 11, color: colors.textMuted }} numberOfLines={3}>
+                    {`Makes ${analysisResult.servings ?? 1} serving(s) · ${analysisResult.ingredients.length} ingredients: `}
+                    {analysisResult.ingredients.map((i) => i.name).join(', ')}
+                  </Text>
+                )}
+
                 {/* Macro Bar Grid */}
                 <View style={[styles.macroGrid, { backgroundColor: colors.surfaceSecondary, borderColor: colors.border }]}>
                   <View style={styles.macroCol}>
@@ -892,7 +1027,7 @@ export function FoodLoggingModal({
 
                 return (
                   <>
-                    {/* ROW 1: SCAN MODES (Food | Nutrition Label | Receipt) */}
+                    {/* ROW 1: SCAN MODES (Food | Barcode/Label | Receipt | Recipe) */}
                     <View style={styles.gridRow}>
                       {/* 1. Food Scanner */}
                       <TouchableOpacity
@@ -933,6 +1068,20 @@ export function FoodLoggingModal({
                         </View>
                         <Text style={[styles.gridButtonText, textBase, scanMode === 'receipt' && textActive]} numberOfLines={1}>
                           Receipt
+                        </Text>
+                      </TouchableOpacity>
+
+                      {/* 4. Recipe Reader (photo of a recipe; pasted recipes go through Typing) */}
+                      <TouchableOpacity
+                        style={[styles.gridButton, scanMode === 'recipe' && styles.gridButtonActive]}
+                        onPress={() => handleModePress('recipe')}
+                        activeOpacity={0.7}
+                      >
+                        <View style={[styles.gridIconCircle, circleBase, scanMode === 'recipe' && [styles.gridIconCircleActive, circleActive]]}>
+                          <Ionicons name="book-outline" size={20} color={iconColor(scanMode === 'recipe')} />
+                        </View>
+                        <Text style={[styles.gridButtonText, textBase, scanMode === 'recipe' && textActive]} numberOfLines={1}>
+                          Recipe
                         </Text>
                       </TouchableOpacity>
                     </View>

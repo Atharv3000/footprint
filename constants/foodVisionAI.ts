@@ -39,6 +39,17 @@ export interface FoodVisionAnalysisResult {
   isFood?: boolean;
   nonFoodReason?: string;
   detectedSubject?: string;
+  /** Several separate foods were found in the photo (one entry each in `items`). */
+  isMultiItem?: boolean;
+  /** A branded product (barcode, label or pack text) from Open Food Facts. */
+  isProduct?: boolean;
+  isReceipt?: boolean;
+  isRecipe?: boolean;
+  /** Recipe: number of servings the recipe makes (items[0] is one serving). */
+  servings?: number;
+  ingredients?: { name: string; portion: string; calories: number; matched: boolean }[];
+  /** Less certain foods also seen in the photo; the user can add them with one tap. */
+  alsoSpotted?: FoodItem[];
 }
 
 /*
@@ -54,6 +65,79 @@ type Raw = { ok: boolean; data?: any; error?: string; offline?: boolean };
 
 function requestFood(kind: 'photo' | 'text', payload: Record<string, unknown>, timeoutMs: number): Promise<Raw> {
   return aiRequest(kind === 'photo' ? 'analyze_food' : 'describe_food', payload, timeoutMs);
+}
+
+function toItems(raw: any[] | undefined, prefix: string): FoodItem[] {
+  return (raw || []).map((it: any, i: number) => ({
+    id: it.id || `${prefix}_${Date.now()}_${i}`,
+    name: it.name,
+    portion: it.portion || '1 serving',
+    calories: it.calories ?? 0,
+    proteinG: it.proteinG ?? 0,
+    carbsG: it.carbsG ?? 0,
+    fatG: it.fatG ?? 0,
+    fiberG: it.fiberG ?? undefined,
+    confidence: it.confidence ?? 0.8,
+  }));
+}
+
+/** Server scan result (items[] + totals) -> the result the logging screen shows. */
+function fromScan(d: any, prefix: string): FoodVisionAnalysisResult {
+  return {
+    dishTitle: d.dishTitle,
+    confidence: d.confidence ?? 0,
+    totalCalories: d.totalCalories ?? 0,
+    totalProteinG: d.totalProteinG ?? 0,
+    totalCarbsG: d.totalCarbsG ?? 0,
+    totalFatG: d.totalFatG ?? 0,
+    items: toItems(d.items, prefix),
+    candidates: d.candidates || [],
+    portionVariants: d.portionVariants || [],
+    servingsPerContainer: d.servingsPerContainer || 1.0,
+    healthScore: d.healthScore ?? 0,
+    dietaryTags: d.dietaryTags || [],
+    tips: d.tips || '',
+    isFood: true,
+    isMultiItem: !!d.isMultiItem,
+    isProduct: !!d.isProduct,
+    isReceipt: !!d.isReceipt,
+    isRecipe: !!d.isRecipe,
+    servings: d.servings,
+    ingredients: d.ingredients,
+    alsoSpotted: toItems(d.alsoSpotted, 'also'),
+  };
+}
+
+function scanFailure(res: Raw, what: string): FoodVisionAnalysisResult {
+  if (res.offline) {
+    return errorResult('AI Server Unreachable', 'Offline', `${res.error || 'Could not reach the AI server.'} Check your connection and try again.`, 'Connection Issue');
+  }
+  return errorResult(`Could Not Read ${what}`, 'Unreadable', res.error || `The ${what.toLowerCase()} could not be read. Fill the frame, avoid glare and try again.`, what);
+}
+
+/** Barcode (already read by the camera) and/or a photo of a nutrition label or package -> one product. */
+export async function scanLabelAsync(base64Image: string, barcode?: string): Promise<FoodVisionAnalysisResult> {
+  const res = await aiRequest('scan_label', { image: base64Image || '', barcode: barcode || '' }, 25000);
+  return res.ok ? fromScan(res.data, 'label') : scanFailure(res, 'Label');
+}
+
+/** Receipt photo -> the food items bought, each with nutrition for a typical serving. */
+export async function readReceiptAsync(base64Image: string): Promise<FoodVisionAnalysisResult> {
+  const res = await aiRequest('read_receipt', { image: base64Image }, 30000);
+  return res.ok ? fromScan(res.data, 'rcpt') : scanFailure(res, 'Receipt');
+}
+
+/** Recipe photo or pasted recipe text -> nutrition for one serving. */
+export async function readRecipeAsync(input: { image?: string; text?: string }): Promise<FoodVisionAnalysisResult> {
+  const res = await aiRequest('read_recipe', { image: input.image || '', text: input.text || '' }, 30000);
+  return res.ok ? fromScan(res.data, 'recipe') : scanFailure(res, 'Recipe');
+}
+
+/** Pasted text that is a recipe (several ingredient lines, or an "Ingredients"/"Serves" line), not a meal. */
+export function looksLikeRecipe(text: string): boolean {
+  const lines = text.split(/\n+/).map((l) => l.trim()).filter(Boolean);
+  if (/\b(ingredients|serves|servings|yield|makes \d+|directions|instructions)\b/i.test(text) && lines.length >= 3) return true;
+  return lines.filter((l) => /^([-•*]\s*)?(\d|½|¼|¾|⅓|⅔)/.test(l)).length >= 4;
 }
 
 function errorResult(title: string, tag: string, message: string, subject: string): FoodVisionAnalysisResult {
@@ -108,6 +192,10 @@ export async function analyzeFoodImageAsync(
     };
   }
 
+  if (Array.isArray(d.items) && (d.isMultiItem || d.isProduct || d.items.length > 1)) {
+    return fromScan(d, 'food');
+  }
+
   let items: FoodItem[] = [
     {
       id: `food_${Date.now()}_1`,
@@ -148,6 +236,7 @@ export async function analyzeFoodImageAsync(
     dietaryTags: d.dietaryTags || [],
     tips: d.tips || `USDA-based estimate: ${d.totalCalories} kcal, ${d.totalProteinG} g protein.`,
     isFood: true,
+    alsoSpotted: toItems(d.alsoSpotted, 'also'),
   };
 }
 

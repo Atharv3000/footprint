@@ -38,6 +38,9 @@ const RESULT_TYPES: Record<string, string> = {
   describe_food: 'describe_food_result',
   estimate_body_fat: 'body_fat_result',
   analyze_muscle: 'muscle_analysis_result',
+  scan_label: 'label_scan_result',
+  read_receipt: 'receipt_result',
+  read_recipe: 'recipe_result',
 };
 
 /**

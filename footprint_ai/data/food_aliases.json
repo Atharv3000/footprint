@@ -3273,5 +3273,317 @@
 },
 "beef tenderloin": {
 "id": "13921"
+},
+"chocolate chip": {
+"id": "19080"
+},
+"chocolate chips": {
+"id": "19080"
+},
+"semisweet chocolate chip": {
+"id": "19080"
+},
+"dark chocolate chip": {
+"id": "19080"
+},
+"milk chocolate chip": {
+"id": "19120"
+},
+"baking soda": {
+"id": "18372"
+},
+"baking powder": {
+"id": "18370"
+},
+"brown sugar": {
+"id": "19334"
+},
+"light brown sugar": {
+"id": "19334"
+},
+"dark brown sugar": {
+"id": "19334"
+},
+"powdered sugar": {
+"id": "19336"
+},
+"confectioner sugar": {
+"id": "19336"
+},
+"icing sugar": {
+"id": "19336"
+},
+"granulated sugar": {
+"id": "19335"
+},
+"white sugar": {
+"id": "19335"
+},
+"cane sugar": {
+"id": "19335"
+},
+"all purpose flour": {
+"id": "20081"
+},
+"flour": {
+"id": "20081"
+},
+"plain flour": {
+"id": "20081"
+},
+"self rising flour": {
+"id": "20082"
+},
+"whole wheat flour": {
+"id": "20080"
+},
+"bread flour": {
+"id": "20083"
+},
+"cornstarch": {
+"id": "20027"
+},
+"corn starch": {
+"id": "20027"
+},
+"cocoa powder": {
+"id": "19165"
+},
+"unsweetened cocoa powder": {
+"id": "19165"
+},
+"cocoa": {
+"id": "19165"
+},
+"vanilla": {
+"id": "02050"
+},
+"vanilla extract": {
+"id": "02050"
+},
+"unsalted butter": {
+"id": "01145"
+},
+"salted butter": {
+"id": "01001"
+},
+"heavy whipping cream": {
+"id": "01053"
+},
+"whipping cream": {
+"id": "01053"
+},
+"sour cream": {
+"id": "01056"
+},
+"buttermilk": {
+"id": "01088"
+},
+"yeast": {
+"id": "18375"
+},
+"active dry yeast": {
+"id": "18375"
+},
+"instant yeast": {
+"id": "18375"
+},
+"rolled oat": {
+"id": "08120"
+},
+"old fashioned oat": {
+"id": "08120"
+},
+"quick oat": {
+"id": "08120"
+},
+"chicken broth": {
+"id": "06194"
+},
+"chicken stock": {
+"id": "06172"
+},
+"beef broth": {
+"id": "06432"
+},
+"beef stock": {
+"id": "06432"
+},
+"vegetable broth": {
+"id": "06194"
+},
+"tomato paste": {
+"id": "11546"
+},
+"tomato sauce": {
+"id": "11549"
+},
+"diced tomato": {
+"id": "11531"
+},
+"crushed tomato": {
+"id": "11693"
+},
+"black pepper": {
+"id": "02030"
+},
+"pepper": {
+"id": "02030"
+},
+"ground black pepper": {
+"id": "02030"
+},
+"cinnamon": {
+"id": "02010"
+},
+"ground cinnamon": {
+"id": "02010"
+},
+"cumin": {
+"id": "02014"
+},
+"ground cumin": {
+"id": "02014"
+},
+"paprika": {
+"id": "02028"
+},
+"smoked paprika": {
+"id": "02028"
+},
+"chili powder": {
+"id": "02009"
+},
+"oregano": {
+"id": "02027"
+},
+"dried oregano": {
+"id": "02027"
+},
+"nutmeg": {
+"id": "02025"
+},
+"shredded cheddar": {
+"id": "01009"
+},
+"shredded cheddar cheese": {
+"id": "01009"
+},
+"parmesan cheese": {
+"id": "01032"
+},
+"grated parmesan": {
+"id": "01032"
+},
+"dijon mustard": {
+"id": "02046"
+},
+"lemon juice": {
+"id": "09152"
+},
+"lime juice": {
+"id": "09160"
+},
+"cornmeal": {
+"id": "20020"
+},
+"cream of tartar": {
+"id": "18373"
+},
+"molasses": {
+"id": "19304"
+},
+"shortening": {
+"id": "04615"
+},
+"evaporated milk": {
+"id": "01214"
+},
+"sweetened condensed milk": {
+"id": "01095"
+},
+"red bell pepper": {
+"id": "11821"
+},
+"green bell pepper": {
+"id": "11333"
+},
+"green onion": {
+"id": "11291"
+},
+"scallion": {
+"id": "11291"
+},
+"celery stalk": {
+"id": "11143"
+},
+"ginger": {
+"id": "11216"
+},
+"fresh ginger": {
+"id": "11216"
+},
+"cilantro": {
+"id": "11165"
+},
+"parsley": {
+"id": "11297"
+},
+"basil": {
+"id": "02044"
+},
+"fresh basil": {
+"id": "02044"
+},
+"baby spinach": {
+"id": "11457"
+},
+"coconut milk": {
+"id": "12118"
+},
+"sesame oil": {
+"id": "04058"
+},
+"rice vinegar": {
+"id": "02048"
+},
+"apple cider vinegar": {
+"id": "02048"
+},
+"vinegar": {
+"id": "02053"
+},
+"white vinegar": {
+"id": "02053"
+},
+"warm water": {
+"id": "14411"
+},
+"cold water": {
+"id": "14411"
+},
+"salt": {
+"id": "02047"
+},
+"kosher salt": {
+"id": "02047"
+},
+"sea salt": {
+"id": "02047"
+},
+"table salt": {
+"id": "02047"
+},
+"salt and pepper": {
+"id": "02047"
+},
+"mini marshmallow": {
+"id": "19116"
+},
+"marshmallow": {
+"id": "19116"
+},
+"egg yolk": {
+"id": "01125"
 }
 }

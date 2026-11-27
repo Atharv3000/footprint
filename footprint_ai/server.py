@@ -5,6 +5,9 @@ Speaks the app's existing WebSocket protocol on ws://HOST:9001/ :
   -> {"type": "describe_food", "description": "..."}              <- {"type": "describe_food_result", ...}
   -> {"type": "estimate_body_fat", ...profile fields, "image"?}   <- {"type": "body_fat_result", ...}
   -> {"type": "analyze_muscle", "muscle": "abs", "photos": [...]} <- {"type": "muscle_analysis_result", ...}
+  -> {"type": "scan_label", "image": <base64>}                    <- {"type": "label_scan_result", ...}   barcode / nutrition label / pack
+  -> {"type": "read_receipt", "image": <base64>}                  <- {"type": "receipt_result", ...}
+  -> {"type": "read_recipe", "image"?: <base64>, "text"?: "..."}  <- {"type": "recipe_result", ...}
   -> {"type": "ping"}                                             <- {"type": "pong"}
 and the same operations as JSON over HTTP (POST /v1/food/photo, /v1/food/describe,
 /v1/body-fat, /v1/muscle; GET /health) for other systems.
@@ -30,13 +33,15 @@ from fastapi.responses import JSONResponse
 
 from . import __version__
 from .body_metrics import estimate_body_fat
-from .food_vision import ImageError, analyze_food, describe_food
+from .food_vision import ImageError, describe_food
+from . import scan
 from .muscle import analyze_muscle
 
 log = logging.getLogger('footprint_ai')
 MAX_MESSAGE = 16_000_000
 RESULT_TYPE = {'analyze_food': 'food_analysis_result', 'describe_food': 'describe_food_result',
-               'estimate_body_fat': 'body_fat_result', 'analyze_muscle': 'muscle_analysis_result'}
+               'estimate_body_fat': 'body_fat_result', 'analyze_muscle': 'muscle_analysis_result',
+               'scan_label': 'label_scan_result', 'read_receipt': 'receipt_result', 'read_recipe': 'recipe_result'}
 
 
 def _token() -> str:
@@ -74,7 +79,13 @@ def handle(msg: dict) -> dict:
     """Synchronous dispatcher shared by WebSocket and HTTP. Returns the `data` payload."""
     kind = msg.get('type')
     if kind == 'analyze_food':
-        return analyze_food(msg.get('image', ''), str(msg.get('hint') or '')[:300])
+        return scan.analyze_food_photo(msg.get('image', ''), str(msg.get('hint') or '')[:300])
+    if kind == 'scan_label':
+        return scan.scan_label(msg.get('image', '') or '', str(msg.get('barcode') or '')[:20])
+    if kind == 'read_receipt':
+        return scan.read_receipt_photo(msg.get('image', ''))
+    if kind == 'read_recipe':
+        return scan.read_recipe_input(msg.get('image', '') or '', str(msg.get('text') or '')[:20000])
     if kind == 'describe_food':
         return describe_food(str(msg.get('description') or msg.get('text') or ''))
     if kind == 'estimate_body_fat':
@@ -92,7 +103,13 @@ def warm_up() -> None:
     """Load models before the first request so the app does not time out."""
     from .food_model import model
     from .nutrition import db
-    db(); model()
+    from . import products
+    db(); model(); products.available()
+    try:
+        from . import ocr
+        ocr.engine()
+    except Exception as exc:  # noqa: BLE001 - only label, receipt and recipe photos need OCR
+        log.warning('Text reader unavailable (%s); label, receipt and recipe photos will fail.', exc)
     try:
         from .pose import detector
         detector()
@@ -191,6 +208,21 @@ async def http_describe(request: Request):
 @app.post('/v1/body-fat')
 async def http_body_fat(request: Request):
     return await _http(request, 'estimate_body_fat')
+
+
+@app.post('/v1/food/label')
+async def http_label(request: Request):
+    return await _http(request, 'scan_label')
+
+
+@app.post('/v1/food/receipt')
+async def http_receipt(request: Request):
+    return await _http(request, 'read_receipt')
+
+
+@app.post('/v1/food/recipe')
+async def http_recipe(request: Request):
+    return await _http(request, 'read_recipe')
 
 
 @app.post('/v1/muscle')
