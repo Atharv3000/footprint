@@ -24,6 +24,8 @@ interface Props {
   onSaveTrackedWorkout: (data: WorkoutTrackingData) => void | Promise<void>;
 }
 export type TrackableExercise = 'pushups' | 'squats' | 'bicep_curls' | 'boxing';
+// At most 6 photos a second: the rep counter is trained on 2–6 fps.
+const MIN_CAPTURE_GAP_MS = 167;
 const bones = [['shoulder_l', 'shoulder_r'], ['shoulder_l', 'elbow_l'], ['elbow_l', 'wrist_l'],
   ['shoulder_r', 'elbow_r'], ['elbow_r', 'wrist_r'], ['shoulder_l', 'hip_l'], ['shoulder_r', 'hip_r'],
   ['hip_l', 'hip_r'], ['hip_l', 'knee_l'], ['hip_r', 'knee_r'], ['knee_l', 'ankle_l'], ['knee_r', 'ankle_r']];
@@ -246,7 +248,7 @@ export function CameraFormTrackerModal({ visible, onClose, onSaveTrackedWorkout,
           socket.current!.send(JSON.stringify({ type: 'frame', image: held.image, captured_at: held.capturedAt }));
         }
       }
-      if (!capturing.current && !heldFrame.current && idle && Date.now() - lastCaptureAt.current >= 200 && camera.current) {
+      if (!capturing.current && !heldFrame.current && idle && Date.now() - lastCaptureAt.current >= MIN_CAPTURE_GAP_MS && camera.current) {
         capturing.current = true;
         let uri: string | undefined;
         try {

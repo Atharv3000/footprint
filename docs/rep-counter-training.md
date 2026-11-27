@@ -103,7 +103,7 @@ generalisation. `ph` is the total phantom reps across all negative clips.
 
 | Change | Where | Effect |
 | --- | --- | --- |
-| The phone takes the next photo while the previous one is uploading and being analysed, instead of waiting for the answer first. | `components/CameraFormTrackerModal.tsx` | Camera and network work in parallel, so good connections reach about 5–6 frames per second instead of about 4. A held photo older than 1 s is dropped, so feedback stays current. |
+| The phone takes the next photo while the previous one is uploading and being analysed, instead of waiting for the answer first. | `components/CameraFormTrackerModal.tsx` | Camera and network work in parallel, so good connections reach up to 6 frames per second (one photo every 167 ms at most, `MIN_CAPTURE_GAP_MS`) instead of about 4. The cap matches the 2–6 fps range the counter was trained on. A held photo older than 1 s is dropped, so feedback stays current. |
 | Each user's working rotation is remembered. A lying body (push-ups, planks) used to run the pose network twice per frame: once upright, then once turned sideways. | `server/vision.py` (`_locate`) | Push-up frames went from 1.98 to 1.01 pose runs and from 54 to 29 ms on the server, measured on the same clips. Standing exercises are unchanged at about 27 ms. |
 | A pool of pose detectors replaces the single shared lock. | `server/vision.py` | Several users' frames are analysed at once (2 detectors by default; set `REP_POSE_WORKERS` to change). |
 
