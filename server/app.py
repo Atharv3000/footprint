@@ -6,6 +6,7 @@ from contextlib import asynccontextmanager, suppress
 import hashlib
 import hmac
 import json
+import math
 import os
 from pathlib import Path
 import re
@@ -174,6 +175,9 @@ class Client:
         self.share_video = False  # Privacy-by-default: only pose skeleton is shared unless explicitly opted in.
         self.valid_at = 0
         self.frame_at = 0
+        self.track = {}  # pose rotation that worked last frame (see Vision._locate)
+        self.clock = None  # server time minus phone capture time, set on the first stamped frame
+        self.stamp = 0.0
         self.touched = time.monotonic()
         self.busy = False
         self.epoch = 0
@@ -187,6 +191,35 @@ class Client:
 
     def purge_frames(self):
         self.messages = deque((m for m in self.messages if m['type'] != 'opponent_frame'), maxlen=12)
+
+
+def frame_time(client, captured_at):
+    """When the photo was taken, on the server clock.
+
+    Upload time on a phone network varies by hundreds of milliseconds, so
+    arrival time makes reps look faster or slower than they were. The phone's
+    own capture time keeps the real spacing between frames. It is anchored to
+    the server clock on the first frame and re-anchored if the two drift more
+    than 2 s apart (clock change, long stall)."""
+    now = time.monotonic()
+    if isinstance(captured_at, bool) or not isinstance(captured_at, (int, float)) or not math.isfinite(captured_at):
+        return now
+    taken = captured_at / 1000
+    if client.clock is None or not -2 <= now - (client.clock + taken) <= 2:
+        client.clock = now - taken
+    # Never in the future, never before the previous frame.
+    stamp = min(now, max(client.clock + taken, client.stamp + .01))
+    client.stamp = stamp
+    return stamp
+
+
+def _analyze(image, upright, include_preview, track):
+    try:
+        return vision.analyze(image, upright, include_preview, track=track)
+    except TypeError as error:
+        # Test doubles that predate the track argument.
+        if 'track' not in str(error): raise
+        return vision.analyze(image, upright, *((True,) if include_preview else ()))
 
 
 def publish(room, exclude=None):
@@ -470,20 +503,14 @@ async def frame(request: Request):
         room = battles.get(client.id)
         include_preview = bool(room and room.status in ('waiting', 'countdown', 'active') and client.share_video)
         if client.boxing:
-            points, aspect, preview = await asyncio.to_thread(vision.analyze, data.get('image'), True)
-        elif include_preview:
-            points, aspect, preview = await asyncio.to_thread(vision.analyze, data.get('image'), False, True)
+            points, aspect, preview = await asyncio.to_thread(_analyze, data.get('image'), True, False, client.track)
         else:
-            try:
-                points, aspect, preview = await asyncio.to_thread(vision.analyze, data.get('image'), False)
-            except TypeError:
-                # Compatibility with test mocks accepting only (image)
-                points, aspect, preview = await asyncio.to_thread(vision.analyze, data.get('image'))
+            points, aspect, preview = await asyncio.to_thread(_analyze, data.get('image'), False, include_preview, client.track)
         if client.id not in clients or epoch != client.epoch:
             return {'messages': [{'type': 'frame_skipped'}]}
         room = battles.get(client.id)
         before = client.counter.count
-        pose = (client.boxing or client.counter).update(points, time.monotonic(), aspect)
+        pose = (client.boxing or client.counter).update(points, frame_time(client, data.get('captured_at')), aspect)
         if pose['valid']:
             client.valid_at = time.monotonic()
         else:

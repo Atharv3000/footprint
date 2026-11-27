@@ -25,6 +25,7 @@ import math
 import random
 import sys
 import time
+import zlib
 from pathlib import Path
 
 from .counter import DEFAULT_PARAMS, PARAMS_PATH, RepCounter
@@ -39,7 +40,7 @@ SPACE = {
         'up_angle': (135, 165, float), 'down_angle': (95, 130, float),
         'top_ratio': (.65, .9, float), 'bottom_ratio': (.5, .85, float),
         'min_descent_s': (.5, 1.0, float), 'min_gap_s': (.4, 1.0, float), 'relabel_dist': (.04, .2, float),
-        'streak': (1, 2, int), 'calib_frames': (2, 3, int),
+        'streak': (1, 2, int), 'calib_frames': (2, 3, int), 'stand_ratio': (.7, 1.6, float),
     },
     'squats': {
         'up_angle': (145, 170, float), 'down_angle': (95, 150, float),
@@ -112,8 +113,10 @@ def scenario_frames(frames, rng, fps, stretch=1., noise=0., drop=0., flip=False,
 
 def scenarios(seed=0, n=10):
     rng = random.Random(seed)
-    base = [dict(fps=4), dict(fps=3), dict(fps=2.2)]
-    extra = [dict(fps=rng.uniform(2, 4.5), stretch=rng.uniform(.75, 1.35), noise=rng.choice([0, .004, .008]),
+    # The phone captures the next photo while the last one uploads, so good
+    # connections now reach 5-6 fps; 2-3 fps is a slow network.
+    base = [dict(fps=5), dict(fps=4), dict(fps=3), dict(fps=2.2)]
+    extra = [dict(fps=rng.uniform(2, 6), stretch=rng.uniform(.75, 1.35), noise=rng.choice([0, .004, .008]),
                   drop=rng.choice([0, .05, .12]), flip=rng.random() < .5) for _ in range(n)]
     return [(i, s) for i, s in enumerate(base + extra)]
 
@@ -127,6 +130,11 @@ def replay(exercise, frames, params):
 
 # ---------------------------------------------------------------- objective
 
+def _seed(*parts):
+    # hash() of a string changes every run (PYTHONHASHSEED), which made scores irreproducible.
+    return zlib.crc32(repr(parts).encode())
+
+
 def evaluate(exercise, params, pos, neg, scen, seed=0):
     rows = []
     for clip in pos:
@@ -134,7 +142,7 @@ def evaluate(exercise, params, pos, neg, scen, seed=0):
             continue
         counts = []
         for i, s in scen:
-            rng = random.Random(hash((seed, clip['cache'], i)) & 0xffffffff)
+            rng = random.Random(_seed(seed, clip['cache'], i))
             counts.append(replay(exercise, scenario_frames(clip['frames'], rng, **s), params))
         rows.append({'clip': clip['cache'], 'expected': clip['expected'], 'counts': counts,
                      'mae': sum(abs(c - clip['expected']) for c in counts) / len(counts),
@@ -145,7 +153,7 @@ def evaluate(exercise, params, pos, neg, scen, seed=0):
             continue
         counts = []
         for i, s in scen[:4]:
-            rng = random.Random(hash((seed, clip['cache'], i, 'n')) & 0xffffffff)
+            rng = random.Random(_seed(seed, clip['cache'], i, 'n'))
             counts.append(replay(exercise, scenario_frames(clip['frames'], rng, **s), params))
         false.append({'clip': clip['cache'], 'false_reps': sum(counts) / len(counts)})
     return rows, false
@@ -225,7 +233,7 @@ def fit_exercise(exercise, pos, neg, iters=160, seed=0, log=None):
 
 def cmd_evaluate(args):
     params = json.loads(Path(args.params).read_text()) if args.params else copy.deepcopy(DEFAULT_PARAMS)
-    pos, neg = load_clips(args.cache, roles=('train', 'hard'))
+    pos, neg = load_clips(args.cache, roles=('train', 'test', 'hard'))
     scen = scenarios(args.seed)
     report = {}
     for ex in EXERCISES:
@@ -319,6 +327,9 @@ def cmd_extract(args):
             if not cap.isOpened() or fps <= 0:
                 print('skip', video); continue
             step = max(1, round(fps / 12)); frames = []; i = 0
+            # One track per clip, like one per user in the app (see Vision._locate).
+            track = None if args.no_track else {}
+            runs, spent = vision.detections, 0.0
             while True:
                 ok, bgr = cap.read()
                 if not ok: break
@@ -326,13 +337,17 @@ def cmd_extract(args):
                     h, w = bgr.shape[:2]; s = min(1, 640 / max(h, w))
                     small = cv2.resize(bgr, (round(w * s), round(h * s)), interpolation=cv2.INTER_AREA)
                     ok, jpg = cv2.imencode('.jpg', small, [cv2.IMWRITE_JPEG_QUALITY, 50])
-                    points, aspect, _ = vision.analyze(base64.b64encode(jpg).decode())
+                    started = time.perf_counter()
+                    points, aspect, _ = vision.analyze(base64.b64encode(jpg).decode(), track=track)
+                    spent += time.perf_counter() - started
                     frames.append({'t': i / fps, 'aspect': aspect, 'points': points})
                 i += 1
             cap.release()
             name = Path(video).stem.replace(' ', '_')
             (cache / f'{name}.json').write_text(json.dumps({'video': Path(video).name, 'fps': fps / step, 'frames': frames}))
-            print(name, len(frames), 'frames')
+            n = max(1, len(frames))
+            print(name, len(frames), 'frames', f'{1000 * spent / n:.1f} ms/frame',
+                  f'{(vision.detections - runs) / n:.2f} pose runs/frame', flush=True)
     finally:
         vision.close()
 
@@ -342,6 +357,7 @@ def main(argv=None):
     sub = parser.add_subparsers(dest='cmd', required=True)
     e = sub.add_parser('extract'); e.add_argument('videos', nargs='+', type=Path)
     e.add_argument('--cache', required=True); e.add_argument('--model', default=str(HERE / 'models/pose_landmarker_full.task'))
+    e.add_argument('--no-track', action='store_true', help='re-detect rotation on every frame (the pre-2026-11-26 path)')
     f = sub.add_parser('fit'); f.add_argument('--cache', required=True); f.add_argument('--iters', type=int, default=160)
     f.add_argument('--seed', type=int, default=0); f.add_argument('--output'); f.add_argument('--workers', type=int, default=2)
     v = sub.add_parser('evaluate'); v.add_argument('--cache', required=True); v.add_argument('--params')

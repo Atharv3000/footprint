@@ -17,6 +17,10 @@ DEFAULT_PARAMS = {
     'pushups': {
         'up_angle': 145.0, 'down_angle': 115.0, 'top_ratio': .82, 'bottom_ratio': .78,
         'min_descent_s': .8, 'min_gap_s': .9, 'streak': 2, 'relabel_dist': .12, 'calib_frames': 3,
+        # Torso rise (shoulder above hip) per unit of torso run beyond which the
+        # body counts as standing. A phone placed above and in front of the user
+        # makes a plank look tilted, so this must not be too strict.
+        'stand_ratio': .7,
     },
     'squats': {
         # Knee angle alone misses front-on squats (foreshortened knees), so the
@@ -182,7 +186,7 @@ class RepCounter:
             if not usable(*names): continue
             shoulder, elbow, wrist, hip = [points[n] for n in names]
             torso_x = abs(shoulder['x'] - hip['x']) * aspect
-            if hip['y'] - shoulder['y'] > max(.12, torso_x * .7):
+            if hip['y'] - shoulder['y'] > max(.12, torso_x * p['stand_ratio']):
                 standing_detected = True
                 continue
             arm = [{**point, 'x': point['x'] * aspect} for point in (shoulder, elbow, wrist)]

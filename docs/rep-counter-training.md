@@ -97,6 +97,44 @@ generalisation. `ph` is the total phantom reps across all negative clips.
 | Squats | 2.2 | MAE 2.69, 2% exact | MAE 0.44, 58% exact | MAE 0.31, 69% exact, ph 2.0 |
 | Curls | 4 | MAE 1.20, 30% exact, ph 13 | MAE 0.00, 100% exact, ph 0 | MAE 0.00, 100% exact, ph 0 |
 
+## Update: 2026-11-26 (faster and more accurate)
+
+### Faster
+
+| Change | Where | Effect |
+| --- | --- | --- |
+| The phone takes the next photo while the previous one is uploading and being analysed, instead of waiting for the answer first. | `components/CameraFormTrackerModal.tsx` | Camera and network work in parallel, so good connections reach about 5–6 frames per second instead of about 4. A held photo older than 1 s is dropped, so feedback stays current. |
+| Each user's working rotation is remembered. A lying body (push-ups, planks) used to run the pose network twice per frame: once upright, then once turned sideways. | `server/vision.py` (`_locate`) | Push-up frames went from 1.98 to 1.01 pose runs and from 54 to 29 ms on the server, measured on the same clips. Standing exercises are unchanged at about 27 ms. |
+| A pool of pose detectors replaces the single shared lock. | `server/vision.py` | Several users' frames are analysed at once (2 detectors by default; set `REP_POSE_WORKERS` to change). |
+
+### More accurate
+
+- **Capture-time rep timing.** The phone sends `captured_at` with each photo, and the server times reps by when the photo was taken (`frame_time` in `server/app.py`). Previously it used arrival time, so varying upload delay made reps look faster or slower than they were.
+- **Tilted planks are no longer rejected.** A phone placed above and in front of the user makes the plank look tilted. The "standing, not a plank" check rejected any torso steeper than about 35°, which threw away good frames mid-set (`vv_pushup9` counted about 2 of 6). That limit is now the fitted parameter `stand_ratio` (fitted value 0.92, about 43°).
+- **Refit for the faster loop.** Training scenarios now cover 2–6 fps, using landmarks extracted through the new tracked path. The new parameters were adopted for push-ups and curls. Squats keep the 2026-11-24 fit, which scored better on the same clips.
+- **Reproducible evaluation.** Scenario seeds used Python's `hash()` of a string, which changes on every run. They now use CRC32, so scores can be compared between runs. `evaluate` now also includes the test clips.
+
+All labelled train and test clips, averaged over 6 randomised replays per clip. Both columns use the same tracked landmarks. Both parameter sets were fitted on these clips, so this is in-sample.
+
+| Exercise | fps | 2026-11-24 params | 2026-11-26 params |
+| --- | ---: | --- | --- |
+| Push-ups | 5 | MAE 0.23, 83% exact | MAE 0.09, 91% exact |
+| Push-ups | 4 | MAE 0.41, 78% exact | MAE 0.09, 91% exact |
+| Push-ups | 3 | MAE 0.42, 77% exact | MAE 0.27, 81% exact |
+| Push-ups | 2.2 | MAE 0.59, 63% exact | MAE 0.54, 63% exact |
+| Squats | 4 | MAE 0.12, 88% exact | unchanged |
+| Curls | 4 | MAE 0.00, phantom 1.0 | MAE 0.00, phantom 0 |
+
+On the 5 held-out push-up clips, the new fit never saw them, but the old parameters had been fitted on them. Even so, the new fit scores MAE 0.71 against 1.07 for the old parameters. In the end-to-end API replay at 4 fps, `pushup2` counts 5/5, `vv_squats-vid-1` counts 9/9, and `vv_pushup9` counts 7 (7 visible reps; the label's 6 excludes the first rep, which has no calibration hold).
+
+Reproduce:
+
+```bash
+python -m server.rep_training extract clips/*.mp4 --cache .rep-cache     # prints ms/frame and pose runs/frame
+python -m server.rep_training extract clips/*.mp4 --cache .rep-cache-old --no-track   # previous path, for comparison
+npm run train:reps && npm run eval:reps
+```
+
 ## Limitations
 
 - The dataset is small: about 30 positive clips and two curl clips. These
@@ -106,7 +144,7 @@ generalisation. `ph` is the total phantom reps across all negative clips.
 - Head-on push-ups remain unsupported, as before. Very dark or heavily occluded
   curls (the hard clips) still undercount.
 - Around 2 fps (a degraded network), quick push-ups can lose their brief top
-  frame. At the app's normal ~4 fps they count well.
+  frame. At the app's normal 4–6 fps they count well.
 - There is still no form score.
 
 ## Retraining with your own clips

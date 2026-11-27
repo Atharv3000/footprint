@@ -1,14 +1,15 @@
 {
   "pushups": {
-    "up_angle": 135.356,
-    "down_angle": 113.381,
-    "top_ratio": 0.848,
-    "bottom_ratio": 0.757,
-    "min_descent_s": 0.505,
-    "min_gap_s": 0.727,
+    "up_angle": 142.232,
+    "down_angle": 107.84,
+    "top_ratio": 0.839,
+    "bottom_ratio": 0.786,
+    "min_descent_s": 0.528,
+    "min_gap_s": 0.755,
     "streak": 1,
-    "relabel_dist": 0.2,
-    "calib_frames": 2
+    "relabel_dist": 0.198,
+    "calib_frames": 2,
+    "stand_ratio": 0.921
   },
   "squats": {
     "up_angle": 151.382,
@@ -20,20 +21,20 @@
     "streak": 1
   },
   "bicep_curls": {
-    "up_angle": 150.839,
-    "down_angle": 62.54,
-    "hang_ratio": 0.424,
-    "merge_s": 0.673,
-    "min_descent_s": 0.384,
-    "min_gap_s": 0.611,
+    "up_angle": 148.984,
+    "down_angle": 67.409,
+    "hang_ratio": 0.504,
+    "merge_s": 0.483,
+    "min_descent_s": 0.345,
+    "min_gap_s": 0.558,
     "streak": 1,
-    "max_hip_motion": 0.22,
-    "wrist_rise": 0.27
+    "max_hip_motion": 0.125,
+    "wrist_rise": 0.263
   },
   "_meta": {
-    "trained_at": "2026-11-24",
+    "trained_at": "2026-11-26",
     "iters": 300,
     "seed": 0,
-    "note": "Counting-layer parameters fitted by server.rep_training; pose network unchanged."
+    "note": "Counting-layer parameters fitted by server.rep_training; pose network unchanged. 2026-11-26 refit (tracked landmarks, 2-6 fps scenarios, new stand_ratio) adopted for pushups and bicep_curls; squats keep the 2026-11-24 fit, which scored better on the same clips."
   }
 }

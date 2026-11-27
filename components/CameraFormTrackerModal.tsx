@@ -91,6 +91,10 @@ export function CameraFormTrackerModal({ visible, onClose, onSaveTrackedWorkout,
   const framePending = useRef(false);
   const frameSentAt = useRef(0);
   const capturing = useRef(false);
+  // Next photo, taken while the previous one is still being analysed, so the
+  // camera and the network work in parallel instead of taking turns.
+  const heldFrame = useRef<{ image: string; capturedAt: number } | null>(null);
+  const lastCaptureAt = useRef(0);
   const commandPending = useRef(false);
   const commandTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const resetting = useRef(false);
@@ -232,16 +236,31 @@ export function CameraFormTrackerModal({ visible, onClose, onSaveTrackedWorkout,
       if (framePending.current && Date.now() - frameSentAt.current > 10000) {
         setRunning(false); setError('Camera analysis stalled. Reconnect before continuing.'); return;
       }
-      if (!capturing.current && !framePending.current && !commandPending.current && !resetting.current
-          && Date.now() - frameSentAt.current >= 220 && camera.current) {
+      const open = socket.current?.readyState === RepConnection.OPEN;
+      const idle = !commandPending.current && !resetting.current;
+      if (heldFrame.current && !framePending.current) {
+        const held = heldFrame.current; heldFrame.current = null;
+        // A photo that waited too long would show stale feedback; take a fresh one instead.
+        if (idle && open && Date.now() - held.capturedAt <= 1000) {
+          framePending.current = true; frameSentAt.current = Date.now();
+          socket.current!.send(JSON.stringify({ type: 'frame', image: held.image, captured_at: held.capturedAt }));
+        }
+      }
+      if (!capturing.current && !heldFrame.current && idle && Date.now() - lastCaptureAt.current >= 200 && camera.current) {
         capturing.current = true;
         let uri: string | undefined;
         try {
+          const capturedAt = Date.now(); lastCaptureAt.current = capturedAt;
           const photo = await camera.current.takePictureAsync({ quality: .5, base64: true, exif: false, shutterSound: false });
           uri = photo?.uri;
-          if (alive && current.current.running && current.current.active && photo?.base64 && socket.current?.readyState === RepConnection.OPEN) {
-            framePending.current = true; frameSentAt.current = Date.now();
-            socket.current.send(JSON.stringify({ type: 'frame', image: photo.base64 }));
+          if (alive && current.current.running && current.current.active && photo?.base64
+              && !commandPending.current && !resetting.current && socket.current?.readyState === RepConnection.OPEN) {
+            if (framePending.current) heldFrame.current = { image: photo.base64, capturedAt };
+            else {
+              framePending.current = true; frameSentAt.current = Date.now();
+              // captured_at lets the server time each rep by when the photo was taken, not when it arrived.
+              socket.current.send(JSON.stringify({ type: 'frame', image: photo.base64, captured_at: capturedAt }));
+            }
           }
         } catch { if (alive) { setError('Camera capture failed. Check camera access and try again.'); setRunning(false); } }
         finally {
@@ -251,14 +270,14 @@ export function CameraFormTrackerModal({ visible, onClose, onSaveTrackedWorkout,
           }
         }
       }
-      if (alive) timer = setTimeout(nextFrame, 60);
+      if (alive) timer = setTimeout(nextFrame, 40);
     }
     nextFrame();
-    return () => { alive = false; clearTimeout(timer); };
+    return () => { alive = false; clearTimeout(timer); heldFrame.current = null; };
   }, [visible, connected, permission?.granted, cameraReady, active, running, facing]);
 
   function reset(ex: TrackableExercise = exercise) {
-    setPose(null); setError(''); resetting.current = true;
+    setPose(null); setError(''); resetting.current = true; heldFrame.current = null;
     if (!send({ type: 'reset', exercise: ex })) resetting.current = false;
     saved.current = false; startedAt.current = Date.now();
   }
